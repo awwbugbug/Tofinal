@@ -18,6 +18,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { AttachmentLightbox } from "@/components/task/AttachmentLightbox";
 import { cn } from "@/lib/utils";
 import type { AttachmentView } from "@/stores/attachmentStore";
 import type { Task, TaskPriority } from "@/types/task";
@@ -129,6 +130,7 @@ export function TaskDetail({
   const [error, setError] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [brokenAttachmentIds, setBrokenAttachmentIds] = useState<Record<string, boolean>>({});
+  const [lightboxAttachment, setLightboxAttachment] = useState<AttachmentView | null>(null);
   const titleRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -150,6 +152,7 @@ export function TaskDetail({
     setError("");
     setDeleteDialogOpen(false);
     setBrokenAttachmentIds({});
+    setLightboxAttachment(null);
   }, [task]);
 
   if (!task) {
@@ -340,7 +343,13 @@ export function TaskDetail({
                     className="flex gap-3 rounded-3xl border border-[var(--border-soft)] bg-[var(--surface-field)] p-3"
                     key={attachment.id}
                   >
-                    <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-input)]">
+                    <button
+                      aria-label={`Preview attachment ${attachment.originalName}`}
+                      className="attachment-preview-trigger"
+                      disabled={broken}
+                      onClick={() => setLightboxAttachment(attachment)}
+                      type="button"
+                    >
                       {!broken && attachment.url ? (
                         <img
                           alt={attachment.originalName}
@@ -353,7 +362,7 @@ export function TaskDetail({
                       ) : (
                         <ImageOff className="h-5 w-5 text-[var(--text-faint)]" />
                       )}
-                    </div>
+                    </button>
                     <div className="min-w-0 flex-1">
                       <div className="flex min-w-0 items-center gap-2">
                         <ImageIcon className="h-4 w-4 shrink-0 text-[var(--text-faint)]" />
@@ -446,6 +455,9 @@ export function TaskDetail({
         onCancel={() => setDeleteDialogOpen(false)}
         onConfirm={handleConfirmDelete}
       />
+      {lightboxAttachment && (
+        <AttachmentLightbox attachment={lightboxAttachment} onClose={() => setLightboxAttachment(null)} />
+      )}
     </div>
   );
 }

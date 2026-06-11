@@ -364,6 +364,8 @@ describe("App", () => {
 
     const detailPanel = within(screen.getByTestId("detail-panel"));
     expect(await detailPanel.findByText("sample.png")).toBeInTheDocument();
+    const previewButton = detailPanel.getByRole("button", { name: /preview attachment sample\.png/i });
+    expect(previewButton).toHaveClass("attachment-preview-trigger");
     expect(detailPanel.getByRole("img", { name: /sample\.png/i })).toHaveAttribute(
       "src",
       "blob:image/png:attachments/images/task-1/attachment-1.png",
@@ -376,6 +378,50 @@ describe("App", () => {
     await userEvent.click(detailPanel.getAllByRole("button", { name: /delete attachment/i })[0]);
     await waitFor(() => expect(rows).toHaveLength(1));
     expect(rows.some((row) => row.id === "attachment-1")).toBe(false);
+  });
+
+  it("opens image attachments in a lightbox and closes with button, backdrop, and Escape", async () => {
+    const { repository } = createAttachmentRepository([createAttachment()]);
+    setAttachmentDependenciesForTest({ fileStorage: createAttachmentFileStorage(), repository });
+    await renderApp();
+
+    const detailPanel = within(screen.getByTestId("detail-panel"));
+    await userEvent.click(await detailPanel.findByRole("button", { name: /preview attachment sample\.png/i }));
+
+    const lightbox = screen.getByRole("dialog", { name: /image preview sample\.png/i });
+    expect(within(lightbox).getByRole("img", { name: /sample\.png/i })).toHaveAttribute(
+      "src",
+      "blob:image/png:attachments/images/task-1/attachment-1.png",
+    );
+
+    await userEvent.click(within(lightbox).getByRole("button", { name: /close image preview/i }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: /image preview/i })).not.toBeInTheDocument());
+
+    await userEvent.click(detailPanel.getByRole("button", { name: /preview attachment sample\.png/i }));
+    await userEvent.click(screen.getByTestId("attachment-lightbox-backdrop"));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: /image preview/i })).not.toBeInTheDocument());
+
+    await userEvent.click(detailPanel.getByRole("button", { name: /preview attachment sample\.png/i }));
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: /image preview/i })).not.toBeInTheDocument());
+  });
+
+  it("shows a broken lightbox image state without breaking attachment deletion", async () => {
+    const { repository, rows } = createAttachmentRepository([createAttachment()]);
+    setAttachmentDependenciesForTest({ fileStorage: createAttachmentFileStorage(), repository });
+    await renderApp();
+
+    const detailPanel = within(screen.getByTestId("detail-panel"));
+    await userEvent.click(await detailPanel.findByRole("button", { name: /preview attachment sample\.png/i }));
+
+    const lightbox = screen.getByRole("dialog", { name: /image preview sample\.png/i });
+    fireEvent.error(within(lightbox).getByRole("img", { name: /sample\.png/i }));
+    expect(within(lightbox).getByText(/unable to preview image/i)).toBeInTheDocument();
+
+    await userEvent.click(within(lightbox).getByRole("button", { name: /close image preview/i }));
+    await userEvent.click(detailPanel.getByRole("button", { name: /delete attachment sample\.png/i }));
+
+    await waitFor(() => expect(rows).toHaveLength(0));
   });
 
   it("does not let stale attachment loads from a previous selected task replace the current task attachments", async () => {

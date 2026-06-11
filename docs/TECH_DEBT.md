@@ -17,7 +17,7 @@
 - Full-snapshot writes are simple and safe for the current task count, but row-level writes may be needed if task volume grows substantially.
 - More UI preferences in Zustand could blur business state and ephemeral state if not separated.
 - Advanced desktop features will expand Tauri permissions and increase platform-specific failure modes.
-- Image attachment import, copying, preview, and delete UI now exist, but full orphan-file scanning/repair and backup policy are still not implemented.
+- Image attachment import, copying, thumbnail preview, Lightbox preview, and delete UI now exist, but full orphan-file scanning/repair and backup policy are still not implemented.
 
 ## Resolved By Phase 3 SQLite
 
@@ -49,6 +49,14 @@
 - Deleting a task triggers attachment metadata cleanup and app-owned file cleanup.
 - UI and stores do not persist original source image paths as the attachment source of truth.
 
+## Resolved By Phase 4C Image Lightbox
+
+- TaskDetail image thumbnails can open a centered Lightbox preview.
+- Lightbox closes via close button, backdrop click, and Escape.
+- Preview uses the app-owned copied image URL already loaded by the attachment store.
+- Lightbox is local UI state and does not alter tasks, SQLite metadata, or file storage.
+- Broken preview state is handled without crashing the detail panel.
+
 ## Must Fix Before Next Persistence Expansion
 
 - Add a user-facing backup/export and restore strategy.
@@ -62,6 +70,7 @@
 - Add backup/export and restore semantics for copied attachment files together with SQLite metadata.
 - Decide whether to add thumbnail generation for large image lists.
 - Add image dimension extraction if UI needs width/height-aware layouts.
+- Add optional Lightbox enhancements only if needed: previous/next navigation, zoom/pan, and rotation.
 - Ensure screenshot-generated files reuse the attachment file storage adapter instead of creating a parallel screenshot file system.
 - Continue ensuring file import never writes images, `tofinal.db`, `*.db`, or `*.sqlite` into the Git working tree.
 

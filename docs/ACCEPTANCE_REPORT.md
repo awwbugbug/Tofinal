@@ -505,6 +505,56 @@ Date: 2026-06-11
 
 ---
 
+# Phase 4C Image Lightbox Preview Addendum
+
+Date: 2026-06-11
+
+## 1. Scope Completed
+
+- Added click-to-open image Lightbox preview from TaskDetail attachment thumbnails.
+- Lightbox displays the app-owned copied attachment image, not the original source path.
+- Large preview is centered with a semi-transparent blurred backdrop.
+- Closing works through:
+  - Close button.
+  - Backdrop click.
+  - Escape key.
+- Image sizing is constrained by the viewport with `max-width: 90vw` and `max-height: 85vh`.
+- Image aspect ratio is preserved with `object-fit: contain`.
+- Broken preview state shows a non-crashing missing image message.
+- Lightbox state is local to TaskDetail and does not affect task data, attachment metadata, or persistence.
+
+## 2. Animation
+
+- Implemented with CSS only.
+- Open animation uses opacity, slight `translateY`, and scale.
+- Close animation uses opacity, slight `translateY`, and scale.
+- Timing uses non-linear easing based on `cubic-bezier(0.22, 1, 0.36, 1)`.
+- No animation library was added.
+
+## 3. Explicitly Unchanged
+
+- SQLite schema was not changed.
+- Attachment metadata repository was not changed.
+- File storage path and copy/delete logic were not changed.
+- Desktop Pin Mode remains unchanged and does not load attachment previews.
+- Screenshot, voice input, AI/OCR, task-binding app integration, system tray, and global shortcuts remain unimplemented.
+
+## 4. Known Follow-Up Enhancements
+
+- Previous/next navigation between multiple images.
+- Zoom and pan.
+- Rotation.
+- Dedicated full orphan-file repair flow.
+
+## 5. Test And Build Results
+
+- `npm test`: passed, 7 test files, 65 tests.
+- `npm run build`: passed, TypeScript and Vite production build completed.
+- `cargo check`: passed for `src-tauri`.
+- `npm run tauri dev`: verified Vite startup on port 1420 and `target\debug\tofinal.exe` launch; validation processes were then stopped intentionally.
+
+---
+
 # Phase 3 SQLite Acceptance Addendum
 
 Date: 2026-06-10

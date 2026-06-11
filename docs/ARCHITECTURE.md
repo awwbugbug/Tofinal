@@ -68,6 +68,7 @@ ToFinal/
 - `src/lib/windowControls.ts`: wraps Tauri current-window controls for dragging, minimize, maximize/restore, and close.
 - `src/components/layout/*`: composes app-level surfaces, window modes, navigation, title bar, details, and resizable Normal Mode columns.
 - `src/components/task/*`: implements task creation, list rendering, completion, selection, and detail editing.
+- `src/components/task/AttachmentLightbox.tsx`: owns enlarged image preview rendering, local close animation, backdrop click, close button, and Escape handling.
 - `src-tauri/tauri.conf.json`: product metadata, dev/build commands, main window dimensions, custom titlebar decorations setting, and bundle icons.
 - `src-tauri/capabilities/default.json`: grants the main window only the current core/window permissions plus opener default.
 
@@ -233,3 +234,13 @@ Phase 4B adds local image file handling behind `src/storage/attachmentFileStorag
 Deleting an attachment removes metadata first and then attempts to remove the copied file. If file deletion fails, metadata stays deleted and the error is surfaced through attachment store state.
 
 Screenshot capture should reuse this boundary in Phase 5 by writing the screenshot image into the same attachments directory and inserting a `task_attachments` row with `kind = "screenshot"`.
+
+## Attachment Preview Boundary
+
+Phase 4C adds a TaskDetail-local Lightbox for image attachments:
+
+- TaskDetail holds the currently previewed attachment in local React state.
+- `AttachmentLightbox` renders the centered preview, backdrop, close control, Escape listener, and broken-image state.
+- The Lightbox consumes the preview URL already produced by `attachmentStore`; it does not read files, query SQLite, or mutate task data.
+- The preview is intentionally read-only. It does not edit, rotate, crop, zoom, or generate thumbnails.
+- Desktop Pin Mode does not render the Lightbox entry because it does not load attachment previews.
