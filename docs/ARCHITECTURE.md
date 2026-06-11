@@ -6,7 +6,7 @@
 - Frontend: React, TypeScript, Vite, Tailwind CSS, shadcn-style local UI primitives.
 - State: Zustand.
 - Icons: lucide-react.
-- Persistence: localStorage through a repository boundary.
+- Persistence: SQLite through the official Tauri SQL Plugin, with localStorage retained only as a v0.2 migration source.
 - Tests: Vitest, Testing Library, jsdom.
 
 ## Project Structure
@@ -44,8 +44,8 @@ ToFinal/
 - `src/components/task`: task input, list, item, and editable detail components.
 - `src/components/ui`: small local UI primitives used by the app.
 - `src/lib`: shared helpers and Tauri window wrappers.
-- `src/repositories`: persistence-facing repository interface boundary.
-- `src/storage`: localStorage snapshot load/save and migration logic.
+- `src/repositories`: async persistence-facing repository interface boundary plus SQLite-backed implementation.
+- `src/storage`: localStorage snapshot load/save utilities retained for v0.2 migration and rollback.
 - `src/stores`: Zustand task store and store tests.
 - `src/styles`: global CSS tokens and utility classes.
 - `src/test`: test setup.
@@ -54,9 +54,10 @@ ToFinal/
 
 ## Core File Responsibilities
 
-- `src/stores/taskStore.ts`: owns in-memory task state, selected task, app mode, filter/search state, task mutations, filtering, and persistence calls.
-- `src/storage/taskStorage.ts`: reads/writes task snapshots to localStorage key `tofinal.tasks.v1`, seeds first-run data, validates stored tasks, and migrates missing `pinned` to `false`.
-- `src/repositories/taskRepository.ts`: defines `TaskRepository` and exports the current localStorage-backed implementation.
+- `src/stores/taskStore.ts`: owns in-memory task state, selected task, app mode, filter/search state, task mutations, filtering, async hydration, and persistence calls.
+- `src/storage/taskStorage.ts`: reads/writes v0.2 task snapshots at localStorage key `tofinal.tasks.v1`, seeds first-run data, validates stored tasks, and migrates missing `pinned` to `false`.
+- `src/repositories/taskRepository.ts`: defines async `TaskRepository`, exposes the active repository, and allows tests to inject a memory repository.
+- `src/repositories/sqliteTaskRepository.ts`: opens `sqlite:tofinal.db`, ensures schema, maps SQLite rows to `Task`, migrates v0.2 localStorage snapshots, and saves task snapshots transactionally.
 - `src/types/task.ts`: defines `Task`, `TaskPriority`, `AppMode`, and `TaskFilter`.
 - `src/lib/windowMode.ts`: applies Normal/Pin Tauri window profiles with try/catch fallback.
 - `src/lib/windowControls.ts`: wraps Tauri current-window controls for dragging, minimize, maximize/restore, and close.
@@ -67,14 +68,16 @@ ToFinal/
 
 ## Data Flow
 
-1. User interacts with UI components such as `QuickInput`, `TaskItem`, `TaskDetail`, Sidebar, or mode buttons.
-2. `AppShell` passes the relevant Zustand actions into layout/task components.
-3. `taskStore` updates task state in memory and recomputes `selectedTaskId` when filtering, searching, updating, completing, or deleting can change visible tasks.
-4. Task mutations call `localTaskRepository.saveSnapshot({ tasks })`.
-5. `localTaskRepository` delegates to `saveTaskSnapshot`.
-6. `taskStorage` serializes `{ version: 1, savedAt, tasks }` into localStorage key `tofinal.tasks.v1`.
-7. On startup, `taskStore` calls `localTaskRepository.loadSnapshot()`, which delegates to `loadTaskSnapshot()`.
-8. If no valid snapshot exists, seed tasks are used.
+1. `AppShell` calls `taskStore.hydrateTasks()` on startup.
+2. `taskStore` calls the active async `TaskRepository.loadSnapshot()`.
+3. The default repository opens `sqlite:tofinal.db` through `@tauri-apps/plugin-sql`.
+4. The SQLite repository ensures `schema_meta` and `tasks` exist.
+5. If SQLite contains rows, tasks are loaded from SQLite with explicit sort order.
+6. If SQLite is empty, the repository reads localStorage key `tofinal.tasks.v1`; valid v0.2 snapshots are migrated into SQLite, while missing/invalid localStorage falls back to seed tasks.
+7. User interactions flow from UI components to Zustand actions.
+8. `taskStore` updates memory immediately and recomputes `selectedTaskId` when filtering, searching, updating, completing, or deleting can change visible tasks.
+9. Mutations call `TaskRepository.saveSnapshot({ tasks })`, which writes the full snapshot to SQLite in a transaction.
+10. UI components do not import SQLite, localStorage, or plugin APIs directly.
 
 ## Task Schema
 
@@ -95,12 +98,16 @@ type Task = {
 
 ## Persistence Strategy
 
-- Current persistence is intentionally localStorage-only.
-- `TASK_STORAGE_KEY` is `tofinal.tasks.v1`.
-- Stored JSON includes `version`, `savedAt`, and `tasks`.
-- Invalid JSON, invalid snapshot shape, invalid task shape, or unavailable localStorage falls back to seed tasks.
-- Legacy tasks missing `pinned` are normalized to `pinned: false`.
-- Only task data is persisted. Window mode, column widths, active filter, search query, and selection are session UI state.
+- Current persistence is SQLite.
+- Database path: `sqlite:tofinal.db`.
+- SQLite schema version: `1`, stored in `schema_meta`.
+- Tasks are stored in the `tasks` table with `sort_order` for deterministic ordering.
+- `tags` are JSON TEXT.
+- `completed` and `pinned` are SQLite INTEGER booleans with `CHECK (value IN (0, 1))`.
+- `completedAt` maps to nullable `completed_at`.
+- localStorage key `tofinal.tasks.v1` is retained for v0.2 migration and rollback only.
+- Invalid localStorage snapshots are not migrated; empty SQLite then falls back to seed tasks.
+- Only task data is persisted. Window mode, column widths, active filter, search query, and selection remain session UI state.
 
 ## State Management
 
@@ -110,8 +117,12 @@ Store state:
 - `mode`
 - `activeFilter`
 - `searchQuery`
+- `hydrated`
+- `loading`
+- `error`
 
 Store actions:
+- `hydrateTasks`
 - `addTask`
 - `updateTask`
 - `deleteTask`
@@ -123,7 +134,7 @@ Store actions:
 - `setSearchQuery`
 - `getFilteredTasks`
 
-The store currently mixes task data with lightweight UI state. This is acceptable for v0.2 because the app has one local user and simple mode/filter state. Larger features should split persistent task data from ephemeral UI preferences before adding more global UI state.
+The store mixes task data with lightweight UI state. This remains acceptable for the current single-user desktop app, but larger features should split persistent task data from ephemeral UI preferences before adding more global UI state.
 
 ## Window Modes
 
@@ -145,15 +156,17 @@ Current capability permissions:
 - `core:window:allow-toggle-maximize`
 - `core:window:allow-close`
 - `opener:default`
+- `sql:default`
+- `sql:allow-execute`
+- `sql:allow-select`
 
-These permissions are narrow for the current feature set. No filesystem, shell, clipboard, global shortcut, tray, screenshot, notification, or SQL permissions are currently granted.
+These permissions are narrow for the current feature set. SQL permissions are limited to the plugin defaults plus select/execute. No filesystem, shell, clipboard, global shortcut, tray, screenshot, or notification permissions are currently granted.
 
-## SQLite Replacement Recommendation
+## SQLite Repository Boundary
 
-Phase 3 should replace the `localTaskRepository` implementation rather than changing UI components. Recommended shape:
+The SQLite replacement is implemented behind the same repository boundary:
 
-- Keep `TaskRepository` as the frontend-facing boundary.
-- Add an async repository path before SQLite if Tauri commands are used.
-- Move persistence effects out of direct synchronous store calls if SQLite access becomes async.
-- Add a migration/version layer for `Task` schema before writing SQLite data.
-- Keep localStorage import/export fallback only if explicitly needed for migration.
+- `loadSnapshot(): Promise<TaskSnapshot>`
+- `saveSnapshot(snapshot: TaskSnapshot): Promise<void>`
+
+Future schema work should extend the repository layer and SQLite migrations instead of letting UI components access SQL directly. Attachments, screenshots, and metadata should add their own tables instead of expanding the task row with binary data.

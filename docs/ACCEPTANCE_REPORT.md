@@ -368,6 +368,101 @@ Date: 2026-06-09
 - `npm run build`: passed, TypeScript and Vite production build completed.
 - `cargo check`: passed for `src-tauri`.
 - `npm run tauri dev`: verified Vite on port 1420 and `target\debug\tofinal.exe` startup; validation processes were then stopped intentionally.
+
+---
+
+# Phase 3 SQLite Acceptance Addendum
+
+Date: 2026-06-10
+
+## 1. Real Implemented Functions
+
+- Replaced runtime task persistence with SQLite through the official Tauri SQL Plugin.
+- Fixed SQLite database path: `sqlite:tofinal.db`.
+- Added async repository methods: `loadSnapshot(): Promise<TaskSnapshot>` and `saveSnapshot(snapshot): Promise<void>`.
+- Added store hydration state: `hydrated`, `loading`, and `error`.
+- App startup now calls `hydrateTasks()` and shows a safe lightweight loading state before tasks are available.
+- Task mutations still update UI immediately, then save the full snapshot to SQLite.
+- Write failures are captured in store `error` instead of crashing the app.
+- Existing Phase 2 task behavior remains: add, edit, delete, complete/reopen, priority, tags, pinned, filters, search, Desktop Pin Mode, and resizable Normal Mode columns.
+
+## 2. SQLite Schema Actually Implemented
+
+- `schema_meta`
+  - `key TEXT PRIMARY KEY`
+  - `value TEXT NOT NULL`
+  - `updated_at TEXT NOT NULL`
+- `tasks`
+  - `id TEXT PRIMARY KEY`
+  - `title TEXT NOT NULL`
+  - `note TEXT NOT NULL`
+  - `completed INTEGER NOT NULL CHECK (completed IN (0, 1))`
+  - `priority TEXT NOT NULL CHECK (priority IN ('normal', 'important', 'urgent'))`
+  - `pinned INTEGER NOT NULL CHECK (pinned IN (0, 1))`
+  - `tags TEXT NOT NULL`
+  - `created_at TEXT NOT NULL`
+  - `updated_at TEXT NOT NULL`
+  - `completed_at TEXT NULL`
+  - `sort_order INTEGER NOT NULL`
+- `idx_tasks_sort_order` keeps explicit snapshot ordering.
+- All task reads use explicit `ORDER BY sort_order ASC, created_at DESC, id ASC`.
+
+## 3. Migration Strategy Actually Implemented
+
+- On startup, the SQLite repository opens `sqlite:tofinal.db` and ensures `schema_meta` and `tasks` exist.
+- If SQLite already contains task rows, SQLite wins and localStorage is not used to overwrite it.
+- If SQLite is empty, the repository reads localStorage key `tofinal.tasks.v1`.
+- Valid localStorage snapshots are migrated into SQLite in a transaction and `localstorage_v1_migrated=true` is written to `schema_meta`.
+- Missing or invalid localStorage falls back to seed tasks and writes `seed_initialized=true`.
+- localStorage data is not deleted after migration.
+- `tags` are stored as JSON TEXT.
+- booleans are mapped to SQLite INTEGER `0` / `1`.
+- `completedAt` maps to nullable `completed_at`.
+
+## 4. Dependencies And Permissions Added
+
+- npm dependency: `@tauri-apps/plugin-sql`.
+- Cargo dependency: `tauri-plugin-sql` with `sqlite` feature.
+- Tauri capability permissions added:
+  - `sql:default`
+  - `sql:allow-execute`
+  - `sql:allow-select`
+- No filesystem, shell, clipboard, tray, shortcut, screenshot, or other unrelated permissions were added.
+
+## 5. Still Explicitly Not Implemented
+
+- Screenshot capture.
+- Voice input.
+- Image upload.
+- AI features.
+- Account login.
+- Cloud sync.
+- Calendar or reminders.
+- System tray.
+- Global shortcuts.
+- Windows WorkerW/Progman desktop embedding.
+
+## 6. Test And Build Results
+
+- `npm test`: passed, 4 test files, 35 tests.
+- `npm run build`: passed, TypeScript and Vite production build completed.
+- `cargo check`: passed for `src-tauri` with Tauri SQL Plugin compiled.
+- `npm run tauri dev`: verified startup to `target\debug\tofinal.exe`; validation processes were then stopped intentionally.
+
+## 7. Manual Acceptance Checklist
+
+- New task persists after restart: implemented by SQLite snapshot save/load; manual restart check still recommended as product QA.
+- Edited title/note persists after restart: implemented by SQLite snapshot save/load; manual restart check still recommended as product QA.
+- Deleted task stays deleted after restart: implemented by SQLite snapshot save/load; manual restart check still recommended as product QA.
+- Completed/reopened state persists after restart: implemented by SQLite snapshot save/load; manual restart check still recommended as product QA.
+- `priority`, `tags`, and `pinned` persist after restart: implemented by SQLite snapshot save/load; manual restart check still recommended as product QA.
+- v0.2 localStorage data migrates when SQLite is empty.
+- localStorage key `tofinal.tasks.v1` remains untouched after migration.
+- UI behavior should match Phase 2 because components still only talk to Zustand actions.
+
+## 8. Phase 3 Tag Recommendation
+
+After `npm run tauri dev` is manually confirmed and restart persistence is checked, tag a Phase 3 baseline such as `v0.3-sqlite-task-baseline`.
 - Static color audit: no matches for `bg-white`, `bg-black`, `text-black`, `border-white`, `neutral-950`, `neutral-900`, or old `#f2f2f4` in `src`.
 
 ## 8. Phase 2.6B Readiness

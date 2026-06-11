@@ -1,17 +1,81 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { TASK_STORAGE_KEY } from "@/storage/taskStorage";
+import { resetTaskRepositoryForTest, setTaskRepositoryForTest } from "@/repositories/taskRepository";
+import { createSeedTasks } from "@/storage/taskStorage";
 import { createTaskStore } from "@/stores/taskStore";
+import { createMemoryTaskRepository, flushPromises } from "@/test/taskRepositoryTestUtils";
+import type { TaskSnapshot } from "@/storage/taskStorage";
 
-describe("task store", () => {
-  beforeEach(() => {
-    localStorage.clear();
+type Deferred<T> = {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (error: Error) => void;
+};
+
+const createDeferred = <T,>(): Deferred<T> => {
+  let resolve!: (value: T) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
   });
 
-  it("adds a new normal-priority task from a title and persists it", () => {
+  return { promise, resolve, reject };
+};
+
+describe("task store", () => {
+  const createHydratedStore = async () => {
+    const repository = createMemoryTaskRepository({ tasks: createSeedTasks() });
+    setTaskRepositoryForTest(repository);
     const store = createTaskStore();
 
+    await store.getState().hydrateTasks();
+    return { store, repository };
+  };
+
+  beforeEach(() => {
+    localStorage.clear();
+    resetTaskRepositoryForTest();
+  });
+
+  it("hydrates task state from the active repository", async () => {
+    const repository = createMemoryTaskRepository({ tasks: createSeedTasks() });
+    setTaskRepositoryForTest(repository);
+    const store = createTaskStore();
+
+    const hydration = store.getState().hydrateTasks();
+
+    expect(store.getState().loading).toBe(true);
+    expect(store.getState().hydrated).toBe(false);
+
+    await hydration;
+
+    expect(store.getState().loading).toBe(false);
+    expect(store.getState().hydrated).toBe(true);
+    expect(store.getState().tasks).toHaveLength(4);
+  });
+
+  it("falls back to seed tasks and records an error when hydration fails", async () => {
+    setTaskRepositoryForTest({
+      async loadSnapshot() {
+        throw new Error("SQLite open failed");
+      },
+      async saveSnapshot() {},
+    });
+    const store = createTaskStore();
+
+    await store.getState().hydrateTasks();
+
+    expect(store.getState().hydrated).toBe(true);
+    expect(store.getState().tasks).toHaveLength(4);
+    expect(store.getState().error).toBe("SQLite open failed");
+  });
+
+  it("adds a new normal-priority task from a title and persists it", async () => {
+    const { store, repository } = await createHydratedStore();
+
     store.getState().addTask("Review inbox");
+    await flushPromises();
 
     const created = store.getState().tasks.find((task) => task.title === "Review inbox");
     expect(created).toMatchObject({
@@ -24,11 +88,12 @@ describe("task store", () => {
       completedAt: null,
     });
     expect(store.getState().selectedTaskId).toBe(created?.id);
-    expect(localStorage.getItem(TASK_STORAGE_KEY)).toContain("Review inbox");
+    const lastSnapshot = repository.savedSnapshots[repository.savedSnapshots.length - 1];
+    expect(lastSnapshot.tasks[0].title).toBe("Review inbox");
   });
 
-  it("ignores an empty task title", () => {
-    const store = createTaskStore();
+  it("ignores an empty task title", async () => {
+    const { store } = await createHydratedStore();
     const initialTasks = store.getState().tasks;
 
     store.getState().addTask("   ");
@@ -37,8 +102,8 @@ describe("task store", () => {
     expect(store.getState().selectedTaskId).toBe(initialTasks[0].id);
   });
 
-  it("edits title and note while rejecting an empty title", () => {
-    const store = createTaskStore();
+  it("edits title and note while rejecting an empty title", async () => {
+    const { store } = await createHydratedStore();
     const task = store.getState().tasks[0];
 
     const saved = store.getState().updateTask(task.id, {
@@ -56,19 +121,21 @@ describe("task store", () => {
     expect(store.getState().tasks[0].updatedAt).not.toBe(task.updatedAt);
   });
 
-  it("deletes the selected task and selects the next visible task", () => {
-    const store = createTaskStore();
+  it("deletes the selected task and selects the next visible task", async () => {
+    const { store, repository } = await createHydratedStore();
     const [firstTask, secondTask] = store.getState().tasks;
 
     store.getState().deleteTask(firstTask.id);
+    await flushPromises();
 
     expect(store.getState().tasks.some((task) => task.id === firstTask.id)).toBe(false);
     expect(store.getState().selectedTaskId).toBe(secondTask.id);
-    expect(localStorage.getItem(TASK_STORAGE_KEY)).not.toContain(firstTask.title);
+    const lastSnapshot = repository.savedSnapshots[repository.savedSnapshots.length - 1];
+    expect(lastSnapshot.tasks.some((task) => task.id === firstTask.id)).toBe(false);
   });
 
-  it("toggles completion and records completedAt only while completed", () => {
-    const store = createTaskStore();
+  it("toggles completion and records completedAt only while completed", async () => {
+    const { store } = await createHydratedStore();
     const taskId = store.getState().tasks[0].id;
 
     store.getState().toggleTask(taskId);
@@ -84,8 +151,8 @@ describe("task store", () => {
     expect(reopened.completedAt).toBeNull();
   });
 
-  it("updates priority, tags, and pinned state", () => {
-    const store = createTaskStore();
+  it("updates priority, tags, and pinned state", async () => {
+    const { store } = await createHydratedStore();
     const taskId = store.getState().tasks[1].id;
 
     const saved = store.getState().updateTask(taskId, {
@@ -101,8 +168,8 @@ describe("task store", () => {
     expect(task.pinned).toBe(true);
   });
 
-  it("selects a task by id and switches mode without losing task state", () => {
-    const store = createTaskStore();
+  it("selects a task by id and switches mode without losing task state", async () => {
+    const { store } = await createHydratedStore();
     const secondTaskId = store.getState().tasks[1].id;
 
     store.getState().selectTask(secondTaskId);
@@ -114,8 +181,8 @@ describe("task store", () => {
     expect(store.getState().tasks[1].completed).toBe(true);
   });
 
-  it("filters Today, All Tasks, Important, and Pinned tasks", () => {
-    const store = createTaskStore();
+  it("filters Today, All Tasks, Important, and Pinned tasks", async () => {
+    const { store } = await createHydratedStore();
     const secondTaskId = store.getState().tasks[1].id;
 
     store.getState().updateTask(secondTaskId, { pinned: true });
@@ -126,8 +193,8 @@ describe("task store", () => {
     expect(store.getState().getFilteredTasks("pinned")).toHaveLength(1);
   });
 
-  it("searches title and note together with the active filter", () => {
-    const store = createTaskStore();
+  it("searches title and note together with the active filter", async () => {
+    const { store } = await createHydratedStore();
 
     store.getState().setSearchQuery("workerw");
     expect(store.getState().getFilteredTasks().map((task) => task.title)).toEqual([
@@ -139,5 +206,125 @@ describe("task store", () => {
     expect(store.getState().getFilteredTasks().map((task) => task.title)).toEqual([
       "Review lightweight state boundaries",
     ]);
+  });
+
+  it("records repository write failures without reverting in-memory state", async () => {
+    const { store } = await createHydratedStore();
+    setTaskRepositoryForTest({
+      async loadSnapshot() {
+        return { tasks: createSeedTasks() };
+      },
+      async saveSnapshot() {
+        throw new Error("SQLite write failed");
+      },
+    });
+
+    store.getState().addTask("Keeps working in memory");
+    await flushPromises();
+
+    expect(store.getState().tasks[0].title).toBe("Keeps working in memory");
+    expect(store.getState().error).toBe("SQLite write failed");
+  });
+
+  it("serializes rapid saves so the final persisted snapshot is the latest state", async () => {
+    let loadedSnapshot: TaskSnapshot = { tasks: createSeedTasks() };
+    const committedSnapshots: TaskSnapshot[] = [];
+    const requests: Array<Deferred<void> & { snapshot: TaskSnapshot }> = [];
+    setTaskRepositoryForTest({
+      async loadSnapshot() {
+        return loadedSnapshot;
+      },
+      saveSnapshot(snapshot) {
+        const request = createDeferred<void>();
+        requests.push({ ...request, snapshot });
+        return request.promise.then(() => {
+          committedSnapshots.push(snapshot);
+          loadedSnapshot = snapshot;
+        });
+      },
+    });
+    const store = createTaskStore();
+    await store.getState().hydrateTasks();
+    const taskId = store.getState().tasks[0].id;
+
+    store.getState().updateTask(taskId, { title: "Title A" });
+    store.getState().updateTask(taskId, { title: "Title B" });
+    store.getState().updateTask(taskId, { title: "Title C" });
+    await flushPromises();
+
+    if (requests.length === 3) {
+      requests[2].resolve();
+      await flushPromises();
+      requests[0].resolve();
+      await flushPromises();
+      requests[1].resolve();
+      await flushPromises();
+    } else {
+      let index = 0;
+      while (index < requests.length) {
+        requests[index].resolve();
+        index += 1;
+        await flushPromises();
+      }
+    }
+
+    expect(store.getState().tasks[0].title).toBe("Title C");
+    expect(committedSnapshots[committedSnapshots.length - 1].tasks[0].title).toBe("Title C");
+  });
+
+  it("tracks saving state and lastSavedAt around an async save", async () => {
+    const saveRequest = createDeferred<void>();
+    setTaskRepositoryForTest({
+      async loadSnapshot() {
+        return { tasks: createSeedTasks() };
+      },
+      async saveSnapshot() {
+        return saveRequest.promise;
+      },
+    });
+    const store = createTaskStore();
+    await store.getState().hydrateTasks();
+
+    store.getState().updateTask(store.getState().tasks[0].id, { note: "Saving state note" });
+    await flushPromises();
+
+    expect(store.getState().saving).toBe(true);
+    expect(store.getState().lastSavedAt).toBeNull();
+
+    saveRequest.resolve();
+    await flushPromises();
+
+    expect(store.getState().saving).toBe(false);
+    expect(store.getState().lastSavedAt).toEqual(expect.any(String));
+  });
+
+  it("does not mutate or persist tasks before hydration completes", async () => {
+    const hydration = createDeferred<TaskSnapshot>();
+    const savedSnapshots: TaskSnapshot[] = [];
+    setTaskRepositoryForTest({
+      async loadSnapshot() {
+        return hydration.promise;
+      },
+      async saveSnapshot(snapshot) {
+        savedSnapshots.push(snapshot);
+      },
+    });
+    const store = createTaskStore();
+    const hydrationPromise = store.getState().hydrateTasks();
+
+    store.getState().addTask("Too early");
+    store.getState().toggleTask("task-1");
+    const updated = store.getState().updateTask("task-1", { title: "Too early update" });
+    store.getState().deleteTask("task-1");
+
+    expect(updated).toBe(false);
+    expect(store.getState().tasks).toHaveLength(0);
+    expect(savedSnapshots).toHaveLength(0);
+
+    hydration.resolve({ tasks: createSeedTasks() });
+    await hydrationPromise;
+
+    expect(store.getState().tasks[0].title).toBe("Finalize the first-stage desktop shell");
+    expect(savedSnapshots).toHaveLength(0);
   });
 });

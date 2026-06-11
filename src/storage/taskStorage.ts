@@ -8,6 +8,11 @@ export type TaskSnapshot = {
   tasks: Task[];
 };
 
+export type StoredTaskSnapshotResult =
+  | { status: "valid"; snapshot: TaskSnapshot }
+  | { status: "missing" }
+  | { status: "invalid"; error: string };
+
 const nowIso = () => new Date().toISOString();
 
 const createSeedTask = (
@@ -68,7 +73,7 @@ export const createSeedTasks = (): Task[] => [
 const isPriority = (value: unknown): value is Task["priority"] =>
   value === "normal" || value === "important" || value === "urgent";
 
-const normalizeTask = (value: unknown): Task | null => {
+export const normalizeStoredTask = (value: unknown): Task | null => {
   if (!value || typeof value !== "object") {
     return null;
   }
@@ -109,29 +114,42 @@ const storage = () => {
   return window.localStorage;
 };
 
-export const loadTaskSnapshot = (): TaskSnapshot => {
+export const loadStoredTaskSnapshot = (): StoredTaskSnapshotResult => {
   try {
     const localStorage = storage();
     const raw = localStorage?.getItem(TASK_STORAGE_KEY);
 
     if (!raw) {
-      return { tasks: createSeedTasks() };
+      return { status: "missing" };
     }
 
     const parsed = JSON.parse(raw) as { tasks?: unknown };
     if (!Array.isArray(parsed.tasks)) {
-      return { tasks: createSeedTasks() };
+      return { status: "invalid", error: "Stored task snapshot does not contain a tasks array." };
     }
 
-    const tasks = parsed.tasks.map(normalizeTask);
+    const tasks = parsed.tasks.map(normalizeStoredTask);
     if (tasks.some((task) => task === null)) {
-      return { tasks: createSeedTasks() };
+      return { status: "invalid", error: "Stored task snapshot contains invalid task records." };
     }
 
-    return { tasks: tasks as Task[] };
-  } catch {
-    return { tasks: createSeedTasks() };
+    return { status: "valid", snapshot: { tasks: tasks as Task[] } };
+  } catch (error) {
+    return {
+      status: "invalid",
+      error: error instanceof Error ? error.message : "Unable to parse stored task snapshot.",
+    };
   }
+};
+
+export const loadTaskSnapshot = (): TaskSnapshot => {
+  const storedSnapshot = loadStoredTaskSnapshot();
+
+  if (storedSnapshot.status === "valid") {
+    return storedSnapshot.snapshot;
+  }
+
+  return { tasks: createSeedTasks() };
 };
 
 export const saveTaskSnapshot = (snapshot: TaskSnapshot) => {

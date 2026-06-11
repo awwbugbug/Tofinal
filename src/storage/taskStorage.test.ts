@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { loadTaskSnapshot, saveTaskSnapshot, TASK_STORAGE_KEY } from "@/storage/taskStorage";
+import {
+  loadStoredTaskSnapshot,
+  loadTaskSnapshot,
+  saveTaskSnapshot,
+  TASK_STORAGE_KEY,
+} from "@/storage/taskStorage";
 import type { Task } from "@/types/task";
 
 const task = (overrides: Partial<Task> = {}): Task => ({
@@ -48,6 +53,14 @@ describe("task storage", () => {
     expect(snapshot.tasks[0].title).toBe("Finalize the first-stage desktop shell");
   });
 
+  it("reports invalid stored JSON separately for SQLite migration", () => {
+    localStorage.setItem(TASK_STORAGE_KEY, "{not valid json");
+
+    const result = loadStoredTaskSnapshot();
+
+    expect(result.status).toBe("invalid");
+  });
+
   it("migrates legacy tasks without pinned to pinned false", () => {
     const legacyTask = task();
     const { pinned: _pinned, ...withoutPinned } = legacyTask;
@@ -57,5 +70,15 @@ describe("task storage", () => {
 
     expect(snapshot.tasks).toHaveLength(1);
     expect(snapshot.tasks[0].pinned).toBe(false);
+  });
+
+  it("returns a valid stored snapshot for SQLite migration without deleting localStorage", () => {
+    saveTaskSnapshot({ tasks: [task({ title: "Migration source" })] });
+
+    const result = loadStoredTaskSnapshot();
+
+    expect(result.status).toBe("valid");
+    expect(result.status === "valid" ? result.snapshot.tasks[0].title : "").toBe("Migration source");
+    expect(localStorage.getItem(TASK_STORAGE_KEY)).toContain("Migration source");
   });
 });

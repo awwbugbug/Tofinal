@@ -2,31 +2,37 @@
 
 ## Known Issues
 
-- `taskStore` imports the concrete `localTaskRepository` singleton directly. This is sufficient for v0.2 but will need an async-friendly injection or factory before SQLite commands are introduced.
-- `TaskRepository` is currently synchronous because localStorage is synchronous. SQLite via Tauri commands will likely require async load/save methods.
+- SQLite persistence is now implemented through an async repository boundary, but the store still writes full task snapshots after each mutation instead of row-level changes.
+- localStorage remains in the codebase for v0.2 migration and rollback; it should not regain responsibility for normal runtime persistence.
 - `Today` is still a default task collection, not a real date-based view.
 - Task ordering is simple insertion order, with Desktop Pin Mode only sorting pinned open tasks first.
 - Normal Mode column widths are session-only and are not persisted.
 - Visual styles are mostly tokenized, but a few component-level `color-mix(...)`, shadow, and status-color classes remain inline for local visual states.
 - App version in `package.json` and `tauri.conf.json` is still `0.1.0`; product baseline can be named v0.2 in docs/tagging even if package version has not yet been bumped.
-- There is no formal import/export, backup, or recovery flow for localStorage data.
+- There is no formal SQLite backup/export/recovery flow yet.
 
 ## Current Risks
 
-- localStorage can be cleared by WebView/runtime policy, user action, or app data reset; data durability is not strong enough for long-term use.
-- A future async repository may require store action changes. Treat SQLite as a persistence migration, not a drop-in one-line replacement.
+- SQLite improves durability over localStorage, but the app still lacks backup/export and database corruption recovery UI.
+- Full-snapshot writes are simple and safe for the current task count, but row-level writes may be needed if task volume grows substantially.
 - More UI preferences in Zustand could blur business state and ephemeral state if not separated.
 - Advanced desktop features will expand Tauri permissions and increase platform-specific failure modes.
 - Screenshot, image, and file attachment features require explicit file storage policy before implementation.
 
-## Must Fix Before SQLite
+## Resolved By Phase 3 SQLite
 
-- Decide whether repository APIs become async:
-  - recommended: `loadSnapshot(): Promise<TaskSnapshot>` and `saveSnapshot(snapshot): Promise<void>` behind a hydration state.
-- Define SQLite schema and migration versioning for `Task`.
-- Add explicit error handling for failed reads/writes instead of silent best-effort only.
-- Add migration from localStorage snapshot to SQLite if existing v0.2 data should be preserved.
-- Add tests for repository failure behavior and startup hydration.
+- Repository APIs are async: `loadSnapshot(): Promise<TaskSnapshot>` and `saveSnapshot(snapshot): Promise<void>`.
+- Store hydration state exists: `hydrated`, `loading`, and `error`.
+- SQLite schema versioning begins with `schema_meta.schema_version = 1`.
+- v0.2 localStorage migration is implemented and preserves the original localStorage key.
+- Repository failure and startup hydration behavior are covered by tests.
+
+## Must Fix Before Next Persistence Expansion
+
+- Add a user-facing backup/export and restore strategy.
+- Decide whether to keep full-snapshot writes or introduce row-level repository methods.
+- Add schema migration tests before any Task schema change.
+- Define database recovery UX for corrupted SQLite rows or failed migrations.
 
 ## Must Fix Before Screenshot Or Image Upload
 

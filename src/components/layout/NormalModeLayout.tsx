@@ -16,6 +16,9 @@ type NormalModeLayoutProps = {
   selectedTaskId: string | null;
   activeFilter: TaskFilter;
   searchQuery: string;
+  saving: boolean;
+  lastSavedAt: string | null;
+  persistenceError: string | null;
   onAddTask: (title: string) => void;
   onDeleteTask: (id: string) => void;
   onFilterChange: (filter: TaskFilter) => void;
@@ -89,9 +92,12 @@ export function NormalModeLayout({
   onSwitchToPin,
   onToggleTask,
   onUpdateTask,
+  persistenceError,
+  saving,
   searchQuery,
   selectedTask,
   selectedTaskId,
+  lastSavedAt,
   tasks,
 }: NormalModeLayoutProps) {
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
@@ -252,7 +258,14 @@ export function NormalModeLayout({
         tabIndex={0}
       />
 
-      <DetailPanel onDeleteTask={onDeleteTask} onUpdateTask={onUpdateTask} task={selectedTask} />
+      <DetailPanel
+        lastSavedAt={lastSavedAt}
+        onDeleteTask={onDeleteTask}
+        onUpdateTask={onUpdateTask}
+        persistenceError={persistenceError}
+        saving={saving}
+        task={selectedTask}
+      />
     </main>
   );
 }

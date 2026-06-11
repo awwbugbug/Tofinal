@@ -1,19 +1,40 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "@/app/App";
+import { resetTaskRepositoryForTest, setTaskRepositoryForTest } from "@/repositories/taskRepository";
+import { createSeedTasks } from "@/storage/taskStorage";
 import { resetTaskStore } from "@/stores/taskStore";
+import { createMemoryTaskRepository } from "@/test/taskRepositoryTestUtils";
+
+const createDeferred = <T,>() => {
+  let resolve!: (value: T) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+
+  return { promise, resolve, reject };
+};
 
 describe("App", () => {
+  const renderApp = async () => {
+    render(<App />);
+    await screen.findByTestId("normal-mode-layout");
+  };
+
   beforeEach(() => {
     localStorage.clear();
     vi.restoreAllMocks();
+    resetTaskRepositoryForTest();
+    setTaskRepositoryForTest(createMemoryTaskRepository({ tasks: createSeedTasks() }));
     resetTaskStore();
   });
 
   it("switches between normal window mode and desktop pin mode without losing task state", async () => {
-    render(<App />);
+    await renderApp();
 
     expect(screen.getByTestId("normal-mode-layout")).toBeInTheDocument();
 
@@ -30,7 +51,7 @@ describe("App", () => {
   });
 
   it("adds a task through quick input with click and Enter, then clears the input", async () => {
-    render(<App />);
+    await renderApp();
     const input = screen.getByPlaceholderText(/add a task/i);
 
     await userEvent.click(screen.getByRole("button", { name: /add task/i }));
@@ -49,7 +70,7 @@ describe("App", () => {
   });
 
   it("edits the selected task title, note, priority, tags, and pinned state", async () => {
-    render(<App />);
+    await renderApp();
 
     const detailPanel = within(screen.getByTestId("detail-panel"));
     const titleInput = detailPanel.getByLabelText(/task title/i);
@@ -73,7 +94,7 @@ describe("App", () => {
   });
 
   it("does not save an empty title", async () => {
-    render(<App />);
+    await renderApp();
 
     const detailPanel = within(screen.getByTestId("detail-panel"));
     await userEvent.clear(detailPanel.getByLabelText(/task title/i));
@@ -83,8 +104,52 @@ describe("App", () => {
     expect(within(screen.getByTestId("task-list")).getByText("Finalize the first-stage desktop shell")).toBeInTheDocument();
   });
 
+  it("shows saving status while a task update is being persisted", async () => {
+    const saveRequest = createDeferred<void>();
+    setTaskRepositoryForTest({
+      async loadSnapshot() {
+        return { tasks: createSeedTasks() };
+      },
+      async saveSnapshot() {
+        return saveRequest.promise;
+      },
+    });
+    resetTaskStore();
+    await renderApp();
+
+    const detailPanel = within(screen.getByTestId("detail-panel"));
+    await userEvent.clear(detailPanel.getByLabelText(/task note/i));
+    await userEvent.type(detailPanel.getByLabelText(/task note/i), "Persisting with status");
+    await userEvent.click(detailPanel.getByRole("button", { name: /save task/i }));
+
+    expect(detailPanel.getByRole("button", { name: /saving task/i })).toBeInTheDocument();
+    expect(detailPanel.getByText(/saving locally/i)).toBeInTheDocument();
+
+    saveRequest.resolve();
+
+    await waitFor(() => {
+      expect(detailPanel.getByText(/saved/i)).toBeInTheDocument();
+    });
+  });
+
+  it("does not carry an unsaved draft into another selected task", async () => {
+    await renderApp();
+
+    const detailPanel = within(screen.getByTestId("detail-panel"));
+    await userEvent.clear(detailPanel.getByLabelText(/task title/i));
+    await userEvent.type(detailPanel.getByLabelText(/task title/i), "Unsaved first draft");
+    await userEvent.click(screen.getByText("Sketch the desktop pin interaction"));
+    await userEvent.clear(detailPanel.getByLabelText(/task note/i));
+    await userEvent.type(detailPanel.getByLabelText(/task note/i), "Second task saved note");
+    await userEvent.click(detailPanel.getByRole("button", { name: /save task/i }));
+
+    expect(screen.queryByText("Unsaved first draft")).not.toBeInTheDocument();
+    expect(detailPanel.getByDisplayValue("Sketch the desktop pin interaction")).toBeInTheDocument();
+    expect(detailPanel.getByDisplayValue("Second task saved note")).toBeInTheDocument();
+  });
+
   it("deletes the selected task after confirmation and updates the detail panel", async () => {
-    render(<App />);
+    await renderApp();
 
     const detailPanel = within(screen.getByTestId("detail-panel"));
     await userEvent.click(detailPanel.getByRole("button", { name: /delete task/i }));
@@ -97,7 +162,7 @@ describe("App", () => {
   });
 
   it("filters with real navigation including Pinned", async () => {
-    render(<App />);
+    await renderApp();
     const detailPanel = within(screen.getByTestId("detail-panel"));
 
     expect(screen.getByRole("button", { name: /today 4/i })).toHaveAttribute("aria-pressed", "true");
@@ -117,7 +182,7 @@ describe("App", () => {
   });
 
   it("searches by title and note and shows an empty state for no results", async () => {
-    render(<App />);
+    await renderApp();
     const searchInput = screen.getByLabelText(/search tasks/i);
 
     await userEvent.type(searchInput, "workerw");
@@ -130,8 +195,8 @@ describe("App", () => {
     expect(screen.getByText(/no tasks match your search/i)).toBeInTheDocument();
   });
 
-  it("renders the custom title bar controls", () => {
-    render(<App />);
+  it("renders the custom title bar controls", async () => {
+    await renderApp();
     const titleBar = within(screen.getByTestId("window-title-bar"));
 
     expect(titleBar.getByText("ToFinal")).toBeInTheDocument();
@@ -140,9 +205,9 @@ describe("App", () => {
     expect(titleBar.getByRole("button", { name: /close window/i })).toBeInTheDocument();
   });
 
-  it("resizes the three normal-mode panels within their width limits", () => {
+  it("resizes the three normal-mode panels within their width limits", async () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1120 });
-    render(<App />);
+    await renderApp();
 
     const layout = screen.getByTestId("normal-mode-layout");
     const leftHandle = screen.getByRole("separator", { name: /resize sidebar and task list/i });
@@ -173,9 +238,9 @@ describe("App", () => {
     expect(rightHandle).toHaveStyle({ right: "420px" });
   });
 
-  it("reclamps resized panels when the window becomes narrower", () => {
+  it("reclamps resized panels when the window becomes narrower", async () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1600 });
-    render(<App />);
+    await renderApp();
 
     const layout = screen.getByTestId("normal-mode-layout");
     const leftHandle = screen.getByRole("separator", { name: /resize sidebar and task list/i });
@@ -200,7 +265,7 @@ describe("App", () => {
   });
 
   it("does not render normal-mode resize handles in desktop pin mode", async () => {
-    render(<App />);
+    await renderApp();
 
     await userEvent.click(screen.getByRole("button", { name: /desktop pin mode/i }));
 

@@ -12,6 +12,9 @@ import type { Task, TaskPriority } from "@/types/task";
 
 type TaskDetailProps = {
   task: Task | null;
+  saving: boolean;
+  lastSavedAt: string | null;
+  persistenceError: string | null;
   onDeleteTask: (id: string) => void;
   onUpdateTask: (
     id: string,
@@ -76,7 +79,14 @@ const formatDate = (value: string | null) => {
 
 const parseTags = (value: string) => value.split(",");
 
-export function TaskDetail({ onDeleteTask, onUpdateTask, task }: TaskDetailProps) {
+export function TaskDetail({
+  lastSavedAt,
+  onDeleteTask,
+  onUpdateTask,
+  persistenceError,
+  saving,
+  task,
+}: TaskDetailProps) {
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("normal");
@@ -126,6 +136,13 @@ export function TaskDetail({ onDeleteTask, onUpdateTask, task }: TaskDetailProps
     priority !== task.priority ||
     pinned !== task.pinned ||
     normalizedTags !== currentTags;
+  const saveStatus = persistenceError
+    ? `Save failed: ${persistenceError}`
+    : saving
+      ? "Saving locally..."
+      : lastSavedAt
+        ? `Saved ${formatDate(lastSavedAt)}`
+        : "";
 
   const handleSave = () => {
     if (!title.trim()) {
@@ -280,9 +297,26 @@ export function TaskDetail({ onDeleteTask, onUpdateTask, task }: TaskDetailProps
           <Trash2 className="h-4 w-4" />
           Delete
         </Button>
-        <Button aria-label="Save task" disabled={!hasDraftChanges} onClick={handleSave}>
-          Save
-        </Button>
+        <div className="flex min-w-0 flex-col items-end gap-1">
+          {saveStatus && (
+            <span
+              aria-live="polite"
+              className={cn(
+                "max-w-40 truncate text-xs text-[var(--text-faint)]",
+                persistenceError && "text-[var(--danger)]",
+              )}
+            >
+              {saveStatus}
+            </span>
+          )}
+          <Button
+            aria-label={saving ? "Saving task" : "Save task"}
+            disabled={!hasDraftChanges}
+            onClick={handleSave}
+          >
+            {saving ? "Saving..." : "Save"}
+          </Button>
+        </div>
         </div>
       </div>
 

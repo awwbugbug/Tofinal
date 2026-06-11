@@ -12,6 +12,12 @@ export function AppShell() {
   const mode = useTaskStore((state) => state.mode);
   const activeFilter = useTaskStore((state) => state.activeFilter);
   const searchQuery = useTaskStore((state) => state.searchQuery);
+  const hydrated = useTaskStore((state) => state.hydrated);
+  const loading = useTaskStore((state) => state.loading);
+  const saving = useTaskStore((state) => state.saving);
+  const lastSavedAt = useTaskStore((state) => state.lastSavedAt);
+  const error = useTaskStore((state) => state.error);
+  const hydrateTasks = useTaskStore((state) => state.hydrateTasks);
   const addTask = useTaskStore((state) => state.addTask);
   const updateTask = useTaskStore((state) => state.updateTask);
   const deleteTask = useTaskStore((state) => state.deleteTask);
@@ -25,8 +31,23 @@ export function AppShell() {
   const filteredTasks = getFilteredTasks(activeFilter);
 
   useEffect(() => {
+    void hydrateTasks();
+  }, [hydrateTasks]);
+
+  useEffect(() => {
     void applyWindowMode(mode);
   }, [mode]);
+
+  if (!hydrated) {
+    return (
+      <div className="app-shell-bg flex h-screen flex-col">
+        <WindowTitleBar mode={mode} />
+        <div className="flex min-h-0 flex-1 items-center justify-center px-6 text-sm text-[color:var(--text-secondary)]">
+          {loading ? "Loading local tasks..." : error ? "Unable to load local tasks." : "Preparing local tasks..."}
+        </div>
+      </div>
+    );
+  }
 
   if (mode === "pin") {
     return (
@@ -61,9 +82,12 @@ export function AppShell() {
           onSwitchToPin={() => setMode("pin")}
           onToggleTask={toggleTask}
           onUpdateTask={updateTask}
+          persistenceError={error}
+          saving={saving}
           searchQuery={searchQuery}
           selectedTask={selectedTask}
           selectedTaskId={selectedTaskId}
+          lastSavedAt={lastSavedAt}
           tasks={tasks}
         />
       </div>
