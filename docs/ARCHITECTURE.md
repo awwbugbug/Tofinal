@@ -44,7 +44,7 @@ ToFinal/
 - `src/components/task`: task input, list, item, and editable detail components.
 - `src/components/ui`: small local UI primitives used by the app.
 - `src/lib`: shared helpers and Tauri window wrappers.
-- `src/repositories`: async persistence-facing repository interface boundary plus SQLite-backed implementation.
+- `src/repositories`: async persistence-facing repository interface boundary plus SQLite-backed task and attachment metadata implementations.
 - `src/storage`: localStorage snapshot load/save utilities retained for v0.2 migration and rollback.
 - `src/stores`: Zustand task store and store tests.
 - `src/styles`: global CSS tokens and utility classes.
@@ -57,8 +57,10 @@ ToFinal/
 - `src/stores/taskStore.ts`: owns in-memory task state, selected task, app mode, filter/search state, task mutations, filtering, async hydration, and persistence calls.
 - `src/storage/taskStorage.ts`: reads/writes v0.2 task snapshots at localStorage key `tofinal.tasks.v1`, seeds first-run data, validates stored tasks, and migrates missing `pinned` to `false`.
 - `src/repositories/taskRepository.ts`: defines async `TaskRepository`, exposes the active repository, and allows tests to inject a memory repository.
-- `src/repositories/sqliteTaskRepository.ts`: opens `sqlite:tofinal.db`, ensures schema, maps SQLite rows to `Task`, migrates v0.2 localStorage snapshots, and saves task snapshots transactionally.
+- `src/repositories/sqliteTaskRepository.ts`: opens `sqlite:tofinal.db`, ensures schema version 2, maps SQLite rows to `Task`, migrates v0.2 localStorage snapshots, and saves task snapshots transactionally.
+- `src/repositories/sqliteAttachmentRepository.ts`: manages `task_attachments` metadata only; it does not copy files, open file pickers, or render previews.
 - `src/types/task.ts`: defines `Task`, `TaskPriority`, `AppMode`, and `TaskFilter`.
+- `src/types/attachment.ts`: defines `TaskAttachment` and `AttachmentKind`.
 - `src/lib/windowMode.ts`: applies Normal/Pin Tauri window profiles with try/catch fallback.
 - `src/lib/windowControls.ts`: wraps Tauri current-window controls for dragging, minimize, maximize/restore, and close.
 - `src/components/layout/*`: composes app-level surfaces, window modes, navigation, title bar, details, and resizable Normal Mode columns.
@@ -71,7 +73,7 @@ ToFinal/
 1. `AppShell` calls `taskStore.hydrateTasks()` on startup.
 2. `taskStore` calls the active async `TaskRepository.loadSnapshot()`.
 3. The default repository opens `sqlite:tofinal.db` through `@tauri-apps/plugin-sql`.
-4. The SQLite repository ensures `schema_meta` and `tasks` exist.
+4. The SQLite repository ensures `schema_meta`, `tasks`, and `task_attachments` exist.
 5. If SQLite contains rows, tasks are loaded from SQLite with explicit sort order.
 6. If SQLite is empty, the repository reads localStorage key `tofinal.tasks.v1`; valid v0.2 snapshots are migrated into SQLite, while missing/invalid localStorage falls back to seed tasks.
 7. User interactions flow from UI components to Zustand actions.
@@ -100,8 +102,9 @@ type Task = {
 
 - Current persistence is SQLite.
 - Database path: `sqlite:tofinal.db`.
-- SQLite schema version: `1`, stored in `schema_meta`.
+- SQLite schema version: `2`, stored in `schema_meta`.
 - Tasks are stored in the `tasks` table with `sort_order` for deterministic ordering.
+- Attachment metadata is stored in `task_attachments`; image files themselves are not stored in SQLite.
 - `tags` are JSON TEXT.
 - `completed` and `pinned` are SQLite INTEGER booleans with `CHECK (value IN (0, 1))`.
 - `completedAt` maps to nullable `completed_at`.
@@ -170,3 +173,23 @@ The SQLite replacement is implemented behind the same repository boundary:
 - `saveSnapshot(snapshot: TaskSnapshot): Promise<void>`
 
 Future schema work should extend the repository layer and SQLite migrations instead of letting UI components access SQL directly. Attachments, screenshots, and metadata should add their own tables instead of expanding the task row with binary data.
+
+## Attachment Metadata Boundary
+
+Phase 4A adds metadata-only attachment persistence:
+
+- `listByTaskId(taskId): Promise<TaskAttachment[]>`
+- `getAttachment(id): Promise<TaskAttachment | null>`
+- `insertAttachment(attachment): Promise<void>`
+- `deleteAttachment(id): Promise<void>`
+- `deleteByTaskId(taskId): Promise<void>`
+
+The table uses:
+
+```sql
+FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE
+```
+
+`PRAGMA foreign_keys = ON` is enabled during SQLite schema initialization. Task snapshot saving no longer deletes every task row before reinsert; it upserts retained tasks and deletes only missing task ids, so retained task attachments are not removed by ordinary task saves.
+
+Phase 4A does not include file picker, image copying, thumbnail generation, or preview UI. Those belong to Phase 4B.

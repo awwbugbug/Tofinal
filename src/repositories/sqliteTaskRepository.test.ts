@@ -181,7 +181,7 @@ describe("sqlite task repository", () => {
     const snapshot = await repository.loadSnapshot();
 
     expect(snapshot.tasks).toEqual([localTask]);
-    expect(db.meta.get("schema_version")).toBe("1");
+    expect(db.meta.get("schema_version")).toBe("2");
     expect(db.meta.get("localstorage_v1_migrated")).toBe("true");
     expect(localStorage.getItem(TASK_STORAGE_KEY)).toContain("Migrated from localStorage");
   });
@@ -195,7 +195,7 @@ describe("sqlite task repository", () => {
 
     expect(snapshot.tasks).toHaveLength(createSeedTasks().length);
     expect(snapshot.tasks[0].title).toBe("Finalize the first-stage desktop shell");
-    expect(db.meta.get("schema_version")).toBe("1");
+    expect(db.meta.get("schema_version")).toBe("2");
     expect(db.meta.get("seed_initialized")).toBe("true");
   });
 

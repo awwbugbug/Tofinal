@@ -17,7 +17,7 @@
 - Full-snapshot writes are simple and safe for the current task count, but row-level writes may be needed if task volume grows substantially.
 - More UI preferences in Zustand could blur business state and ephemeral state if not separated.
 - Advanced desktop features will expand Tauri permissions and increase platform-specific failure modes.
-- Screenshot, image, and file attachment features require explicit file storage policy before implementation.
+- Attachment metadata now exists in SQLite, but actual image import, file copying, preview, cleanup, and backup policy are still not implemented.
 
 ## Resolved By Phase 3 SQLite
 
@@ -27,21 +27,31 @@
 - v0.2 localStorage migration is implemented and preserves the original localStorage key.
 - Repository failure and startup hydration behavior are covered by tests.
 
+## Resolved By Phase 4A Attachment Metadata
+
+- SQLite schema version advanced to `2`.
+- `task_attachments` metadata table exists.
+- `TaskAttachment` type exists separately from core `Task`.
+- Attachment metadata repository exists for list/insert/delete operations.
+- `PRAGMA foreign_keys = ON` is enabled during SQLite schema initialization.
+- `ON DELETE CASCADE` is covered for attachment metadata when a task is deleted.
+- `schema_meta` writes support both current `updated_at` and key/value-only fallback.
+
 ## Must Fix Before Next Persistence Expansion
 
 - Add a user-facing backup/export and restore strategy.
 - Decide whether to keep full-snapshot writes or introduce row-level repository methods.
-- Add schema migration tests before any Task schema change.
+- Add schema migration tests before any future Task or attachment schema change.
 - Define database recovery UX for corrupted SQLite rows or failed migrations.
 
 ## Must Fix Before Screenshot Or Image Upload
 
-- Define local file storage root and path strategy.
-- Define attachment metadata schema separate from `Task`.
+- Implement local file storage root and path strategy.
 - Add file size/type validation.
 - Add cleanup rules for deleted tasks and orphaned files.
 - Add Tauri permissions/plugins only for the exact file APIs required.
 - Avoid storing binary data in localStorage.
+- Ensure file import never writes images, `tofinal.db`, `*.db`, or `*.sqlite` into the Git working tree.
 
 ## Must Fix Before System Tray Or Global Shortcuts
 
@@ -58,7 +68,7 @@
 - Calendar/reminder semantics.
 - WorkerW/Progman desktop embedding.
 - Large UI template libraries or Redux.
-- File attachments before SQLite and file storage policy.
+- File attachment UI before file storage policy and cleanup behavior are implemented.
 - Screenshot/voice features before the local data model is stable.
 
 ## Suggested Priority

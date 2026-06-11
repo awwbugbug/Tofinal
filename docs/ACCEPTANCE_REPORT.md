@@ -371,6 +371,75 @@ Date: 2026-06-09
 
 ---
 
+# Phase 4A Attachment Metadata Layer Addendum
+
+Date: 2026-06-11
+
+## 1. Scope Completed
+
+- Added SQLite schema migration from version `1` to version `2`.
+- Added `task_attachments` metadata table.
+- Added `TaskAttachment` domain type.
+- Added SQLite-backed attachment metadata repository.
+- Added row mapping for attachment metadata.
+- Enabled `PRAGMA foreign_keys = ON` during SQLite schema initialization.
+- Preserved existing task data and task CRUD behavior.
+
+## 2. Explicitly Not Implemented In Phase 4A
+
+- Image file picker UI.
+- Image file copying.
+- Image preview UI.
+- Thumbnail generation.
+- Screenshot capture.
+- Voice input.
+- AI features.
+- Cloud sync.
+- System tray.
+- Global shortcuts.
+
+## 3. SQLite Schema Version
+
+- Current schema version is now `2`.
+- `schema_meta` writes are compatible with both:
+  - current `key/value/updated_at` schema.
+  - legacy `key/value` schema via fallback.
+
+## 4. Attachment Table
+
+`task_attachments` stores metadata only:
+
+- `id`
+- `task_id`
+- `kind`
+- `original_name`
+- `stored_name`
+- `relative_path`
+- `mime_type`
+- `size_bytes`
+- `width`
+- `height`
+- `created_at`
+- `updated_at`
+- `sort_order`
+
+`kind` currently supports `image` and `screenshot`, so Phase 5 screenshot metadata can reuse the same table.
+
+## 5. Foreign Key And Cascade Notes
+
+- `task_attachments.task_id` references `tasks.id` with `ON DELETE CASCADE`.
+- `PRAGMA foreign_keys = ON` is required after opening the SQLite connection.
+- Task snapshot saving now upserts retained tasks and deletes only missing tasks, so ordinary task saves do not wipe attachment metadata.
+
+## 6. Test And Build Results
+
+- `npm test`: passed, 5 test files, 49 tests.
+- `npm run build`: passed, TypeScript and Vite production build completed.
+- `cargo check`: passed for `src-tauri`.
+- `npm run tauri dev`: verified startup to `target\debug\tofinal.exe`; validation processes were then stopped intentionally.
+
+---
+
 # Phase 3 SQLite Acceptance Addendum
 
 Date: 2026-06-10

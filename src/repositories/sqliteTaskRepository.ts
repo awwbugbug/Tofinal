@@ -2,8 +2,9 @@ import { createSeedTasks, loadStoredTaskSnapshot, type TaskSnapshot } from "@/st
 import type { Task, TaskPriority } from "@/types/task";
 
 export const SQLITE_DATABASE_PATH = "sqlite:tofinal.db";
+export const SQLITE_SCHEMA_VERSION = "2";
 
-type SqlValue = string | number | null;
+export type SqlValue = string | number | null;
 
 export type SqlDatabaseClient = {
   execute: (sql: string, params?: SqlValue[]) => Promise<unknown>;
@@ -48,6 +49,26 @@ const SCHEMA_SQL = [
     sort_order INTEGER NOT NULL
   )`,
   "CREATE INDEX IF NOT EXISTS idx_tasks_sort_order ON tasks(sort_order)",
+  `CREATE TABLE IF NOT EXISTS task_attachments (
+    id TEXT PRIMARY KEY,
+    task_id TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('image', 'screenshot')),
+    original_name TEXT NOT NULL,
+    stored_name TEXT NOT NULL,
+    relative_path TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL CHECK (size_bytes >= 0),
+    width INTEGER NULL,
+    height INTEGER NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    sort_order INTEGER NOT NULL,
+    FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_task_attachments_task_id_sort
+    ON task_attachments(task_id, sort_order)`,
+  `CREATE INDEX IF NOT EXISTS idx_task_attachments_created_at
+    ON task_attachments(created_at)`,
 ];
 
 const SELECT_TASKS_SQL = `SELECT
@@ -65,7 +86,9 @@ const SELECT_TASKS_SQL = `SELECT
 FROM tasks
 ORDER BY sort_order ASC, created_at DESC, id ASC`;
 
-const INSERT_TASK_SQL = `INSERT INTO tasks (
+const SELECT_TASK_IDS_SQL = "SELECT id FROM tasks";
+
+const UPSERT_TASK_SQL = `INSERT INTO tasks (
   id,
   title,
   note,
@@ -77,7 +100,18 @@ const INSERT_TASK_SQL = `INSERT INTO tasks (
   updated_at,
   completed_at,
   sort_order
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(id) DO UPDATE SET
+  title = excluded.title,
+  note = excluded.note,
+  completed = excluded.completed,
+  priority = excluded.priority,
+  pinned = excluded.pinned,
+  tags = excluded.tags,
+  created_at = excluded.created_at,
+  updated_at = excluded.updated_at,
+  completed_at = excluded.completed_at,
+  sort_order = excluded.sort_order`;
 
 const isPriority = (value: unknown): value is TaskPriority =>
   value === "normal" || value === "important" || value === "urgent";
@@ -149,12 +183,27 @@ export const taskToSqlParams = (task: Task, sortOrder: number): SqlValue[] => [
 
 const nowIso = () => new Date().toISOString();
 
-const writeMeta = async (db: SqlDatabaseClient, key: string, value: string) => {
+const schemaMetaHasUpdatedAt = async (db: SqlDatabaseClient) => {
+  const columns = await db.select<{ name: unknown }>("PRAGMA table_info(schema_meta)");
+  return columns.some((column) => column.name === "updated_at");
+};
+
+export const writeSchemaMeta = async (db: SqlDatabaseClient, key: string, value: string) => {
+  if (await schemaMetaHasUpdatedAt(db)) {
+    await db.execute(
+      `INSERT INTO schema_meta (key, value, updated_at)
+       VALUES (?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+      [key, value, nowIso()],
+    );
+    return;
+  }
+
   await db.execute(
-    `INSERT INTO schema_meta (key, value, updated_at)
-     VALUES (?, ?, ?)
-     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
-    [key, value, nowIso()],
+    `INSERT INTO schema_meta (key, value)
+     VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [key, value],
   );
 };
 
@@ -175,24 +224,33 @@ const replaceTasksInTransaction = async (
   extraMeta: Record<string, string> = {},
 ) => {
   await runTransaction(db, async () => {
-    await db.execute("DELETE FROM tasks");
-    for (const [index, task] of tasks.entries()) {
-      await db.execute(INSERT_TASK_SQL, taskToSqlParams(task, index));
+    const existingRows = await db.select<{ id: unknown }>(SELECT_TASK_IDS_SQL);
+    const nextTaskIds = new Set(tasks.map((task) => task.id));
+    for (const row of existingRows) {
+      if (typeof row.id === "string" && !nextTaskIds.has(row.id)) {
+        await db.execute("DELETE FROM tasks WHERE id = ?", [row.id]);
+      }
     }
-    await writeMeta(db, "schema_version", "1");
+
+    for (const [index, task] of tasks.entries()) {
+      await db.execute(UPSERT_TASK_SQL, taskToSqlParams(task, index));
+    }
+    await writeSchemaMeta(db, "schema_version", SQLITE_SCHEMA_VERSION);
     for (const [key, value] of Object.entries(extraMeta)) {
-      await writeMeta(db, key, value);
+      await writeSchemaMeta(db, key, value);
     }
   });
 };
 
-const ensureSchema = async (db: SqlDatabaseClient) => {
+export const ensureSqliteSchema = async (db: SqlDatabaseClient) => {
+  await db.execute("PRAGMA foreign_keys = ON");
   for (const sql of SCHEMA_SQL) {
     await db.execute(sql);
   }
+  await writeSchemaMeta(db, "schema_version", SQLITE_SCHEMA_VERSION);
 };
 
-const tauriSqlDatabaseLoader: SqlDatabaseLoader = {
+export const tauriSqlDatabaseLoader: SqlDatabaseLoader = {
   async load(path) {
     const Database = (await import("@tauri-apps/plugin-sql")).default;
     return Database.load(path) as Promise<SqlDatabaseClient>;
@@ -236,13 +294,11 @@ export const createSqliteTaskRepository = (
       return;
     }
 
-    await ensureSchema(db);
+    await ensureSqliteSchema(db);
 
     const countRows = await db.select<{ count: number }>("SELECT COUNT(*) as count FROM tasks");
     if ((countRows[0]?.count ?? 0) === 0) {
       await initializeEmptyDatabase(db);
-    } else {
-      await writeMeta(db, "schema_version", "1");
     }
 
     initialized = true;
