@@ -4,6 +4,7 @@ import { DesktopPinLayout } from "@/components/layout/DesktopPinLayout";
 import { NormalModeLayout } from "@/components/layout/NormalModeLayout";
 import { WindowTitleBar } from "@/components/layout/WindowTitleBar";
 import { applyWindowMode } from "@/lib/windowMode";
+import { useAttachmentStore } from "@/stores/attachmentStore";
 import { useTaskStore } from "@/stores/taskStore";
 
 export function AppShell() {
@@ -27,8 +28,19 @@ export function AppShell() {
   const setActiveFilter = useTaskStore((state) => state.setActiveFilter);
   const setSearchQuery = useTaskStore((state) => state.setSearchQuery);
   const getFilteredTasks = useTaskStore((state) => state.getFilteredTasks);
+  const attachmentsByTaskId = useAttachmentStore((state) => state.itemsByTaskId);
+  const attachmentLoadingTaskIds = useAttachmentStore((state) => state.loadingTaskIds);
+  const attachmentsAdding = useAttachmentStore((state) => state.adding);
+  const attachmentDeletingIds = useAttachmentStore((state) => state.deletingIds);
+  const attachmentError = useAttachmentStore((state) => state.error);
+  const loadAttachmentsByTaskId = useAttachmentStore((state) => state.loadByTaskId);
+  const addImageAttachment = useAttachmentStore((state) => state.addImageAttachment);
+  const deleteAttachment = useAttachmentStore((state) => state.deleteAttachment);
+  const deleteTaskWithAttachmentCleanup = useAttachmentStore((state) => state.deleteTaskWithAttachmentCleanup);
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null;
   const filteredTasks = getFilteredTasks(activeFilter);
+  const selectedTaskAttachments = selectedTaskId ? (attachmentsByTaskId[selectedTaskId] ?? []) : [];
+  const selectedTaskAttachmentsLoading = selectedTaskId ? Boolean(attachmentLoadingTaskIds[selectedTaskId]) : false;
 
   useEffect(() => {
     void hydrateTasks();
@@ -37,6 +49,16 @@ export function AppShell() {
   useEffect(() => {
     void applyWindowMode(mode);
   }, [mode]);
+
+  useEffect(() => {
+    if (hydrated && mode === "normal" && selectedTaskId) {
+      void loadAttachmentsByTaskId(selectedTaskId);
+    }
+  }, [hydrated, loadAttachmentsByTaskId, mode, selectedTaskId]);
+
+  const handleDeleteTask = (id: string) => {
+    void deleteTaskWithAttachmentCleanup(id, deleteTask);
+  };
 
   if (!hydrated) {
     return (
@@ -75,7 +97,18 @@ export function AppShell() {
           activeFilter={activeFilter}
           filteredTasks={filteredTasks}
           onAddTask={addTask}
-          onDeleteTask={deleteTask}
+          onDeleteTask={handleDeleteTask}
+          attachments={selectedTaskAttachments}
+          attachmentsAdding={attachmentsAdding}
+          attachmentDeletingIds={attachmentDeletingIds}
+          attachmentError={attachmentError}
+          attachmentsLoading={selectedTaskAttachmentsLoading}
+          onAddImageAttachment={(taskId) => {
+            void addImageAttachment(taskId);
+          }}
+          onDeleteAttachment={(attachmentId) => {
+            void deleteAttachment(attachmentId);
+          }}
           onFilterChange={setActiveFilter}
           onSelectTask={selectTask}
           onSearchChange={setSearchQuery}

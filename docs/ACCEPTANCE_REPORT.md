@@ -440,6 +440,71 @@ Date: 2026-06-11
 
 ---
 
+# Phase 4B Local Image Attachments Addendum
+
+Date: 2026-06-11
+
+## 1. Scope Completed
+
+- Added local image attachment import from a native Tauri file picker.
+- Supported image formats: PNG, JPG/JPEG, and WebP.
+- Enforced a 10 MB per-file limit before copying.
+- Copied imported images into the Tauri AppData-owned attachment area instead of referencing the original source path.
+- Stored only attachment metadata in SQLite `task_attachments`.
+- Added a minimal Attachments section in TaskDetail with Add Image, preview, original file name, size, missing-file state, and delete controls.
+- Deleting an attachment removes metadata first and then attempts to remove the app-owned copied file.
+- Deleting a task queries its attachments, deletes the task, removes metadata, and attempts file cleanup without making the task reappear if file cleanup fails.
+- Desktop Pin Mode remains unchanged and does not render image previews.
+
+## 2. Storage Strategy
+
+- App-owned relative path format: `attachments/images/<taskId>/<attachmentId>.<ext>`.
+- The implementation writes through Tauri AppData base directory APIs.
+- Original image paths are used only during import and are not persisted as the source of truth.
+- Moving or deleting the original image after import should not affect ToFinal previews because previews read the copied app-owned file.
+- Image binary data is not stored in SQLite.
+
+## 3. Dependencies And Permissions Added
+
+- npm dependencies:
+  - `@tauri-apps/plugin-dialog`
+  - `@tauri-apps/plugin-fs`
+- Cargo dependencies:
+  - `tauri-plugin-dialog`
+  - `tauri-plugin-fs`
+- Tauri capability additions:
+  - `dialog:allow-open`
+  - `fs:allow-exists`
+  - `fs:allow-mkdir`
+  - `fs:allow-read-file`
+  - `fs:allow-remove`
+  - `fs:allow-stat`
+  - `fs:allow-write-file`
+  - scoped AppData access for `$APPDATA/attachments/**`
+- No shell, clipboard, notification, global shortcut, tray, screenshot, or broad unrelated permissions were added.
+
+## 4. Explicitly Still Not Implemented
+
+- Screenshot capture.
+- OCR or AI image understanding.
+- Image editing.
+- Thumbnail generation.
+- Cloud sync.
+- Account login.
+- System tray.
+- Global shortcuts.
+- Desktop Pin image preview.
+- Full orphan-file scanner/repair job.
+
+## 5. Test And Build Results
+
+- `npm test`: passed, 7 test files, 63 tests.
+- `npm run build`: passed, TypeScript and Vite production build completed.
+- `cargo check`: passed for `src-tauri` with dialog/fs plugins compiled.
+- `npm run tauri dev`: verified Vite startup on port 1420 and `target\debug\tofinal.exe` launch; validation processes were then stopped intentionally.
+
+---
+
 # Phase 3 SQLite Acceptance Addendum
 
 Date: 2026-06-10

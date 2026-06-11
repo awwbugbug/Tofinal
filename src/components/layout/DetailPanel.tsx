@@ -1,11 +1,19 @@
 import { TaskDetail } from "@/components/task/TaskDetail";
+import type { AttachmentView } from "@/stores/attachmentStore";
 import type { Task } from "@/types/task";
 
 type DetailPanelProps = {
   task: Task | null;
+  attachments: AttachmentView[];
+  attachmentsLoading: boolean;
+  attachmentsAdding: boolean;
+  attachmentDeletingIds: Record<string, boolean>;
+  attachmentError: string | null;
   saving: boolean;
   lastSavedAt: string | null;
   persistenceError: string | null;
+  onAddImageAttachment: (taskId: string) => void;
+  onDeleteAttachment: (attachmentId: string) => void;
   onDeleteTask: (id: string) => void;
   onUpdateTask: (
     id: string,
@@ -14,7 +22,14 @@ type DetailPanelProps = {
 };
 
 export function DetailPanel({
+  attachmentDeletingIds,
+  attachmentError,
+  attachments,
+  attachmentsAdding,
+  attachmentsLoading,
   lastSavedAt,
+  onAddImageAttachment,
+  onDeleteAttachment,
   onDeleteTask,
   onUpdateTask,
   persistenceError,
@@ -27,7 +42,14 @@ export function DetailPanel({
       data-testid="detail-panel"
     >
       <TaskDetail
+        attachmentDeletingIds={attachmentDeletingIds}
+        attachmentError={attachmentError}
+        attachments={attachments}
+        attachmentsAdding={attachmentsAdding}
+        attachmentsLoading={attachmentsLoading}
         lastSavedAt={lastSavedAt}
+        onAddImageAttachment={onAddImageAttachment}
+        onDeleteAttachment={onDeleteAttachment}
         onDeleteTask={onDeleteTask}
         onUpdateTask={onUpdateTask}
         persistenceError={persistenceError}

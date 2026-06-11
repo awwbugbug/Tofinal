@@ -1,5 +1,16 @@
 import { type CSSProperties, useEffect, useRef, useState } from "react";
-import { Calendar, CheckCircle2, Clock3, Pin, Tag, Trash2 } from "lucide-react";
+import {
+  Calendar,
+  CheckCircle2,
+  Clock3,
+  ImageIcon,
+  ImageOff,
+  Pin,
+  Plus,
+  Tag,
+  Trash2,
+  X,
+} from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,13 +19,21 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+import type { AttachmentView } from "@/stores/attachmentStore";
 import type { Task, TaskPriority } from "@/types/task";
 
 type TaskDetailProps = {
   task: Task | null;
+  attachments: AttachmentView[];
+  attachmentsLoading: boolean;
+  attachmentsAdding: boolean;
+  attachmentDeletingIds: Record<string, boolean>;
+  attachmentError: string | null;
   saving: boolean;
   lastSavedAt: string | null;
   persistenceError: string | null;
+  onAddImageAttachment: (taskId: string) => void;
+  onDeleteAttachment: (attachmentId: string) => void;
   onDeleteTask: (id: string) => void;
   onUpdateTask: (
     id: string,
@@ -79,8 +98,23 @@ const formatDate = (value: string | null) => {
 
 const parseTags = (value: string) => value.split(",");
 
+const formatFileSize = (sizeBytes: number) => {
+  if (sizeBytes < 1024 * 1024) {
+    return `${Math.max(1, Math.round(sizeBytes / 1024))} KB`;
+  }
+
+  return `${(sizeBytes / 1024 / 1024).toFixed(1)} MB`;
+};
+
 export function TaskDetail({
+  attachmentDeletingIds,
+  attachmentError,
+  attachments,
+  attachmentsAdding,
+  attachmentsLoading,
   lastSavedAt,
+  onAddImageAttachment,
+  onDeleteAttachment,
   onDeleteTask,
   onUpdateTask,
   persistenceError,
@@ -94,6 +128,7 @@ export function TaskDetail({
   const [pinned, setPinned] = useState(false);
   const [error, setError] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [brokenAttachmentIds, setBrokenAttachmentIds] = useState<Record<string, boolean>>({});
   const titleRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -114,6 +149,7 @@ export function TaskDetail({
     setPinned(task?.pinned ?? false);
     setError("");
     setDeleteDialogOpen(false);
+    setBrokenAttachmentIds({});
   }, [task]);
 
   if (!task) {
@@ -263,6 +299,88 @@ export function TaskDetail({
             <span className="text-sm text-[var(--text-faint)]">No tags</span>
           )}
         </div>
+
+        <section className="space-y-3" aria-labelledby="task-attachments-label">
+          <div className="flex items-center justify-between gap-3">
+            <div
+              className="text-xs font-medium uppercase text-[var(--text-faint)]"
+              id="task-attachments-label"
+            >
+              Attachments
+            </div>
+            <Button
+              aria-label="Add image attachment"
+              disabled={attachmentsAdding}
+              onClick={() => onAddImageAttachment(task.id)}
+              size="sm"
+              type="button"
+              variant="secondary"
+            >
+              <Plus className="h-4 w-4" />
+              {attachmentsAdding ? "Adding..." : "Add Image"}
+            </Button>
+          </div>
+
+          {attachmentError && <p className="text-xs text-[var(--danger)]">{attachmentError}</p>}
+          {attachmentsLoading ? (
+            <div className="rounded-3xl border border-dashed border-[var(--border-soft)] bg-[var(--surface-field)] p-4 text-sm text-[var(--text-faint)]">
+              Loading attachments...
+            </div>
+          ) : attachments.length === 0 ? (
+            <div className="rounded-3xl border border-dashed border-[var(--border-soft)] bg-[var(--surface-field)] p-4 text-sm text-[var(--text-faint)]">
+              No image attachments
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {attachments.map((attachment) => {
+                const broken = attachment.missing || brokenAttachmentIds[attachment.id];
+
+                return (
+                  <article
+                    className="flex gap-3 rounded-3xl border border-[var(--border-soft)] bg-[var(--surface-field)] p-3"
+                    key={attachment.id}
+                  >
+                    <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-input)]">
+                      {!broken && attachment.url ? (
+                        <img
+                          alt={attachment.originalName}
+                          className="h-full w-full object-cover"
+                          onError={() =>
+                            setBrokenAttachmentIds((current) => ({ ...current, [attachment.id]: true }))
+                          }
+                          src={attachment.url}
+                        />
+                      ) : (
+                        <ImageOff className="h-5 w-5 text-[var(--text-faint)]" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <ImageIcon className="h-4 w-4 shrink-0 text-[var(--text-faint)]" />
+                        <p className="truncate text-sm font-medium text-[var(--text-primary)]">
+                          {attachment.originalName}
+                        </p>
+                      </div>
+                      <p className="mt-1 text-xs text-[var(--text-muted)]">
+                        {broken ? "Missing copied file" : `${formatFileSize(attachment.sizeBytes)} local image`}
+                      </p>
+                    </div>
+                    <Button
+                      aria-label={`Delete attachment ${attachment.originalName}`}
+                      disabled={Boolean(attachmentDeletingIds[attachment.id])}
+                      onClick={() => onDeleteAttachment(attachment.id)}
+                      size="icon"
+                      type="button"
+                      variant="ghost"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
 
         <Separator />
 

@@ -7,6 +7,7 @@
 - State: Zustand.
 - Icons: lucide-react.
 - Persistence: SQLite through the official Tauri SQL Plugin, with localStorage retained only as a v0.2 migration source.
+- Local files: Tauri Dialog and FS plugins for AppData-owned image attachments.
 - Tests: Vitest, Testing Library, jsdom.
 
 ## Project Structure
@@ -45,8 +46,8 @@ ToFinal/
 - `src/components/ui`: small local UI primitives used by the app.
 - `src/lib`: shared helpers and Tauri window wrappers.
 - `src/repositories`: async persistence-facing repository interface boundary plus SQLite-backed task and attachment metadata implementations.
-- `src/storage`: localStorage snapshot load/save utilities retained for v0.2 migration and rollback.
-- `src/stores`: Zustand task store and store tests.
+- `src/storage`: localStorage snapshot utilities plus attachment file storage for AppData-owned image copies.
+- `src/stores`: Zustand task store, attachment store, and store tests.
 - `src/styles`: global CSS tokens and utility classes.
 - `src/test`: test setup.
 - `src/types`: shared TypeScript domain types.
@@ -59,6 +60,8 @@ ToFinal/
 - `src/repositories/taskRepository.ts`: defines async `TaskRepository`, exposes the active repository, and allows tests to inject a memory repository.
 - `src/repositories/sqliteTaskRepository.ts`: opens `sqlite:tofinal.db`, ensures schema version 2, maps SQLite rows to `Task`, migrates v0.2 localStorage snapshots, and saves task snapshots transactionally.
 - `src/repositories/sqliteAttachmentRepository.ts`: manages `task_attachments` metadata only; it does not copy files, open file pickers, or render previews.
+- `src/storage/attachmentFileStorage.ts`: owns local image selection, validation, AppData attachment path generation, file copy/delete, and preview URL creation.
+- `src/stores/attachmentStore.ts`: owns selected-task attachment loading, add/delete flows, preview state, stale-load protection, and task-delete file cleanup coordination.
 - `src/types/task.ts`: defines `Task`, `TaskPriority`, `AppMode`, and `TaskFilter`.
 - `src/types/attachment.ts`: defines `TaskAttachment` and `AttachmentKind`.
 - `src/lib/windowMode.ts`: applies Normal/Pin Tauri window profiles with try/catch fallback.
@@ -105,6 +108,7 @@ type Task = {
 - SQLite schema version: `2`, stored in `schema_meta`.
 - Tasks are stored in the `tasks` table with `sort_order` for deterministic ordering.
 - Attachment metadata is stored in `task_attachments`; image files themselves are not stored in SQLite.
+- Image attachment files are copied into the Tauri AppData base directory under `attachments/images/<taskId>/<attachmentId>.<ext>`.
 - `tags` are JSON TEXT.
 - `completed` and `pinned` are SQLite INTEGER booleans with `CHECK (value IN (0, 1))`.
 - `completedAt` maps to nullable `completed_at`.
@@ -139,6 +143,21 @@ Store actions:
 
 The store mixes task data with lightweight UI state. This remains acceptable for the current single-user desktop app, but larger features should split persistent task data from ephemeral UI preferences before adding more global UI state.
 
+Attachment store state:
+- `itemsByTaskId`
+- `loadingTaskIds`
+- `adding`
+- `deletingIds`
+- `error`
+
+Attachment store actions:
+- `loadByTaskId`
+- `addImageAttachment`
+- `deleteAttachment`
+- `deleteTaskWithAttachmentCleanup`
+
+The attachment store is separate from `taskStore` so Desktop Pin Mode and task filtering do not carry image preview state. UI components call attachment store actions; they do not import Tauri dialog/fs APIs or SQLite repositories directly.
+
 ## Window Modes
 
 - Normal Mode uses the full three-column layout: Sidebar, TaskList, DetailPanel.
@@ -162,8 +181,16 @@ Current capability permissions:
 - `sql:default`
 - `sql:allow-execute`
 - `sql:allow-select`
+- `dialog:allow-open`
+- `fs:allow-exists`
+- `fs:allow-mkdir`
+- `fs:allow-read-file`
+- `fs:allow-remove`
+- `fs:allow-stat`
+- `fs:allow-write-file`
+- scoped filesystem access for `$APPDATA/attachments/**`
 
-These permissions are narrow for the current feature set. SQL permissions are limited to the plugin defaults plus select/execute. No filesystem, shell, clipboard, global shortcut, tray, screenshot, or notification permissions are currently granted.
+These permissions are narrow for the current feature set. SQL permissions are limited to the plugin defaults plus select/execute. Dialog permission is limited to open-file selection. Filesystem writes/removes are scoped to AppData attachments; selected source files are read through the temporary scope granted by the dialog plugin. No shell, clipboard, global shortcut, tray, screenshot, or notification permissions are currently granted.
 
 ## SQLite Repository Boundary
 
@@ -192,4 +219,17 @@ FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE
 
 `PRAGMA foreign_keys = ON` is enabled during SQLite schema initialization. Task snapshot saving no longer deletes every task row before reinsert; it upserts retained tasks and deletes only missing task ids, so retained task attachments are not removed by ordinary task saves.
 
-Phase 4A does not include file picker, image copying, thumbnail generation, or preview UI. Those belong to Phase 4B.
+## Attachment File Boundary
+
+Phase 4B adds local image file handling behind `src/storage/attachmentFileStorage.ts`:
+
+1. The UI requests `attachmentStore.addImageAttachment(taskId)`.
+2. The file storage adapter opens a native image picker.
+3. The selected source image is validated by extension and file size.
+4. The source image is copied to AppData under `attachments/images/<taskId>/`.
+5. SQLite stores only metadata, including `relative_path`.
+6. Preview URLs are created from the app-owned copied file, not from the original source path.
+
+Deleting an attachment removes metadata first and then attempts to remove the copied file. If file deletion fails, metadata stays deleted and the error is surfaced through attachment store state.
+
+Screenshot capture should reuse this boundary in Phase 5 by writing the screenshot image into the same attachments directory and inserting a `task_attachments` row with `kind = "screenshot"`.

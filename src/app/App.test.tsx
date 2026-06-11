@@ -4,9 +4,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "@/app/App";
 import { resetTaskRepositoryForTest, setTaskRepositoryForTest } from "@/repositories/taskRepository";
+import type { AttachmentRepository } from "@/repositories/sqliteAttachmentRepository";
 import { createSeedTasks } from "@/storage/taskStorage";
+import type { AttachmentFileStorage } from "@/storage/attachmentFileStorage";
+import {
+  resetAttachmentDependenciesForTest,
+  setAttachmentDependenciesForTest,
+} from "@/stores/attachmentStore";
 import { resetTaskStore } from "@/stores/taskStore";
 import { createMemoryTaskRepository } from "@/test/taskRepositoryTestUtils";
+import type { TaskAttachment } from "@/types/attachment";
 
 const createDeferred = <T,>() => {
   let resolve!: (value: T) => void;
@@ -19,6 +26,77 @@ const createDeferred = <T,>() => {
   return { promise, resolve, reject };
 };
 
+const createAttachment = (overrides: Partial<TaskAttachment> = {}): TaskAttachment => ({
+  id: "attachment-1",
+  taskId: "task-1",
+  kind: "image",
+  originalName: "sample.png",
+  storedName: "attachment-1.png",
+  relativePath: "attachments/images/task-1/attachment-1.png",
+  mimeType: "image/png",
+  sizeBytes: 4,
+  width: null,
+  height: null,
+  createdAt: "2026-06-11T00:00:00.000Z",
+  updatedAt: "2026-06-11T00:00:00.000Z",
+  sortOrder: 0,
+  ...overrides,
+});
+
+const createAttachmentRepository = (initialAttachments: TaskAttachment[] = []) => {
+  const rows = [...initialAttachments];
+  const repository: AttachmentRepository = {
+    async listByTaskId(taskId) {
+      return rows.filter((row) => row.taskId === taskId).sort((first, second) => first.sortOrder - second.sortOrder);
+    },
+    async getAttachment(id) {
+      return rows.find((row) => row.id === id) ?? null;
+    },
+    async insertAttachment(attachment) {
+      rows.push(attachment);
+    },
+    async deleteAttachment(id) {
+      const index = rows.findIndex((row) => row.id === id);
+      if (index >= 0) {
+        rows.splice(index, 1);
+      }
+    },
+    async deleteByTaskId(taskId) {
+      let index = rows.length - 1;
+      while (index >= 0) {
+        if (rows[index].taskId === taskId) {
+          rows.splice(index, 1);
+        }
+        index -= 1;
+      }
+    },
+  };
+
+  return { repository, rows };
+};
+
+const createAttachmentFileStorage = (overrides: Partial<AttachmentFileStorage> = {}): AttachmentFileStorage => ({
+  async pickImageFiles() {
+    return ["C:\\Users\\Tester\\Pictures\\sample.png"];
+  },
+  async copyImageToAppData({ attachmentId, taskId }) {
+    return {
+      originalName: "sample.png",
+      storedName: `${attachmentId}.png`,
+      relativePath: `attachments/images/${taskId}/${attachmentId}.png`,
+      mimeType: "image/png",
+      sizeBytes: 4,
+      width: null,
+      height: null,
+    };
+  },
+  async deleteAttachmentFile() {},
+  async resolvePreview(relativePath, mimeType) {
+    return { missing: false, url: `blob:${mimeType}:${relativePath}` };
+  },
+  ...overrides,
+});
+
 describe("App", () => {
   const renderApp = async () => {
     render(<App />);
@@ -30,6 +108,11 @@ describe("App", () => {
     vi.restoreAllMocks();
     resetTaskRepositoryForTest();
     setTaskRepositoryForTest(createMemoryTaskRepository({ tasks: createSeedTasks() }));
+    resetAttachmentDependenciesForTest();
+    setAttachmentDependenciesForTest({
+      fileStorage: createAttachmentFileStorage(),
+      repository: createAttachmentRepository().repository,
+    });
     resetTaskStore();
   });
 
@@ -272,5 +355,75 @@ describe("App", () => {
     expect(screen.getByTestId("desktop-pin-layout")).toBeInTheDocument();
     expect(screen.queryByRole("separator", { name: /resize sidebar and task list/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("separator", { name: /resize task list and detail panel/i })).not.toBeInTheDocument();
+  });
+
+  it("loads, adds, previews, and deletes image attachments in the selected task detail", async () => {
+    const { repository, rows } = createAttachmentRepository([createAttachment()]);
+    setAttachmentDependenciesForTest({ fileStorage: createAttachmentFileStorage(), repository });
+    await renderApp();
+
+    const detailPanel = within(screen.getByTestId("detail-panel"));
+    expect(await detailPanel.findByText("sample.png")).toBeInTheDocument();
+    expect(detailPanel.getByRole("img", { name: /sample\.png/i })).toHaveAttribute(
+      "src",
+      "blob:image/png:attachments/images/task-1/attachment-1.png",
+    );
+
+    await userEvent.click(detailPanel.getByRole("button", { name: /add image attachment/i }));
+    await waitFor(() => expect(rows).toHaveLength(2));
+    expect(detailPanel.getAllByText("sample.png")).toHaveLength(2);
+
+    await userEvent.click(detailPanel.getAllByRole("button", { name: /delete attachment/i })[0]);
+    await waitFor(() => expect(rows).toHaveLength(1));
+    expect(rows.some((row) => row.id === "attachment-1")).toBe(false);
+  });
+
+  it("does not let stale attachment loads from a previous selected task replace the current task attachments", async () => {
+    let resolveFirst!: (value: TaskAttachment[]) => void;
+    const firstLoad = new Promise<TaskAttachment[]>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const repository: AttachmentRepository = {
+      listByTaskId: vi
+        .fn()
+        .mockReturnValueOnce(firstLoad)
+        .mockResolvedValueOnce([createAttachment({ id: "task-2-attachment", taskId: "task-2", originalName: "second.png" })]),
+      async getAttachment() {
+        return null;
+      },
+      async insertAttachment() {},
+      async deleteAttachment() {},
+      async deleteByTaskId() {},
+    };
+    setAttachmentDependenciesForTest({ fileStorage: createAttachmentFileStorage(), repository });
+    await renderApp();
+
+    await userEvent.click(screen.getByText("Sketch the desktop pin interaction"));
+    resolveFirst([createAttachment({ originalName: "stale.png" })]);
+
+    const detailPanel = within(screen.getByTestId("detail-panel"));
+    await waitFor(() => expect(detailPanel.getByText("second.png")).toBeInTheDocument());
+    expect(detailPanel.queryByText("stale.png")).not.toBeInTheDocument();
+  });
+
+  it("cleans attachment files when deleting a task and leaves desktop pin mode unchanged", async () => {
+    const deleteAttachmentFile = vi.fn();
+    const { repository, rows } = createAttachmentRepository([createAttachment()]);
+    setAttachmentDependenciesForTest({
+      fileStorage: createAttachmentFileStorage({ deleteAttachmentFile }),
+      repository,
+    });
+    await renderApp();
+
+    const detailPanel = within(screen.getByTestId("detail-panel"));
+    await userEvent.click(detailPanel.getByRole("button", { name: /delete task/i }));
+    await userEvent.click(screen.getByRole("button", { name: /^delete$/i }));
+
+    await waitFor(() => expect(rows).toHaveLength(0));
+    expect(deleteAttachmentFile).toHaveBeenCalledWith("attachments/images/task-1/attachment-1.png");
+
+    await userEvent.click(screen.getByRole("button", { name: /desktop pin mode/i }));
+    expect(screen.getByTestId("desktop-pin-layout")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /add image attachment/i })).not.toBeInTheDocument();
   });
 });

@@ -7,12 +7,18 @@ import { QuickInput } from "@/components/task/QuickInput";
 import { TaskList } from "@/components/task/TaskList";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import type { AttachmentView } from "@/stores/attachmentStore";
 import type { Task, TaskFilter } from "@/types/task";
 
 type NormalModeLayoutProps = {
   tasks: Task[];
   filteredTasks: Task[];
   selectedTask: Task | null;
+  attachments: AttachmentView[];
+  attachmentsLoading: boolean;
+  attachmentsAdding: boolean;
+  attachmentDeletingIds: Record<string, boolean>;
+  attachmentError: string | null;
   selectedTaskId: string | null;
   activeFilter: TaskFilter;
   searchQuery: string;
@@ -20,6 +26,8 @@ type NormalModeLayoutProps = {
   lastSavedAt: string | null;
   persistenceError: string | null;
   onAddTask: (title: string) => void;
+  onAddImageAttachment: (taskId: string) => void;
+  onDeleteAttachment: (attachmentId: string) => void;
   onDeleteTask: (id: string) => void;
   onFilterChange: (filter: TaskFilter) => void;
   onSearchChange: (query: string) => void;
@@ -83,8 +91,15 @@ const normalizePanelWidths = (sidebarWidth: number, detailWidth: number) => {
 
 export function NormalModeLayout({
   activeFilter,
+  attachmentDeletingIds,
+  attachmentError,
+  attachments,
+  attachmentsAdding,
+  attachmentsLoading,
   filteredTasks,
   onAddTask,
+  onAddImageAttachment,
+  onDeleteAttachment,
   onDeleteTask,
   onFilterChange,
   onSearchChange,
@@ -259,7 +274,14 @@ export function NormalModeLayout({
       />
 
       <DetailPanel
+        attachmentDeletingIds={attachmentDeletingIds}
+        attachmentError={attachmentError}
+        attachments={attachments}
+        attachmentsAdding={attachmentsAdding}
+        attachmentsLoading={attachmentsLoading}
         lastSavedAt={lastSavedAt}
+        onAddImageAttachment={onAddImageAttachment}
+        onDeleteAttachment={onDeleteAttachment}
         onDeleteTask={onDeleteTask}
         onUpdateTask={onUpdateTask}
         persistenceError={persistenceError}

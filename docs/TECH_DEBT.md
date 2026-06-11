@@ -17,7 +17,7 @@
 - Full-snapshot writes are simple and safe for the current task count, but row-level writes may be needed if task volume grows substantially.
 - More UI preferences in Zustand could blur business state and ephemeral state if not separated.
 - Advanced desktop features will expand Tauri permissions and increase platform-specific failure modes.
-- Attachment metadata now exists in SQLite, but actual image import, file copying, preview, cleanup, and backup policy are still not implemented.
+- Image attachment import, copying, preview, and delete UI now exist, but full orphan-file scanning/repair and backup policy are still not implemented.
 
 ## Resolved By Phase 3 SQLite
 
@@ -37,6 +37,18 @@
 - `ON DELETE CASCADE` is covered for attachment metadata when a task is deleted.
 - `schema_meta` writes support both current `updated_at` and key/value-only fallback.
 
+## Resolved By Phase 4B Local Image Attachments
+
+- Native file picker is available for image import.
+- Supported image formats are validated: PNG, JPG/JPEG, and WebP.
+- Per-file size validation rejects images larger than 10 MB.
+- Imported images are copied into Tauri AppData under `attachments/images/<taskId>/`.
+- SQLite stores attachment metadata only; image binaries are not stored in SQLite.
+- TaskDetail has a minimal Attachments section with Add Image, preview, original file name, size, missing-file state, and delete control.
+- Deleting an attachment deletes metadata first and then attempts app-owned file cleanup.
+- Deleting a task triggers attachment metadata cleanup and app-owned file cleanup.
+- UI and stores do not persist original source image paths as the attachment source of truth.
+
 ## Must Fix Before Next Persistence Expansion
 
 - Add a user-facing backup/export and restore strategy.
@@ -44,14 +56,14 @@
 - Add schema migration tests before any future Task or attachment schema change.
 - Define database recovery UX for corrupted SQLite rows or failed migrations.
 
-## Must Fix Before Screenshot Or Image Upload
+## Must Fix Before Screenshot Or Advanced Image Work
 
-- Implement local file storage root and path strategy.
-- Add file size/type validation.
-- Add cleanup rules for deleted tasks and orphaned files.
-- Add Tauri permissions/plugins only for the exact file APIs required.
-- Avoid storing binary data in localStorage.
-- Ensure file import never writes images, `tofinal.db`, `*.db`, or `*.sqlite` into the Git working tree.
+- Add an orphan-file scanner/repair path for copied files that lose metadata due to partial failures.
+- Add backup/export and restore semantics for copied attachment files together with SQLite metadata.
+- Decide whether to add thumbnail generation for large image lists.
+- Add image dimension extraction if UI needs width/height-aware layouts.
+- Ensure screenshot-generated files reuse the attachment file storage adapter instead of creating a parallel screenshot file system.
+- Continue ensuring file import never writes images, `tofinal.db`, `*.db`, or `*.sqlite` into the Git working tree.
 
 ## Must Fix Before System Tray Or Global Shortcuts
 
@@ -68,16 +80,15 @@
 - Calendar/reminder semantics.
 - WorkerW/Progman desktop embedding.
 - Large UI template libraries or Redux.
-- File attachment UI before file storage policy and cleanup behavior are implemented.
-- Screenshot/voice features before the local data model is stable.
+- Screenshot/voice features before attachment backup and cleanup policy is stable.
 
 ## Suggested Priority
 
 1. Freeze v0.2 baseline and keep the current feature set stable.
 2. Implement Phase 3 SQLite with migration and repository hardening.
 3. Add import/export or backup after SQLite is stable.
-4. Add local file attachment support with a clear storage policy.
-5. Add screenshot capture only after attachments are modeled.
+4. Add attachment backup/export and orphan cleanup.
+5. Add screenshot capture only by reusing the attachment system.
 6. Add voice input only after task creation/editing paths are stable.
 7. Add tray/global shortcuts after window lifecycle is explicitly designed.
 8. Package and sign the app for regular personal use.
