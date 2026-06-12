@@ -18,6 +18,7 @@ type NormalModeLayoutProps = {
   attachments: AttachmentView[];
   attachmentsLoading: boolean;
   attachmentsAdding: boolean;
+  attachmentsCapturing: boolean;
   attachmentDeletingIds: Record<string, boolean>;
   attachmentError: string | null;
   taskApps: TaskAppView[];
@@ -34,6 +35,7 @@ type NormalModeLayoutProps = {
   persistenceError: string | null;
   onAddTask: (title: string) => void;
   onAddImageAttachment: (taskId: string) => void;
+  onAddScreenshotAttachment: (taskId: string) => void;
   onDeleteAttachment: (attachmentId: string) => void;
   onAddTaskApp: (taskId: string) => void;
   onDeleteTaskApp: (appId: string) => void;
@@ -107,6 +109,7 @@ export function NormalModeLayout({
   attachmentError,
   attachments,
   attachmentsAdding,
+  attachmentsCapturing,
   attachmentsLoading,
   taskAppError,
   taskApps,
@@ -117,6 +120,7 @@ export function NormalModeLayout({
   filteredTasks,
   onAddTask,
   onAddImageAttachment,
+  onAddScreenshotAttachment,
   onAddTaskApp,
   onDeleteAttachment,
   onDeleteTaskApp,
@@ -301,6 +305,7 @@ export function NormalModeLayout({
         attachmentError={attachmentError}
         attachments={attachments}
         attachmentsAdding={attachmentsAdding}
+        attachmentsCapturing={attachmentsCapturing}
         attachmentsLoading={attachmentsLoading}
         taskAppError={taskAppError}
         taskApps={taskApps}
@@ -310,6 +315,7 @@ export function NormalModeLayout({
         lastTaskAppsStartedAt={lastTaskAppsStartedAt}
         lastSavedAt={lastSavedAt}
         onAddImageAttachment={onAddImageAttachment}
+        onAddScreenshotAttachment={onAddScreenshotAttachment}
         onAddTaskApp={onAddTaskApp}
         onDeleteAttachment={onDeleteAttachment}
         onDeleteTaskApp={onDeleteTaskApp}

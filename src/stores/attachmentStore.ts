@@ -10,6 +10,10 @@ import {
   type AttachmentFileStorage,
   type AttachmentPreview,
 } from "@/storage/attachmentFileStorage";
+import {
+  tauriScreenshotCapture,
+  type ScreenshotCapture,
+} from "@/storage/screenshotCapture";
 import type { TaskAttachment } from "@/types/attachment";
 
 export type AttachmentView = TaskAttachment & AttachmentPreview & {
@@ -20,6 +24,7 @@ type AttachmentState = {
   itemsByTaskId: Record<string, AttachmentView[]>;
   loadingTaskIds: Record<string, boolean>;
   adding: boolean;
+  capturing: boolean;
   deletingIds: Record<string, boolean>;
   error: string | null;
 };
@@ -27,6 +32,7 @@ type AttachmentState = {
 type AttachmentActions = {
   loadByTaskId: (taskId: string) => Promise<void>;
   addImageAttachment: (taskId: string) => Promise<void>;
+  addScreenshotAttachment: (taskId: string) => Promise<void>;
   deleteAttachment: (attachmentId: string) => Promise<void>;
   deleteTaskWithAttachmentCleanup: (taskId: string, deleteTask: (taskId: string) => void) => Promise<void>;
 };
@@ -36,22 +42,34 @@ export type AttachmentStore = AttachmentState & AttachmentActions;
 type AttachmentDependencies = {
   repository: AttachmentRepository;
   fileStorage: AttachmentFileStorage;
+  screenshotCapture: ScreenshotCapture;
 };
 
 let dependencies: AttachmentDependencies = {
   repository: sqliteAttachmentRepository,
   fileStorage: tauriAttachmentFileStorage,
+  screenshotCapture: tauriScreenshotCapture,
 };
 
 const initialState = (): AttachmentState => ({
   itemsByTaskId: {},
   loadingTaskIds: {},
   adding: false,
+  capturing: false,
   deletingIds: {},
   error: null,
 });
 
 const nowIso = () => new Date().toISOString();
+
+const screenshotOriginalName = () => {
+  const date = new Date();
+  const pad = (value: number) => String(value).padStart(2, "0");
+
+  return `screenshot-${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(
+    date.getHours(),
+  )}${pad(date.getMinutes())}${pad(date.getSeconds())}.png`;
+};
 
 const errorMessage = (error: unknown) => {
   if (error instanceof Error) {
@@ -172,6 +190,59 @@ const createAttachmentStoreState: StateCreator<AttachmentStore> = (set, get) => 
         set({ adding: false, error: errorMessage(error) });
       }
     },
+    addScreenshotAttachment: async (taskId) => {
+      set({ capturing: true, error: null });
+
+      try {
+        const screenshot = await dependencies.screenshotCapture.captureFullscreen();
+        if ((screenshot.width !== null && screenshot.width <= 0) || (screenshot.height !== null && screenshot.height <= 0)) {
+          throw new Error("Screenshot capture returned invalid dimensions.");
+        }
+
+        const existingAttachments = await dependencies.repository.listByTaskId(taskId);
+        const sortOrder =
+          existingAttachments.reduce((maxSortOrder, attachment) => Math.max(maxSortOrder, attachment.sortOrder), -1) + 1;
+        const attachmentId = `attachment-${crypto.randomUUID()}`;
+        const copied = await dependencies.fileStorage.writeScreenshotToAppData({
+          attachmentId,
+          height: screenshot.height,
+          originalName: screenshotOriginalName(),
+          pngBytes: screenshot.pngBytes,
+          taskId,
+          width: screenshot.width,
+        });
+        const timestamp = nowIso();
+        const attachment: TaskAttachment = {
+          id: attachmentId,
+          taskId,
+          kind: "screenshot",
+          originalName: copied.originalName,
+          storedName: copied.storedName,
+          relativePath: copied.relativePath,
+          mimeType: copied.mimeType,
+          sizeBytes: copied.sizeBytes,
+          width: copied.width,
+          height: copied.height,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          sortOrder,
+        };
+
+        try {
+          await dependencies.repository.insertAttachment(attachment);
+        } catch (error) {
+          await Promise.resolve(dependencies.fileStorage.deleteAttachmentFile(copied.relativePath)).catch(
+            () => undefined,
+          );
+          throw error;
+        }
+
+        await loadAndSetByTaskId(taskId);
+        set({ capturing: false, error: null });
+      } catch (error) {
+        set({ capturing: false, error: errorMessage(error) });
+      }
+    },
     deleteAttachment: async (attachmentId) => {
       const item = Object.values(get().itemsByTaskId)
         .flat()
@@ -257,6 +328,7 @@ export const resetAttachmentDependenciesForTest = () => {
   dependencies = {
     repository: sqliteAttachmentRepository,
     fileStorage: tauriAttachmentFileStorage,
+    screenshotCapture: tauriScreenshotCapture,
   };
   useAttachmentStore.setState(initialState());
 };

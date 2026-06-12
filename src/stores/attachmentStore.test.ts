@@ -7,6 +7,7 @@ import {
   setAttachmentDependenciesForTest,
 } from "@/stores/attachmentStore";
 import type { AttachmentFileStorage } from "@/storage/attachmentFileStorage";
+import type { ScreenshotCapture } from "@/storage/screenshotCapture";
 import type { TaskAttachment } from "@/types/attachment";
 
 const attachment = (overrides: Partial<TaskAttachment> = {}): TaskAttachment => ({
@@ -73,9 +74,31 @@ const createFileStorage = (overrides: Partial<AttachmentFileStorage> = {}): Atta
       height: null,
     };
   },
+  async writeScreenshotToAppData({ attachmentId, taskId }) {
+    return {
+      originalName: "screenshot-20260612-173000.png",
+      storedName: `${attachmentId}.png`,
+      relativePath: `attachments/images/${taskId}/${attachmentId}.png`,
+      mimeType: "image/png",
+      sizeBytes: 12,
+      width: 1920,
+      height: 1080,
+    };
+  },
   async deleteAttachmentFile() {},
   async resolvePreview(relativePath, mimeType) {
     return { missing: false, url: `blob:${mimeType}:${relativePath}` };
+  },
+  ...overrides,
+});
+
+const createScreenshotCapture = (overrides: Partial<ScreenshotCapture> = {}): ScreenshotCapture => ({
+  async captureFullscreen() {
+    return {
+      pngBytes: new Uint8Array([137, 80, 78, 71]),
+      width: 1920,
+      height: 1080,
+    };
   },
   ...overrides,
 });
@@ -117,6 +140,74 @@ describe("attachment store", () => {
       taskId: "task-1",
     });
     expect(store.getState().itemsByTaskId["task-1"]).toHaveLength(1);
+  });
+
+  it("adds a screenshot attachment using existing attachment metadata", async () => {
+    const { repository, rows } = createRepository([attachment({ id: "existing", sortOrder: 0 })]);
+    const store = createAttachmentStore();
+    setAttachmentDependenciesForTest({
+      fileStorage: createFileStorage(),
+      repository,
+      screenshotCapture: createScreenshotCapture(),
+    });
+
+    await store.getState().addScreenshotAttachment("task-1");
+
+    expect(rows).toHaveLength(2);
+    expect(rows[1]).toMatchObject({
+      kind: "screenshot",
+      originalName: expect.stringMatching(/^screenshot-\d{8}-\d{6}\.png$/),
+      storedName: expect.stringMatching(/^attachment-.+\.png$/),
+      relativePath: expect.stringMatching(/^attachments\/images\/task-1\/attachment-.+\.png$/),
+      mimeType: "image/png",
+      sizeBytes: 12,
+      width: 1920,
+      height: 1080,
+      sortOrder: 1,
+    });
+    expect(store.getState().itemsByTaskId["task-1"][1]).toMatchObject({
+      kind: "screenshot",
+      previewUrl: expect.stringContaining("blob:image/png:attachments/images/task-1/"),
+    });
+  });
+
+  it("surfaces screenshot capture failures without changing attachments", async () => {
+    const { repository, rows } = createRepository();
+    const store = createAttachmentStore();
+    setAttachmentDependenciesForTest({
+      fileStorage: createFileStorage(),
+      repository,
+      screenshotCapture: createScreenshotCapture({
+        async captureFullscreen() {
+          throw new Error("Screenshot unavailable");
+        },
+      }),
+    });
+
+    await store.getState().addScreenshotAttachment("task-1");
+
+    expect(rows).toHaveLength(0);
+    expect(store.getState().error).toBe("Screenshot unavailable");
+  });
+
+  it("cleans screenshot files when metadata insert fails", async () => {
+    const deleteAttachmentFile = vi.fn();
+    const { repository, rows } = createRepository();
+    repository.insertAttachment = async () => {
+      throw new Error("metadata failed");
+    };
+    const store = createAttachmentStore();
+    setAttachmentDependenciesForTest({
+      fileStorage: createFileStorage({ deleteAttachmentFile }),
+      repository,
+      screenshotCapture: createScreenshotCapture(),
+    });
+
+    await store.getState().addScreenshotAttachment("task-1");
+
+    expect(rows).toHaveLength(0);
+    expect(deleteAttachmentFile).toHaveBeenCalledWith(expect.stringMatching(/^attachments\/images\/task-1\/attachment-.+\.png$/));
+    expect(store.getState().error).toBe("metadata failed");
   });
 
   it("cleans copied files when metadata insert fails", async () => {

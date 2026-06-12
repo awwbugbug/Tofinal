@@ -9,6 +9,7 @@ import type { TaskAppRepository } from "@/repositories/sqliteTaskAppRepository";
 import type { AppLauncher } from "@/lib/appLauncher";
 import { createSeedTasks } from "@/storage/taskStorage";
 import type { AttachmentFileStorage } from "@/storage/attachmentFileStorage";
+import type { ScreenshotCapture } from "@/storage/screenshotCapture";
 import type { TaskAppSelection } from "@/storage/taskAppSelection";
 import {
   resetAttachmentDependenciesForTest,
@@ -98,9 +99,31 @@ const createAttachmentFileStorage = (overrides: Partial<AttachmentFileStorage> =
       height: null,
     };
   },
+  async writeScreenshotToAppData({ attachmentId, taskId }) {
+    return {
+      originalName: "screenshot-20260612-173000.png",
+      storedName: `${attachmentId}.png`,
+      relativePath: `attachments/images/${taskId}/${attachmentId}.png`,
+      mimeType: "image/png",
+      sizeBytes: 12,
+      width: 1920,
+      height: 1080,
+    };
+  },
   async deleteAttachmentFile() {},
   async resolvePreview(relativePath, mimeType) {
     return { missing: false, url: `blob:${mimeType}:${relativePath}` };
+  },
+  ...overrides,
+});
+
+const createScreenshotCapture = (overrides: Partial<ScreenshotCapture> = {}): ScreenshotCapture => ({
+  async captureFullscreen() {
+    return {
+      pngBytes: new Uint8Array([137, 80, 78, 71]),
+      width: 1920,
+      height: 1080,
+    };
   },
   ...overrides,
 });
@@ -490,6 +513,73 @@ describe("App", () => {
     await userEvent.click(detailPanel.getAllByRole("button", { name: /delete attachment/i })[0]);
     await waitFor(() => expect(rows).toHaveLength(1));
     expect(rows.some((row) => row.id === "attachment-1")).toBe(false);
+  });
+
+  it("adds a screenshot attachment and opens it with the existing lightbox", async () => {
+    const { repository, rows } = createAttachmentRepository();
+    setAttachmentDependenciesForTest({
+      fileStorage: createAttachmentFileStorage(),
+      repository,
+      screenshotCapture: createScreenshotCapture(),
+    });
+    await renderApp();
+
+    const detailPanel = within(screen.getByTestId("detail-panel"));
+    await userEvent.click(detailPanel.getByRole("button", { name: /add screenshot/i }));
+
+    await waitFor(() => expect(rows).toHaveLength(1));
+    expect(rows[0]).toMatchObject({
+      kind: "screenshot",
+      mimeType: "image/png",
+      originalName: expect.stringMatching(/^screenshot-\d{8}-\d{6}\.png$/),
+    });
+    expect(await detailPanel.findByText(rows[0].originalName)).toBeInTheDocument();
+
+    await userEvent.click(detailPanel.getByRole("button", { name: new RegExp(`preview attachment ${rows[0].originalName}`, "i") }));
+    expect(screen.getByRole("dialog", { name: new RegExp(`image preview ${rows[0].originalName}`, "i") })).toBeInTheDocument();
+  });
+
+  it("keeps attachment and app action buttons responsive in a narrow detail panel", async () => {
+    await renderApp();
+
+    const detailPanel = within(screen.getByTestId("detail-panel"));
+    const addImageButton = detailPanel.getByRole("button", { name: /add image attachment/i });
+    const addScreenshotButton = detailPanel.getByRole("button", { name: /add screenshot.*full screen/i });
+    const addAppButton = detailPanel.getByRole("button", { name: /add app/i });
+    const startTaskButton = detailPanel.getByRole("button", { name: /start task/i });
+
+    expect(addImageButton).toBeInTheDocument();
+    expect(addScreenshotButton).toBeInTheDocument();
+    expect(addScreenshotButton).toHaveAttribute("title", "Captures the full screen for now.");
+    expect(addAppButton).toBeInTheDocument();
+    expect(startTaskButton).toBeInTheDocument();
+
+    expect(addImageButton.parentElement).toHaveClass("detail-action-buttons");
+    expect(addScreenshotButton.parentElement).toHaveClass("detail-action-buttons");
+    expect(addAppButton.parentElement).toHaveClass("detail-action-buttons");
+    expect(startTaskButton.parentElement).toHaveClass("detail-action-buttons");
+    expect(addImageButton.parentElement).toHaveClass("detail-action-buttons-grid");
+    expect(addAppButton.parentElement).toHaveClass("detail-action-buttons-grid");
+  });
+
+  it("shows screenshot capture errors without changing existing attachments", async () => {
+    const { repository, rows } = createAttachmentRepository();
+    setAttachmentDependenciesForTest({
+      fileStorage: createAttachmentFileStorage(),
+      repository,
+      screenshotCapture: createScreenshotCapture({
+        async captureFullscreen() {
+          throw new Error("Screenshot unavailable");
+        },
+      }),
+    });
+    await renderApp();
+
+    const detailPanel = within(screen.getByTestId("detail-panel"));
+    await userEvent.click(detailPanel.getByRole("button", { name: /add screenshot/i }));
+
+    await waitFor(() => expect(detailPanel.getByText(/screenshot unavailable/i)).toBeInTheDocument());
+    expect(rows).toHaveLength(0);
   });
 
   it("opens image attachments in a lightbox and closes with button, backdrop, and Escape", async () => {

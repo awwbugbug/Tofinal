@@ -69,6 +69,21 @@
 - App launch is user-triggered and routed through a narrow Rust command that validates path existence and file extension.
 - No broad shell permission, arbitrary command input, automatic app scanning, icon extraction, process monitoring, or background launching was added.
 
+## Resolved By Phase 6B Screenshot Capture MVP
+
+- TaskDetail has a user-triggered Add Screenshot action in the existing Attachments section.
+- Full-screen screenshots are saved as PNG files under the existing AppData attachment directory.
+- Screenshot metadata reuses `task_attachments` with `kind = "screenshot"`; no new SQLite table or schema migration was added.
+- Existing thumbnail preview, delete behavior, missing-file state, and Lightbox preview are reused for screenshots.
+- The screenshot command is invoked only from an explicit user click.
+- No region capture, annotation, OCR, AI, global shortcut, tray, background capture, timed capture, or upload path was added.
+
+## Resolved By Phase 6B.1 Screenshot UI Repair
+
+- The Attachments action row wraps Add Image and Full Screenshot instead of clipping in narrow DetailPanel widths.
+- The Apps action row uses the same responsive button wrapping for Add App and Start Task.
+- Screenshot copy now makes the MVP boundary explicit: it captures the full screen for now.
+
 ## Must Fix Before Next Persistence Expansion
 
 - Add a user-facing backup/export and restore strategy.
@@ -83,7 +98,8 @@
 - Decide whether to add thumbnail generation for large image lists.
 - Add image dimension extraction if UI needs width/height-aware layouts.
 - Add optional Lightbox enhancements only if needed: previous/next navigation, zoom/pan, and rotation.
-- Ensure screenshot-generated files reuse the attachment file storage adapter instead of creating a parallel screenshot file system.
+- Validate multi-monitor screenshot behavior across real Windows display arrangements, especially mixed scaling and negative monitor coordinates.
+- Design and implement region screenshot separately in Phase 6C if it remains a priority.
 - Continue ensuring file import never writes images, `tofinal.db`, `*.db`, or `*.sqlite` into the Git working tree.
 
 ## Must Fix Before System Tray Or Global Shortcuts
@@ -109,7 +125,7 @@
 - Calendar/reminder semantics.
 - WorkerW/Progman desktop embedding.
 - Large UI template libraries or Redux.
-- Screenshot/voice features before attachment backup and cleanup policy is stable.
+- Voice features before task creation/editing paths are stable.
 - Automatic installed-app scanning or AI-driven app launching before manual binding is stable.
 
 ## Suggested Priority
@@ -118,7 +134,7 @@
 2. Implement Phase 3 SQLite with migration and repository hardening.
 3. Add import/export or backup after SQLite is stable.
 4. Add attachment backup/export and orphan cleanup.
-5. Add screenshot capture only by reusing the attachment system.
+5. Manually validate screenshot capture on the primary target Windows setup and refine multi-monitor behavior if needed.
 6. Add voice input only after task creation/editing paths are stable.
 7. Add tray/global shortcuts after window lifecycle is explicitly designed.
 8. Package and sign the app for regular personal use.

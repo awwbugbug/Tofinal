@@ -1,6 +1,7 @@
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 import {
   Calendar,
+  Camera,
   CheckCircle2,
   Clock3,
   MonitorUp,
@@ -31,6 +32,7 @@ type TaskDetailProps = {
   attachments: AttachmentView[];
   attachmentsLoading: boolean;
   attachmentsAdding: boolean;
+  attachmentsCapturing: boolean;
   attachmentDeletingIds: Record<string, boolean>;
   attachmentError: string | null;
   taskApps: TaskAppView[];
@@ -43,6 +45,7 @@ type TaskDetailProps = {
   lastSavedAt: string | null;
   persistenceError: string | null;
   onAddImageAttachment: (taskId: string) => void;
+  onAddScreenshotAttachment: (taskId: string) => void;
   onDeleteAttachment: (attachmentId: string) => void;
   onAddTaskApp: (taskId: string) => void;
   onDeleteTaskApp: (appId: string) => void;
@@ -126,6 +129,7 @@ export function TaskDetail({
   attachmentError,
   attachments,
   attachmentsAdding,
+  attachmentsCapturing,
   attachmentsLoading,
   taskAppError,
   taskApps,
@@ -135,6 +139,7 @@ export function TaskDetail({
   lastTaskAppsStartedAt,
   lastSavedAt,
   onAddImageAttachment,
+  onAddScreenshotAttachment,
   onAddTaskApp,
   onDeleteAttachment,
   onDeleteTaskApp,
@@ -334,24 +339,40 @@ export function TaskDetail({
         </div>
 
         <section className="space-y-3" aria-labelledby="task-attachments-label">
-          <div className="flex items-center justify-between gap-3">
+          <div className="detail-action-row">
             <div
               className="text-xs font-medium uppercase text-[var(--text-faint)]"
               id="task-attachments-label"
             >
               Attachments
             </div>
-            <Button
-              aria-label="Add image attachment"
-              disabled={attachmentsAdding}
-              onClick={() => onAddImageAttachment(task.id)}
-              size="sm"
-              type="button"
-              variant="secondary"
-            >
-              <Plus className="h-4 w-4" />
-              {attachmentsAdding ? "Adding..." : "Add Image"}
-            </Button>
+            <div className="detail-action-buttons detail-action-buttons-grid">
+              <Button
+                aria-label="Add image attachment"
+                className="detail-action-button"
+                disabled={attachmentsAdding || attachmentsCapturing}
+                onClick={() => onAddImageAttachment(task.id)}
+                size="sm"
+                type="button"
+                variant="secondary"
+              >
+                <Plus className="h-4 w-4" />
+                {attachmentsAdding ? "Adding..." : "Add Image"}
+              </Button>
+              <Button
+                aria-label="Add screenshot (full screen)"
+                className="detail-action-button"
+                disabled={attachmentsAdding || attachmentsCapturing}
+                onClick={() => onAddScreenshotAttachment(task.id)}
+                size="sm"
+                title="Captures the full screen for now."
+                type="button"
+                variant="secondary"
+              >
+                <Camera className="h-4 w-4" />
+                {attachmentsCapturing ? "Capturing..." : "Full Screenshot"}
+              </Button>
+            </div>
           </div>
 
           {attachmentError && <p className="text-xs text-[var(--danger)]">{attachmentError}</p>}
@@ -422,13 +443,14 @@ export function TaskDetail({
         </section>
 
         <section className="space-y-3" aria-labelledby="task-apps-label">
-          <div className="flex items-center justify-between gap-3">
+          <div className="detail-action-row">
             <div className="text-xs font-medium uppercase text-[var(--text-faint)]" id="task-apps-label">
               Apps
             </div>
-            <div className="flex items-center gap-2">
+            <div className="detail-action-buttons detail-action-buttons-grid">
               <Button
                 aria-label="Add App"
+                className="detail-action-button"
                 disabled={taskAppsAdding}
                 onClick={() => onAddTaskApp(task.id)}
                 size="sm"
@@ -440,6 +462,7 @@ export function TaskDetail({
               </Button>
               <Button
                 aria-label="Start Task"
+                className="detail-action-button"
                 disabled={taskApps.length === 0 || taskAppsLaunching}
                 onClick={() => onStartTaskApps(task.id)}
                 size="sm"

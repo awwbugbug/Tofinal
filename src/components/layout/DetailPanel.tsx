@@ -8,6 +8,7 @@ type DetailPanelProps = {
   attachments: AttachmentView[];
   attachmentsLoading: boolean;
   attachmentsAdding: boolean;
+  attachmentsCapturing: boolean;
   attachmentDeletingIds: Record<string, boolean>;
   attachmentError: string | null;
   taskApps: TaskAppView[];
@@ -20,6 +21,7 @@ type DetailPanelProps = {
   lastSavedAt: string | null;
   persistenceError: string | null;
   onAddImageAttachment: (taskId: string) => void;
+  onAddScreenshotAttachment: (taskId: string) => void;
   onDeleteAttachment: (attachmentId: string) => void;
   onAddTaskApp: (taskId: string) => void;
   onDeleteTaskApp: (appId: string) => void;
@@ -38,6 +40,7 @@ export function DetailPanel({
   attachmentError,
   attachments,
   attachmentsAdding,
+  attachmentsCapturing,
   attachmentsLoading,
   taskAppError,
   taskApps,
@@ -47,6 +50,7 @@ export function DetailPanel({
   lastTaskAppsStartedAt,
   lastSavedAt,
   onAddImageAttachment,
+  onAddScreenshotAttachment,
   onAddTaskApp,
   onDeleteAttachment,
   onDeleteTaskApp,
@@ -69,6 +73,7 @@ export function DetailPanel({
         attachmentError={attachmentError}
         attachments={attachments}
         attachmentsAdding={attachmentsAdding}
+        attachmentsCapturing={attachmentsCapturing}
         attachmentsLoading={attachmentsLoading}
         taskAppError={taskAppError}
         taskApps={taskApps}
@@ -78,6 +83,7 @@ export function DetailPanel({
         lastTaskAppsStartedAt={lastTaskAppsStartedAt}
         lastSavedAt={lastSavedAt}
         onAddImageAttachment={onAddImageAttachment}
+        onAddScreenshotAttachment={onAddScreenshotAttachment}
         onAddTaskApp={onAddTaskApp}
         onDeleteAttachment={onDeleteAttachment}
         onDeleteTaskApp={onDeleteTaskApp}

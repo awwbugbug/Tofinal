@@ -761,3 +761,83 @@ Date: 2026-06-11
 - `npm run build`: passed.
 - `cargo check`: passed.
 - `npm run tauri dev`: verified Vite on port 1420 and `target\debug\tofinal.exe` startup; validation processes were stopped intentionally.
+
+---
+
+# Phase 6B Screenshot Capture MVP
+
+Date: 2026-06-12
+
+## Implemented
+
+- Added a user-triggered Add Screenshot button to the existing TaskDetail Attachments section.
+- Added a narrow Tauri command, `capture_fullscreen_screenshot`, for full-screen screenshot capture.
+- Added `src/storage/screenshotCapture.ts` as the frontend screenshot adapter.
+- Reused the existing attachment file storage path: `attachments/images/<taskId>/<attachmentId>.png` under Tauri AppData.
+- Reused the existing `task_attachments` table with `kind = "screenshot"` and `mime_type = "image/png"`.
+- Reused existing attachment thumbnail rendering, missing-file state, delete flow, and Lightbox preview.
+- Added `attachmentStore.addScreenshotAttachment(taskId)` with capture/loading error handling and cleanup if metadata insert fails after PNG write.
+
+## Not Implemented
+
+- No region screenshot.
+- No screenshot annotation or editing.
+- No OCR.
+- No AI image understanding.
+- No voice input.
+- No tray or global shortcut.
+- No background, timed, scrolling, or video capture.
+- No cloud upload.
+- No new screenshot table and no SQLite schema migration.
+
+## Storage And Metadata
+
+- Screenshot files are PNG.
+- `stored_name` is `<attachmentId>.png`.
+- `original_name` uses `screenshot-YYYYMMDD-HHMMSS.png`.
+- `relative_path` follows the existing attachment storage convention.
+- SQLite stores metadata only; PNG bytes are not stored as blobs.
+- `schema_version` remains `3`.
+
+## Error Handling
+
+- Screenshot capture failure is surfaced through attachment store error state.
+- Empty PNG bytes and invalid dimensions are rejected.
+- If writing the PNG succeeds but metadata insert fails, the copied PNG is removed best-effort.
+- Preview failures continue to use the existing broken/missing attachment state.
+- Screenshot failures do not mutate task data, task app bindings, or existing attachments.
+
+## Verification Results
+
+- `npm test -- src/stores/attachmentStore.test.ts src/app/App.test.tsx`: passed, 2 test files, 32 tests.
+- `npm test`: passed, 10 test files, 91 tests.
+- `npm run build`: passed, TypeScript and Vite production build completed.
+- `cargo check`: passed for `src-tauri`.
+- `npm run tauri dev`: verified Vite on port 1420 and `target\debug\tofinal.exe` startup; validation processes were stopped intentionally.
+
+---
+
+# Phase 6B.1 Screenshot UI Repair
+
+Date: 2026-06-12
+
+## Implemented
+
+- Repaired the TaskDetail Attachments action row so Add Image and Full Screenshot wrap instead of clipping in a narrow DetailPanel.
+- Applied the same responsive action-row pattern to the Apps section so Add App and Start Task do not overflow when the right panel is narrow.
+- Updated the screenshot action copy to make the current behavior explicit: the button is visible as `Full Screenshot`, with accessible name `Add screenshot (full screen)`.
+- Added a lightweight tooltip/title: `Captures the full screen for now.`
+
+## Scope Notes
+
+- Screenshot capture remains full-screen only.
+- Region selection, annotation, OCR, AI, tray, and global shortcut screenshot remain unimplemented.
+- SQLite schema, `task_attachments`, screenshot file paths, Rust capture logic, image attachments, Lightbox, Start Task, and task persistence were not changed.
+
+## Verification Results
+
+- Targeted regression: `npm test -- src/app/App.test.tsx` passed, 1 test file, 24 tests.
+- `npm test`: passed, 10 test files, 92 tests.
+- `npm run build`: passed, TypeScript and Vite production build completed.
+- `cargo check`: passed for `src-tauri`.
+- `npm run tauri dev`: verified Vite on port 1420 and `target\debug\tofinal.exe` startup; validation processes were stopped intentionally.

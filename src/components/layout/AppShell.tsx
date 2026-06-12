@@ -33,10 +33,12 @@ export function AppShell() {
   const attachmentsByTaskId = useAttachmentStore((state) => state.itemsByTaskId);
   const attachmentLoadingTaskIds = useAttachmentStore((state) => state.loadingTaskIds);
   const attachmentsAdding = useAttachmentStore((state) => state.adding);
+  const attachmentsCapturing = useAttachmentStore((state) => state.capturing);
   const attachmentDeletingIds = useAttachmentStore((state) => state.deletingIds);
   const attachmentError = useAttachmentStore((state) => state.error);
   const loadAttachmentsByTaskId = useAttachmentStore((state) => state.loadByTaskId);
   const addImageAttachment = useAttachmentStore((state) => state.addImageAttachment);
+  const addScreenshotAttachment = useAttachmentStore((state) => state.addScreenshotAttachment);
   const deleteAttachment = useAttachmentStore((state) => state.deleteAttachment);
   const deleteTaskWithAttachmentCleanup = useAttachmentStore((state) => state.deleteTaskWithAttachmentCleanup);
   const appsByTaskId = useTaskAppStore((state) => state.appsByTaskId);
@@ -121,6 +123,7 @@ export function AppShell() {
           onDeleteTask={handleDeleteTask}
           attachments={selectedTaskAttachments}
           attachmentsAdding={attachmentsAdding}
+          attachmentsCapturing={attachmentsCapturing}
           attachmentDeletingIds={attachmentDeletingIds}
           attachmentError={attachmentError}
           attachmentsLoading={selectedTaskAttachmentsLoading}
@@ -132,6 +135,9 @@ export function AppShell() {
           lastTaskAppsStartedAt={lastTaskAppsStartedAt}
           onAddImageAttachment={(taskId) => {
             void addImageAttachment(taskId);
+          }}
+          onAddScreenshotAttachment={(taskId) => {
+            void addScreenshotAttachment(taskId);
           }}
           onAddTaskApp={(taskId) => {
             void addTaskApp(taskId);

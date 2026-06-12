@@ -46,9 +46,19 @@ export type CopyImageInput = {
   sourcePath: string;
 };
 
+export type WriteScreenshotInput = {
+  taskId: string;
+  attachmentId: string;
+  originalName: string;
+  pngBytes: Uint8Array;
+  width: number | null;
+  height: number | null;
+};
+
 export type AttachmentFileStorage = {
   pickImageFiles: () => Promise<string[]>;
   copyImageToAppData: (input: CopyImageInput) => Promise<CopiedAttachmentFile>;
+  writeScreenshotToAppData: (input: WriteScreenshotInput) => Promise<CopiedAttachmentFile>;
   deleteAttachmentFile: (relativePath: string) => Promise<void>;
   resolvePreview: (relativePath: string, mimeType: string) => Promise<AttachmentPreview>;
 };
@@ -139,6 +149,28 @@ export const createAttachmentFileStorage = (
       sizeBytes: fileStat.size,
       width: null,
       height: null,
+    };
+  },
+  async writeScreenshotToAppData({ attachmentId, height, originalName, pngBytes, taskId, width }) {
+    if (pngBytes.byteLength === 0) {
+      throw new Error("Screenshot capture returned an empty PNG.");
+    }
+
+    const storedName = `${sanitizePathSegment(attachmentId)}.png`;
+    const directory = attachmentDirectory(taskId);
+    const relativePath = `${directory}/${storedName}`;
+
+    await runtime.mkdir(directory, { ...appDataOptions, recursive: true });
+    await runtime.writeFile(relativePath, pngBytes, appDataOptions);
+
+    return {
+      originalName,
+      storedName,
+      relativePath,
+      mimeType: "image/png",
+      sizeBytes: pngBytes.byteLength,
+      width,
+      height,
     };
   },
   async deleteAttachmentFile(relativePath) {
