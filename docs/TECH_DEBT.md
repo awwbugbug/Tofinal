@@ -18,6 +18,7 @@
 - More UI preferences in Zustand could blur business state and ephemeral state if not separated.
 - Advanced desktop features will expand Tauri permissions and increase platform-specific failure modes.
 - Image attachment import, copying, thumbnail preview, Lightbox preview, and delete UI now exist, but full orphan-file scanning/repair and backup policy are still not implemented.
+- Task App Binding MVP exists, but it is intentionally manual-only and does not scan installed apps, extract icons, track processes, or manage launch arguments.
 
 ## Resolved By Phase 3 SQLite
 
@@ -57,6 +58,17 @@
 - Lightbox is local UI state and does not alter tasks, SQLite metadata, or file storage.
 - Broken preview state is handled without crashing the detail panel.
 
+## Resolved By Phase 5B Task App Binding MVP
+
+- SQLite schema version advanced to `3`.
+- `task_apps` metadata table exists with cascade delete from `tasks`.
+- `TaskApp` type and `sqliteTaskAppRepository` exist separately from task and attachment repositories.
+- `taskAppStore` is separate from `taskStore`.
+- Users can manually bind `.exe` and `.lnk` paths through a file picker.
+- TaskDetail has minimal Add App, editable display name, Start Task, error, missing, and delete binding controls.
+- App launch is user-triggered and routed through a narrow Rust command that validates path existence and file extension.
+- No broad shell permission, arbitrary command input, automatic app scanning, icon extraction, process monitoring, or background launching was added.
+
 ## Must Fix Before Next Persistence Expansion
 
 - Add a user-facing backup/export and restore strategy.
@@ -82,6 +94,14 @@
 - Add platform-specific tests or manual QA checklist for Windows behavior.
 - Add Tauri permissions/plugins only when the feature is implemented.
 
+## Must Fix Before Expanding Task App Binding
+
+- Decide whether `.lnk` launch should use a deeper Windows-native ShellExecute wrapper if the current best-effort launcher is insufficient.
+- Add optional app icon extraction only after the metadata and launch behavior are stable.
+- Add launch argument support only with a constrained UI model; do not allow free-form shell command execution.
+- Add installed-app discovery only as an explicit later phase with a separate security review.
+- Add better missing-path repair UX if users move or uninstall bound applications.
+
 ## Temporarily Not Recommended
 
 - Cloud sync, accounts, and login.
@@ -90,6 +110,7 @@
 - WorkerW/Progman desktop embedding.
 - Large UI template libraries or Redux.
 - Screenshot/voice features before attachment backup and cleanup policy is stable.
+- Automatic installed-app scanning or AI-driven app launching before manual binding is stable.
 
 ## Suggested Priority
 

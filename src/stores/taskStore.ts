@@ -24,6 +24,7 @@ type TaskActions = {
   hydrateTasks: () => Promise<void>;
   addTask: (title: string) => void;
   updateTask: (id: string, update: TaskUpdate) => boolean;
+  retryPersistTasks: () => void;
   deleteTask: (id: string) => void;
   toggleTask: (id: string) => void;
   togglePinned: (id: string) => void;
@@ -130,8 +131,28 @@ const selectVisibleTask = (
 };
 
 const errorMessage = (error: unknown) => {
+  if (typeof error === "string") {
+    return error;
+  }
+
   if (error instanceof Error) {
     return error.message;
+  }
+
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof error.message === "string"
+  ) {
+    return error.message;
+  }
+
+  if (error !== undefined && error !== null) {
+    const message = String(error);
+    if (message && message !== "[object Object]") {
+      return message;
+    }
   }
 
   return "Task persistence failed.";
@@ -264,6 +285,13 @@ const createTaskStoreState: StateCreator<TaskStore> = (set, get) => {
     set({ tasks, selectedTaskId });
     queuePersistTasks();
     return true;
+  },
+  retryPersistTasks: () => {
+    if (!canMutateTasks()) {
+      return;
+    }
+
+    queuePersistTasks();
   },
   deleteTask: (id) => {
     if (!canMutateTasks()) {

@@ -5,6 +5,7 @@ import { NormalModeLayout } from "@/components/layout/NormalModeLayout";
 import { WindowTitleBar } from "@/components/layout/WindowTitleBar";
 import { applyWindowMode } from "@/lib/windowMode";
 import { useAttachmentStore } from "@/stores/attachmentStore";
+import { useTaskAppStore } from "@/stores/taskAppStore";
 import { useTaskStore } from "@/stores/taskStore";
 
 export function AppShell() {
@@ -21,6 +22,7 @@ export function AppShell() {
   const hydrateTasks = useTaskStore((state) => state.hydrateTasks);
   const addTask = useTaskStore((state) => state.addTask);
   const updateTask = useTaskStore((state) => state.updateTask);
+  const retryPersistTasks = useTaskStore((state) => state.retryPersistTasks);
   const deleteTask = useTaskStore((state) => state.deleteTask);
   const toggleTask = useTaskStore((state) => state.toggleTask);
   const selectTask = useTaskStore((state) => state.selectTask);
@@ -37,10 +39,23 @@ export function AppShell() {
   const addImageAttachment = useAttachmentStore((state) => state.addImageAttachment);
   const deleteAttachment = useAttachmentStore((state) => state.deleteAttachment);
   const deleteTaskWithAttachmentCleanup = useAttachmentStore((state) => state.deleteTaskWithAttachmentCleanup);
+  const appsByTaskId = useTaskAppStore((state) => state.appsByTaskId);
+  const appLoadingTaskIds = useTaskAppStore((state) => state.loadingTaskIds);
+  const taskAppsAdding = useTaskAppStore((state) => state.adding);
+  const taskAppsLaunching = useTaskAppStore((state) => state.launching);
+  const taskAppError = useTaskAppStore((state) => state.error);
+  const lastTaskAppsStartedAt = useTaskAppStore((state) => state.lastStartedAt);
+  const loadTaskAppsByTaskId = useTaskAppStore((state) => state.loadByTaskId);
+  const addTaskApp = useTaskAppStore((state) => state.addApp);
+  const updateTaskAppName = useTaskAppStore((state) => state.updateAppName);
+  const deleteTaskApp = useTaskAppStore((state) => state.deleteApp);
+  const startTaskApps = useTaskAppStore((state) => state.startTask);
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null;
   const filteredTasks = getFilteredTasks(activeFilter);
   const selectedTaskAttachments = selectedTaskId ? (attachmentsByTaskId[selectedTaskId] ?? []) : [];
   const selectedTaskAttachmentsLoading = selectedTaskId ? Boolean(attachmentLoadingTaskIds[selectedTaskId]) : false;
+  const selectedTaskApps = selectedTaskId ? (appsByTaskId[selectedTaskId] ?? []) : [];
+  const selectedTaskAppsLoading = selectedTaskId ? Boolean(appLoadingTaskIds[selectedTaskId]) : false;
 
   useEffect(() => {
     void hydrateTasks();
@@ -55,6 +70,12 @@ export function AppShell() {
       void loadAttachmentsByTaskId(selectedTaskId);
     }
   }, [hydrated, loadAttachmentsByTaskId, mode, selectedTaskId]);
+
+  useEffect(() => {
+    if (hydrated && mode === "normal" && selectedTaskId) {
+      void loadTaskAppsByTaskId(selectedTaskId);
+    }
+  }, [hydrated, loadTaskAppsByTaskId, mode, selectedTaskId]);
 
   const handleDeleteTask = (id: string) => {
     void deleteTaskWithAttachmentCleanup(id, deleteTask);
@@ -103,12 +124,31 @@ export function AppShell() {
           attachmentDeletingIds={attachmentDeletingIds}
           attachmentError={attachmentError}
           attachmentsLoading={selectedTaskAttachmentsLoading}
+          taskAppError={taskAppError}
+          taskApps={selectedTaskApps}
+          taskAppsAdding={taskAppsAdding}
+          taskAppsLaunching={taskAppsLaunching}
+          taskAppsLoading={selectedTaskAppsLoading}
+          lastTaskAppsStartedAt={lastTaskAppsStartedAt}
           onAddImageAttachment={(taskId) => {
             void addImageAttachment(taskId);
+          }}
+          onAddTaskApp={(taskId) => {
+            void addTaskApp(taskId);
           }}
           onDeleteAttachment={(attachmentId) => {
             void deleteAttachment(attachmentId);
           }}
+          onDeleteTaskApp={(appId) => {
+            void deleteTaskApp(appId);
+          }}
+          onStartTaskApps={(taskId) => {
+            void startTaskApps(taskId);
+          }}
+          onUpdateTaskAppName={(appId, appName) => {
+            void updateTaskAppName(appId, appName);
+          }}
+          onRetryPersistTasks={retryPersistTasks}
           onFilterChange={setActiveFilter}
           onSelectTask={selectTask}
           onSearchChange={setSearchQuery}

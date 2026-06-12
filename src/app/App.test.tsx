@@ -5,15 +5,23 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "@/app/App";
 import { resetTaskRepositoryForTest, setTaskRepositoryForTest } from "@/repositories/taskRepository";
 import type { AttachmentRepository } from "@/repositories/sqliteAttachmentRepository";
+import type { TaskAppRepository } from "@/repositories/sqliteTaskAppRepository";
+import type { AppLauncher } from "@/lib/appLauncher";
 import { createSeedTasks } from "@/storage/taskStorage";
 import type { AttachmentFileStorage } from "@/storage/attachmentFileStorage";
+import type { TaskAppSelection } from "@/storage/taskAppSelection";
 import {
   resetAttachmentDependenciesForTest,
   setAttachmentDependenciesForTest,
 } from "@/stores/attachmentStore";
+import {
+  resetTaskAppDependenciesForTest,
+  setTaskAppDependenciesForTest,
+} from "@/stores/taskAppStore";
 import { resetTaskStore } from "@/stores/taskStore";
 import { createMemoryTaskRepository } from "@/test/taskRepositoryTestUtils";
 import type { TaskAttachment } from "@/types/attachment";
+import type { TaskApp } from "@/types/taskApp";
 
 const createDeferred = <T,>() => {
   let resolve!: (value: T) => void;
@@ -97,6 +105,71 @@ const createAttachmentFileStorage = (overrides: Partial<AttachmentFileStorage> =
   ...overrides,
 });
 
+const createTaskApp = (overrides: Partial<TaskApp> = {}): TaskApp => ({
+  id: "task-app-1",
+  taskId: "task-1",
+  appName: "Notepad",
+  appPath: "C:\\Windows\\notepad.exe",
+  appKind: "exe",
+  launchArgs: null,
+  createdAt: "2026-06-11T08:10:00.000Z",
+  updatedAt: "2026-06-11T08:10:00.000Z",
+  sortOrder: 0,
+  ...overrides,
+});
+
+const createTaskAppRepository = (initialApps: TaskApp[] = []) => {
+  const rows = [...initialApps];
+  const repository: TaskAppRepository = {
+    async listByTaskId(taskId) {
+      return rows.filter((row) => row.taskId === taskId).sort((first, second) => first.sortOrder - second.sortOrder);
+    },
+    async getTaskApp(id) {
+      return rows.find((row) => row.id === id) ?? null;
+    },
+    async insertTaskApp(taskApp) {
+      rows.push(taskApp);
+    },
+    async updateTaskApp(id, update) {
+      rows.forEach((row) => {
+        if (row.id === id) {
+          row.appName = update.appName;
+          row.updatedAt = update.updatedAt;
+        }
+      });
+    },
+    async deleteTaskApp(id) {
+      const index = rows.findIndex((row) => row.id === id);
+      if (index >= 0) {
+        rows.splice(index, 1);
+      }
+    },
+    async deleteByTaskId(taskId) {
+      let index = rows.length - 1;
+      while (index >= 0) {
+        if (rows[index].taskId === taskId) {
+          rows.splice(index, 1);
+        }
+        index -= 1;
+      }
+    },
+  };
+
+  return { repository, rows };
+};
+
+const createTaskAppSelection = (overrides: Partial<TaskAppSelection> = {}): TaskAppSelection => ({
+  async pickAppPath() {
+    return "C:\\Windows\\notepad.exe";
+  },
+  ...overrides,
+});
+
+const createAppLauncher = (overrides: Partial<AppLauncher> = {}): AppLauncher => ({
+  async launch() {},
+  ...overrides,
+});
+
 describe("App", () => {
   const renderApp = async () => {
     render(<App />);
@@ -112,6 +185,12 @@ describe("App", () => {
     setAttachmentDependenciesForTest({
       fileStorage: createAttachmentFileStorage(),
       repository: createAttachmentRepository().repository,
+    });
+    resetTaskAppDependenciesForTest();
+    setTaskAppDependenciesForTest({
+      launcher: createAppLauncher(),
+      repository: createTaskAppRepository().repository,
+      selection: createTaskAppSelection(),
     });
     resetTaskStore();
   });
@@ -213,6 +292,39 @@ describe("App", () => {
     await waitFor(() => {
       expect(detailPanel.getByText(/saved/i)).toBeInTheDocument();
     });
+  });
+
+  it("allows retrying a failed task save without changing the draft again", async () => {
+    const savedSnapshots: Array<{ tasks: ReturnType<typeof createSeedTasks> }> = [];
+    let failNextSave = true;
+    setTaskRepositoryForTest({
+      async loadSnapshot() {
+        return { tasks: createSeedTasks() };
+      },
+      async saveSnapshot(snapshot) {
+        if (failNextSave) {
+          failNextSave = false;
+          throw "database is locked";
+        }
+        savedSnapshots.push(snapshot);
+      },
+    });
+    resetTaskStore();
+    await renderApp();
+
+    const detailPanel = within(screen.getByTestId("detail-panel"));
+    await userEvent.clear(detailPanel.getByLabelText(/task note/i));
+    await userEvent.type(detailPanel.getByLabelText(/task note/i), "Retry this saved note");
+    await userEvent.click(detailPanel.getByRole("button", { name: /save task/i }));
+
+    await waitFor(() => expect(detailPanel.getByText(/database is locked/i)).toBeInTheDocument());
+    const retryButton = detailPanel.getByRole("button", { name: /save task/i });
+    expect(retryButton).toBeEnabled();
+
+    await userEvent.click(retryButton);
+
+    await waitFor(() => expect(detailPanel.getByTitle(/^Saved /i)).toBeInTheDocument());
+    expect(savedSnapshots[savedSnapshots.length - 1].tasks[0].note).toBe("Retry this saved note");
   });
 
   it("does not carry an unsaved draft into another selected task", async () => {
@@ -471,5 +583,63 @@ describe("App", () => {
     await userEvent.click(screen.getByRole("button", { name: /desktop pin mode/i }));
     expect(screen.getByTestId("desktop-pin-layout")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /add image attachment/i })).not.toBeInTheDocument();
+  });
+
+  it("loads, adds, edits, starts, and deletes task app bindings in the selected task detail", async () => {
+    const launch = vi.fn();
+    const { repository, rows } = createTaskAppRepository([createTaskApp()]);
+    setTaskAppDependenciesForTest({
+      launcher: createAppLauncher({ launch }),
+      repository,
+      selection: createTaskAppSelection({ async pickAppPath() { return "C:\\Tools\\Editor.lnk"; } }),
+    });
+    await renderApp();
+
+    const detailPanel = within(screen.getByTestId("detail-panel"));
+    expect(await detailPanel.findByDisplayValue("Notepad")).toBeInTheDocument();
+    expect(detailPanel.getByText(/c:\\windows\\notepad\.exe/i)).toBeInTheDocument();
+
+    await userEvent.click(detailPanel.getByRole("button", { name: /start task/i }));
+    await waitFor(() => expect(launch).toHaveBeenCalledWith(createTaskApp()));
+    expect(detailPanel.getByText(/started locally/i)).toBeInTheDocument();
+
+    const appNameInput = detailPanel.getByLabelText(/app name notepad/i);
+    await userEvent.clear(appNameInput);
+    await userEvent.type(appNameInput, "Notes");
+    fireEvent.blur(appNameInput);
+    await waitFor(() => expect(rows[0].appName).toBe("Notes"));
+
+    await userEvent.click(detailPanel.getByRole("button", { name: /add app/i }));
+    await waitFor(() => expect(rows).toHaveLength(2));
+    expect(rows[1]).toMatchObject({ appKind: "shortcut", appName: "Editor" });
+
+    await userEvent.click(detailPanel.getByRole("button", { name: /delete app notes/i }));
+    await waitFor(() => expect(rows.some((row) => row.id === "task-app-1")).toBe(false));
+  });
+
+  it("shows task app launch errors and does not render app bindings in desktop pin mode", async () => {
+    const { repository } = createTaskAppRepository([createTaskApp()]);
+    setTaskAppDependenciesForTest({
+      launcher: createAppLauncher({
+        async launch() {
+          throw new Error("App path does not exist.");
+        },
+      }),
+      repository,
+      selection: createTaskAppSelection(),
+    });
+    await renderApp();
+
+    const detailPanel = within(screen.getByTestId("detail-panel"));
+    expect(await detailPanel.findByDisplayValue("Notepad")).toBeInTheDocument();
+
+    await userEvent.click(detailPanel.getByRole("button", { name: /start task/i }));
+    await waitFor(() => expect(detailPanel.getAllByText(/app path does not exist/i).length).toBeGreaterThan(0));
+    expect(detailPanel.getByText(/missing/i)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /desktop pin mode/i }));
+    expect(screen.getByTestId("desktop-pin-layout")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /start task/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /add app/i })).not.toBeInTheDocument();
   });
 });

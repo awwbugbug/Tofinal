@@ -244,3 +244,48 @@ Phase 4C adds a TaskDetail-local Lightbox for image attachments:
 - The Lightbox consumes the preview URL already produced by `attachmentStore`; it does not read files, query SQLite, or mutate task data.
 - The preview is intentionally read-only. It does not edit, rotate, crop, zoom, or generate thumbnails.
 - Desktop Pin Mode does not render the Lightbox entry because it does not load attachment previews.
+
+## Task App Binding Boundary
+
+Phase 5B adds manual task app binding without automatic software discovery.
+
+SQLite schema version `3` adds `task_apps`:
+
+```sql
+CREATE TABLE IF NOT EXISTS task_apps (
+  id TEXT PRIMARY KEY,
+  task_id TEXT NOT NULL,
+  app_name TEXT NOT NULL,
+  app_path TEXT NOT NULL,
+  app_kind TEXT NOT NULL CHECK (app_kind IN ('exe', 'shortcut')),
+  launch_args TEXT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  sort_order INTEGER NOT NULL,
+  FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE
+);
+```
+
+`PRAGMA foreign_keys = ON` remains part of SQLite initialization, so deleting a task cascades task app metadata.
+
+Task app code is intentionally split:
+
+- `src/types/taskApp.ts` defines `TaskApp` and `TaskAppKind`.
+- `src/repositories/sqliteTaskAppRepository.ts` owns SQL row mapping and metadata CRUD.
+- `src/storage/taskAppSelection.ts` owns manual `.exe` / `.lnk` file selection.
+- `src/lib/appLauncher.ts` owns the frontend launcher adapter.
+- `src/stores/taskAppStore.ts` owns selected-task app loading, add, rename, delete, and Start Task state.
+- `src-tauri/src/lib.rs` exposes `launch_task_app`, a narrow command that validates the selected path and app kind before launching.
+
+The UI data flow is:
+
+1. TaskDetail calls `taskAppStore.addApp(taskId)`.
+2. The selection adapter opens a user-triggered file picker.
+3. The store validates `.exe` or `.lnk`, builds metadata, and inserts through `sqliteTaskAppRepository`.
+4. TaskDetail reloads the selected task app list from store state.
+5. Start Task calls `taskAppStore.startTask(taskId)`, which delegates to `appLauncher.launch(taskApp)`.
+6. The Tauri command launches only the stored, validated path.
+
+Task apps are not stored in `taskStore`, and Desktop Pin Mode does not load or render the app binding list.
+
+No shell plugin permission, clipboard permission, notification permission, tray permission, global shortcut permission, or software-scanning permission is used for Phase 5B.

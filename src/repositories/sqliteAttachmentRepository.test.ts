@@ -194,7 +194,7 @@ describe("sqlite attachment repository", () => {
     localStorage.clear();
   });
 
-  it("migrates schema v1 to v2, keeps existing tasks, and enables foreign keys", async () => {
+  it("migrates schema to the current version, keeps existing tasks, and enables foreign keys", async () => {
     const db = new FakeSqlDatabase();
     db.tasks = [taskToRow(task(), 0)];
     const repository = createSqliteAttachmentRepository(createLoader(db));
@@ -203,7 +203,7 @@ describe("sqlite attachment repository", () => {
 
     expect(db.attachmentTableExists).toBe(true);
     expect(db.foreignKeysEnabled).toBe(true);
-    expect(db.meta.get("schema_version")).toBe("2");
+    expect(db.meta.get("schema_version")).toBe("3");
     expect(db.tasks.map((row) => row.title)).toEqual(["Task with attachments"]);
   });
 
@@ -223,7 +223,7 @@ describe("sqlite attachment repository", () => {
 
     await repository.listByTaskId("task-1");
 
-    expect(db.meta.get("schema_version")).toBe("2");
+    expect(db.meta.get("schema_version")).toBe("3");
     expect(db.executed.some((sql) => sql.includes("INSERT INTO schema_meta (key, value)\n"))).toBe(true);
   });
 

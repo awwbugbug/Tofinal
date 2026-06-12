@@ -226,6 +226,52 @@ describe("task store", () => {
     expect(store.getState().error).toBe("SQLite write failed");
   });
 
+  it("preserves non-Error repository failure messages", async () => {
+    const { store } = await createHydratedStore();
+    setTaskRepositoryForTest({
+      async loadSnapshot() {
+        return { tasks: createSeedTasks() };
+      },
+      async saveSnapshot() {
+        throw "database is locked";
+      },
+    });
+
+    store.getState().addTask("Keeps the raw SQLite message");
+    await flushPromises();
+
+    expect(store.getState().error).toBe("database is locked");
+  });
+
+  it("retries the latest in-memory task snapshot after a failed save", async () => {
+    const savedSnapshots: TaskSnapshot[] = [];
+    let failNextSave = true;
+    const { store } = await createHydratedStore();
+    setTaskRepositoryForTest({
+      async loadSnapshot() {
+        return { tasks: createSeedTasks() };
+      },
+      async saveSnapshot(snapshot) {
+        if (failNextSave) {
+          failNextSave = false;
+          throw "database is locked";
+        }
+        savedSnapshots.push(snapshot);
+      },
+    });
+
+    const taskId = store.getState().tasks[0].id;
+    store.getState().updateTask(taskId, { title: "Latest retry title" });
+    await flushPromises();
+    expect(store.getState().error).toBe("database is locked");
+
+    store.getState().retryPersistTasks();
+    await flushPromises();
+
+    expect(store.getState().error).toBeNull();
+    expect(savedSnapshots[savedSnapshots.length - 1].tasks[0].title).toBe("Latest retry title");
+  });
+
   it("serializes rapid saves so the final persisted snapshot is the latest state", async () => {
     let loadedSnapshot: TaskSnapshot = { tasks: createSeedTasks() };
     const committedSnapshots: TaskSnapshot[] = [];

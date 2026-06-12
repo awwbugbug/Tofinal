@@ -724,3 +724,40 @@ Date: 2026-06-10
 - `npm run build`: passed, TypeScript and Vite production build completed.
 - `cargo check`: passed for `src-tauri`.
 - `npm run tauri dev`: verified Vite on port 1420 and `target\debug\tofinal.exe` startup; validation processes were then stopped intentionally.
+
+---
+
+# Phase 5B Task App Binding MVP
+
+Date: 2026-06-11
+
+## Implemented
+
+- Added SQLite schema version `3` with a `task_apps` metadata table.
+- Added `TaskApp` / `TaskAppKind` types for manually bound local apps.
+- Added a dedicated `sqliteTaskAppRepository` for listing, inserting, updating, deleting, and cascade-compatible task app metadata.
+- Added a separate `taskAppStore`; task app bindings are not stored in `taskStore`.
+- Added manual Add App support through the existing Tauri file picker, limited to `.exe` and `.lnk`.
+- Added a minimal TaskDetail Apps section with Add App, editable display name, Start Task, path display, missing/error state, and delete binding.
+- Added a narrow Rust command, `launch_task_app`, that validates path existence and extension before launching.
+
+## Not Implemented
+
+- No automatic app scanning.
+- No Start Menu, registry, install directory, Microsoft Store, or PATH scanning.
+- No AI, screenshot, voice input, tray, global shortcuts, icon extraction, process monitoring, automatic app closing, or background launching.
+- No URL binding, arbitrary command entry, launch argument editing, or shell-string execution.
+
+## Security And Permissions
+
+- The launcher is user-triggered from the TaskDetail Start Task button.
+- App paths come from the file picker and are stored as metadata.
+- The Rust command checks `.exe` for `app_kind = "exe"` and `.lnk` for `app_kind = "shortcut"`.
+- No broad shell permission was added.
+
+## Verification Results
+
+- `npm test`: passed, 9 test files, 82 tests.
+- `npm run build`: passed.
+- `cargo check`: passed.
+- `npm run tauri dev`: verified Vite on port 1420 and `target\debug\tofinal.exe` startup; validation processes were stopped intentionally.

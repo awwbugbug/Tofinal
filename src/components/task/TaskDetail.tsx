@@ -3,9 +3,11 @@ import {
   Calendar,
   CheckCircle2,
   Clock3,
+  MonitorUp,
   ImageIcon,
   ImageOff,
   Pin,
+  Play,
   Plus,
   Tag,
   Trash2,
@@ -21,6 +23,7 @@ import { Separator } from "@/components/ui/separator";
 import { AttachmentLightbox } from "@/components/task/AttachmentLightbox";
 import { cn } from "@/lib/utils";
 import type { AttachmentView } from "@/stores/attachmentStore";
+import type { TaskAppView } from "@/stores/taskAppStore";
 import type { Task, TaskPriority } from "@/types/task";
 
 type TaskDetailProps = {
@@ -30,11 +33,22 @@ type TaskDetailProps = {
   attachmentsAdding: boolean;
   attachmentDeletingIds: Record<string, boolean>;
   attachmentError: string | null;
+  taskApps: TaskAppView[];
+  taskAppsLoading: boolean;
+  taskAppsAdding: boolean;
+  taskAppsLaunching: boolean;
+  taskAppError: string | null;
+  lastTaskAppsStartedAt: string | null;
   saving: boolean;
   lastSavedAt: string | null;
   persistenceError: string | null;
   onAddImageAttachment: (taskId: string) => void;
   onDeleteAttachment: (attachmentId: string) => void;
+  onAddTaskApp: (taskId: string) => void;
+  onDeleteTaskApp: (appId: string) => void;
+  onStartTaskApps: (taskId: string) => void;
+  onUpdateTaskAppName: (appId: string, appName: string) => void;
+  onRetryPersistTasks: () => void;
   onDeleteTask: (id: string) => void;
   onUpdateTask: (
     id: string,
@@ -113,11 +127,22 @@ export function TaskDetail({
   attachments,
   attachmentsAdding,
   attachmentsLoading,
+  taskAppError,
+  taskApps,
+  taskAppsAdding,
+  taskAppsLaunching,
+  taskAppsLoading,
+  lastTaskAppsStartedAt,
   lastSavedAt,
   onAddImageAttachment,
+  onAddTaskApp,
   onDeleteAttachment,
+  onDeleteTaskApp,
   onDeleteTask,
+  onStartTaskApps,
   onUpdateTask,
+  onUpdateTaskAppName,
+  onRetryPersistTasks,
   persistenceError,
   saving,
   task,
@@ -186,6 +211,11 @@ export function TaskDetail({
   const handleSave = () => {
     if (!title.trim()) {
       setError("Title is required.");
+      return;
+    }
+
+    if (!hasDraftChanges && persistenceError) {
+      onRetryPersistTasks();
       return;
     }
 
@@ -391,6 +421,98 @@ export function TaskDetail({
           )}
         </section>
 
+        <section className="space-y-3" aria-labelledby="task-apps-label">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-xs font-medium uppercase text-[var(--text-faint)]" id="task-apps-label">
+              Apps
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                aria-label="Add App"
+                disabled={taskAppsAdding}
+                onClick={() => onAddTaskApp(task.id)}
+                size="sm"
+                type="button"
+                variant="secondary"
+              >
+                <Plus className="h-4 w-4" />
+                {taskAppsAdding ? "Adding..." : "Add App"}
+              </Button>
+              <Button
+                aria-label="Start Task"
+                disabled={taskApps.length === 0 || taskAppsLaunching}
+                onClick={() => onStartTaskApps(task.id)}
+                size="sm"
+                type="button"
+              >
+                <Play className="h-4 w-4" />
+                {taskAppsLaunching ? "Starting..." : "Start Task"}
+              </Button>
+            </div>
+          </div>
+
+          {taskAppError && <p className="text-xs text-[var(--danger)]">{taskAppError}</p>}
+          {!taskAppError && lastTaskAppsStartedAt && (
+            <p aria-live="polite" className="text-xs text-[var(--text-muted)]">
+              Started locally
+            </p>
+          )}
+          {taskAppsLoading ? (
+            <div className="rounded-3xl border border-dashed border-[var(--border-soft)] bg-[var(--surface-field)] p-4 text-sm text-[var(--text-faint)]">
+              Loading apps...
+            </div>
+          ) : taskApps.length === 0 ? (
+            <div className="rounded-3xl border border-dashed border-[var(--border-soft)] bg-[var(--surface-field)] p-4 text-sm text-[var(--text-faint)]">
+              No bound apps
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {taskApps.map((app) => (
+                <article
+                  className="rounded-3xl border border-[var(--border-soft)] bg-[var(--surface-field)] p-3"
+                  key={app.id}
+                >
+                  <div className="flex items-start gap-3">
+                    <MonitorUp className="mt-2 h-4 w-4 shrink-0 text-[var(--text-faint)]" />
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <Input
+                        aria-label={`App name ${app.appName}`}
+                        className="h-8 rounded-2xl border-[var(--border-soft)] bg-[color-mix(in_srgb,var(--surface-field)_72%,transparent)] px-3 text-sm font-medium"
+                        defaultValue={app.appName}
+                        onBlur={(event) => {
+                          const nextName = event.currentTarget.value.trim();
+                          if (nextName && nextName !== app.appName) {
+                            onUpdateTaskAppName(app.id, nextName);
+                          }
+                        }}
+                      />
+                      <p className="truncate text-xs text-[var(--text-muted)]" title={app.appPath}>
+                        {app.appPath}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <Badge>{app.appKind === "shortcut" ? "Shortcut" : "EXE"}</Badge>
+                        {app.missing && <Badge className="bg-[var(--danger-soft)] text-[var(--danger)]">Missing</Badge>}
+                        {app.lastLaunchError && (
+                          <span className="text-[var(--danger)]">{app.lastLaunchError}</span>
+                        )}
+                      </div>
+                    </div>
+                    <Button
+                      aria-label={`Delete app ${app.appName}`}
+                      onClick={() => onDeleteTaskApp(app.id)}
+                      size="icon"
+                      type="button"
+                      variant="ghost"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+
         <Separator />
 
         <div className="space-y-3 rounded-3xl border border-[var(--border-soft)] bg-[color-mix(in_srgb,var(--surface-field)_72%,transparent)] p-4 text-sm text-[var(--text-muted)]">
@@ -429,16 +551,17 @@ export function TaskDetail({
             <span
               aria-live="polite"
               className={cn(
-                "max-w-40 truncate text-xs text-[var(--text-faint)]",
+                "max-w-56 text-right text-xs leading-snug text-[var(--text-faint)]",
                 persistenceError && "text-[var(--danger)]",
               )}
+              title={saveStatus}
             >
               {saveStatus}
             </span>
           )}
           <Button
             aria-label={saving ? "Saving task" : "Save task"}
-            disabled={!hasDraftChanges}
+            disabled={!hasDraftChanges && !persistenceError}
             onClick={handleSave}
           >
             {saving ? "Saving..." : "Save"}

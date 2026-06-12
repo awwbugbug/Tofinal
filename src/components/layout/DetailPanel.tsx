@@ -1,5 +1,6 @@
 import { TaskDetail } from "@/components/task/TaskDetail";
 import type { AttachmentView } from "@/stores/attachmentStore";
+import type { TaskAppView } from "@/stores/taskAppStore";
 import type { Task } from "@/types/task";
 
 type DetailPanelProps = {
@@ -9,11 +10,22 @@ type DetailPanelProps = {
   attachmentsAdding: boolean;
   attachmentDeletingIds: Record<string, boolean>;
   attachmentError: string | null;
+  taskApps: TaskAppView[];
+  taskAppsLoading: boolean;
+  taskAppsAdding: boolean;
+  taskAppsLaunching: boolean;
+  taskAppError: string | null;
+  lastTaskAppsStartedAt: string | null;
   saving: boolean;
   lastSavedAt: string | null;
   persistenceError: string | null;
   onAddImageAttachment: (taskId: string) => void;
   onDeleteAttachment: (attachmentId: string) => void;
+  onAddTaskApp: (taskId: string) => void;
+  onDeleteTaskApp: (appId: string) => void;
+  onStartTaskApps: (taskId: string) => void;
+  onUpdateTaskAppName: (appId: string, appName: string) => void;
+  onRetryPersistTasks: () => void;
   onDeleteTask: (id: string) => void;
   onUpdateTask: (
     id: string,
@@ -27,11 +39,22 @@ export function DetailPanel({
   attachments,
   attachmentsAdding,
   attachmentsLoading,
+  taskAppError,
+  taskApps,
+  taskAppsAdding,
+  taskAppsLaunching,
+  taskAppsLoading,
+  lastTaskAppsStartedAt,
   lastSavedAt,
   onAddImageAttachment,
+  onAddTaskApp,
   onDeleteAttachment,
+  onDeleteTaskApp,
   onDeleteTask,
+  onStartTaskApps,
   onUpdateTask,
+  onUpdateTaskAppName,
+  onRetryPersistTasks,
   persistenceError,
   saving,
   task,
@@ -47,11 +70,22 @@ export function DetailPanel({
         attachments={attachments}
         attachmentsAdding={attachmentsAdding}
         attachmentsLoading={attachmentsLoading}
+        taskAppError={taskAppError}
+        taskApps={taskApps}
+        taskAppsAdding={taskAppsAdding}
+        taskAppsLaunching={taskAppsLaunching}
+        taskAppsLoading={taskAppsLoading}
+        lastTaskAppsStartedAt={lastTaskAppsStartedAt}
         lastSavedAt={lastSavedAt}
         onAddImageAttachment={onAddImageAttachment}
+        onAddTaskApp={onAddTaskApp}
         onDeleteAttachment={onDeleteAttachment}
+        onDeleteTaskApp={onDeleteTaskApp}
         onDeleteTask={onDeleteTask}
+        onStartTaskApps={onStartTaskApps}
         onUpdateTask={onUpdateTask}
+        onUpdateTaskAppName={onUpdateTaskAppName}
+        onRetryPersistTasks={onRetryPersistTasks}
         persistenceError={persistenceError}
         saving={saving}
         task={task}

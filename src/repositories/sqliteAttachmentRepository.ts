@@ -1,10 +1,10 @@
 import {
-  ensureSqliteSchema,
+  createSqliteDatabaseContext,
   SQLITE_DATABASE_PATH,
-  tauriSqlDatabaseLoader,
-  type SqlDatabaseClient,
+  sharedSqliteDatabaseContext,
   type SqlDatabaseLoader,
   type SqlValue,
+  type SqliteDatabaseContext,
 } from "@/repositories/sqliteTaskRepository";
 import type { AttachmentKind, TaskAttachment } from "@/types/attachment";
 
@@ -144,53 +144,41 @@ export type AttachmentRepository = {
 };
 
 export const createSqliteAttachmentRepository = (
-  loader: SqlDatabaseLoader = tauriSqlDatabaseLoader,
+  source: SqlDatabaseLoader | SqliteDatabaseContext = sharedSqliteDatabaseContext,
   databasePath = SQLITE_DATABASE_PATH,
 ): AttachmentRepository => {
-  let dbPromise: Promise<SqlDatabaseClient> | null = null;
-  let initialized = false;
-
-  const getDb = async () => {
-    dbPromise ??= loader.load(databasePath);
-    return dbPromise;
-  };
-
-  const ensureInitialized = async (db: SqlDatabaseClient) => {
-    if (initialized) {
-      return;
-    }
-
-    await ensureSqliteSchema(db);
-    initialized = true;
-  };
+  const context =
+    "run" in source
+      ? source
+      : createSqliteDatabaseContext(source, databasePath);
 
   return {
     async listByTaskId(taskId) {
-      const db = await getDb();
-      await ensureInitialized(db);
-      const rows = await db.select<SqlAttachmentRow>(SELECT_ATTACHMENTS_BY_TASK_SQL, [taskId]);
-      return rows.map(attachmentFromSqlRow);
+      return context.run(async (db) => {
+        const rows = await db.select<SqlAttachmentRow>(SELECT_ATTACHMENTS_BY_TASK_SQL, [taskId]);
+        return rows.map(attachmentFromSqlRow);
+      });
     },
     async getAttachment(id) {
-      const db = await getDb();
-      await ensureInitialized(db);
-      const rows = await db.select<SqlAttachmentRow>(SELECT_ATTACHMENT_BY_ID_SQL, [id]);
-      return rows[0] ? attachmentFromSqlRow(rows[0]) : null;
+      return context.run(async (db) => {
+        const rows = await db.select<SqlAttachmentRow>(SELECT_ATTACHMENT_BY_ID_SQL, [id]);
+        return rows[0] ? attachmentFromSqlRow(rows[0]) : null;
+      });
     },
     async insertAttachment(attachment) {
-      const db = await getDb();
-      await ensureInitialized(db);
-      await db.execute(INSERT_ATTACHMENT_SQL, attachmentToSqlParams(attachment));
+      await context.run(async (db) => {
+        await db.execute(INSERT_ATTACHMENT_SQL, attachmentToSqlParams(attachment));
+      });
     },
     async deleteAttachment(id) {
-      const db = await getDb();
-      await ensureInitialized(db);
-      await db.execute("DELETE FROM task_attachments WHERE id = ?", [id]);
+      await context.run(async (db) => {
+        await db.execute("DELETE FROM task_attachments WHERE id = ?", [id]);
+      });
     },
     async deleteByTaskId(taskId) {
-      const db = await getDb();
-      await ensureInitialized(db);
-      await db.execute("DELETE FROM task_attachments WHERE task_id = ?", [taskId]);
+      await context.run(async (db) => {
+        await db.execute("DELETE FROM task_attachments WHERE task_id = ?", [taskId]);
+      });
     },
   };
 };

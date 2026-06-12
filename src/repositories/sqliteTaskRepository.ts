@@ -2,7 +2,7 @@ import { createSeedTasks, loadStoredTaskSnapshot, type TaskSnapshot } from "@/st
 import type { Task, TaskPriority } from "@/types/task";
 
 export const SQLITE_DATABASE_PATH = "sqlite:tofinal.db";
-export const SQLITE_SCHEMA_VERSION = "2";
+export const SQLITE_SCHEMA_VERSION = "3";
 
 export type SqlValue = string | number | null;
 
@@ -13,6 +13,10 @@ export type SqlDatabaseClient = {
 
 export type SqlDatabaseLoader = {
   load: (path: string) => Promise<SqlDatabaseClient>;
+};
+
+export type SqliteDatabaseContext = {
+  run: <T>(operation: (db: SqlDatabaseClient) => Promise<T>) => Promise<T>;
 };
 
 type SqlTaskRow = {
@@ -69,6 +73,20 @@ const SCHEMA_SQL = [
     ON task_attachments(task_id, sort_order)`,
   `CREATE INDEX IF NOT EXISTS idx_task_attachments_created_at
     ON task_attachments(created_at)`,
+  `CREATE TABLE IF NOT EXISTS task_apps (
+    id TEXT PRIMARY KEY,
+    task_id TEXT NOT NULL,
+    app_name TEXT NOT NULL,
+    app_path TEXT NOT NULL,
+    app_kind TEXT NOT NULL CHECK (app_kind IN ('exe', 'shortcut')),
+    launch_args TEXT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    sort_order INTEGER NOT NULL,
+    FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_task_apps_task_id_sort_order
+    ON task_apps(task_id, sort_order, created_at, id)`,
 ];
 
 const SELECT_TASKS_SQL = `SELECT
@@ -244,6 +262,7 @@ const replaceTasksInTransaction = async (
 
 export const ensureSqliteSchema = async (db: SqlDatabaseClient) => {
   await db.execute("PRAGMA foreign_keys = ON");
+  await db.execute("PRAGMA busy_timeout = 5000");
   for (const sql of SCHEMA_SQL) {
     await db.execute(sql);
   }
@@ -257,17 +276,58 @@ export const tauriSqlDatabaseLoader: SqlDatabaseLoader = {
   },
 };
 
-export const createSqliteTaskRepository = (
+export const createSqliteDatabaseContext = (
   loader: SqlDatabaseLoader = tauriSqlDatabaseLoader,
   databasePath = SQLITE_DATABASE_PATH,
-) => {
+): SqliteDatabaseContext => {
   let dbPromise: Promise<SqlDatabaseClient> | null = null;
   let initialized = false;
+  let operationQueue: Promise<unknown> = Promise.resolve();
 
   const getDb = async () => {
     dbPromise ??= loader.load(databasePath);
     return dbPromise;
   };
+
+  return {
+    run(operation) {
+      const queuedOperation = operationQueue
+        .catch(() => undefined)
+        .then(async () => {
+          const db = await getDb();
+          if (!initialized) {
+            await ensureSqliteSchema(db);
+            initialized = true;
+          }
+
+          return operation(db);
+        });
+
+      operationQueue = queuedOperation.then(
+        () => undefined,
+        () => undefined,
+      );
+
+      return queuedOperation;
+    },
+  };
+};
+
+export const sharedSqliteDatabaseContext = createSqliteDatabaseContext();
+
+type SqliteRepositorySource = SqlDatabaseLoader | SqliteDatabaseContext;
+
+const isSqliteDatabaseContext = (source: SqliteRepositorySource): source is SqliteDatabaseContext =>
+  "run" in source;
+
+export const createSqliteTaskRepository = (
+  source: SqliteRepositorySource = sharedSqliteDatabaseContext,
+  databasePath = SQLITE_DATABASE_PATH,
+) => {
+  let initialized = false;
+  const context = isSqliteDatabaseContext(source)
+    ? source
+    : createSqliteDatabaseContext(source, databasePath);
 
   const selectTasks = async (db: SqlDatabaseClient) => {
     const rows = await db.select<SqlTaskRow>(SELECT_TASKS_SQL);
@@ -289,12 +349,10 @@ export const createSqliteTaskRepository = (
     await replaceTasksInTransaction(db, snapshot.tasks, meta);
   };
 
-  const ensureInitialized = async (db: SqlDatabaseClient) => {
+  const ensureTaskDataInitialized = async (db: SqlDatabaseClient) => {
     if (initialized) {
       return;
     }
-
-    await ensureSqliteSchema(db);
 
     const countRows = await db.select<{ count: number }>("SELECT COUNT(*) as count FROM tasks");
     if ((countRows[0]?.count ?? 0) === 0) {
@@ -306,14 +364,16 @@ export const createSqliteTaskRepository = (
 
   return {
     async loadSnapshot(): Promise<TaskSnapshot> {
-      const db = await getDb();
-      await ensureInitialized(db);
-      return { tasks: await selectTasks(db) };
+      return context.run(async (db) => {
+        await ensureTaskDataInitialized(db);
+        return { tasks: await selectTasks(db) };
+      });
     },
     async saveSnapshot(snapshot: TaskSnapshot): Promise<void> {
-      const db = await getDb();
-      await ensureInitialized(db);
-      await replaceTasksInTransaction(db, snapshot.tasks);
+      await context.run(async (db) => {
+        await ensureTaskDataInitialized(db);
+        await replaceTasksInTransaction(db, snapshot.tasks);
+      });
     },
   };
 };

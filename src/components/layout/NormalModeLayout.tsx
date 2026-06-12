@@ -8,6 +8,7 @@ import { TaskList } from "@/components/task/TaskList";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { AttachmentView } from "@/stores/attachmentStore";
+import type { TaskAppView } from "@/stores/taskAppStore";
 import type { Task, TaskFilter } from "@/types/task";
 
 type NormalModeLayoutProps = {
@@ -19,6 +20,12 @@ type NormalModeLayoutProps = {
   attachmentsAdding: boolean;
   attachmentDeletingIds: Record<string, boolean>;
   attachmentError: string | null;
+  taskApps: TaskAppView[];
+  taskAppsLoading: boolean;
+  taskAppsAdding: boolean;
+  taskAppsLaunching: boolean;
+  taskAppError: string | null;
+  lastTaskAppsStartedAt: string | null;
   selectedTaskId: string | null;
   activeFilter: TaskFilter;
   searchQuery: string;
@@ -28,6 +35,11 @@ type NormalModeLayoutProps = {
   onAddTask: (title: string) => void;
   onAddImageAttachment: (taskId: string) => void;
   onDeleteAttachment: (attachmentId: string) => void;
+  onAddTaskApp: (taskId: string) => void;
+  onDeleteTaskApp: (appId: string) => void;
+  onStartTaskApps: (taskId: string) => void;
+  onUpdateTaskAppName: (appId: string, appName: string) => void;
+  onRetryPersistTasks: () => void;
   onDeleteTask: (id: string) => void;
   onFilterChange: (filter: TaskFilter) => void;
   onSearchChange: (query: string) => void;
@@ -96,17 +108,28 @@ export function NormalModeLayout({
   attachments,
   attachmentsAdding,
   attachmentsLoading,
+  taskAppError,
+  taskApps,
+  taskAppsAdding,
+  taskAppsLaunching,
+  taskAppsLoading,
+  lastTaskAppsStartedAt,
   filteredTasks,
   onAddTask,
   onAddImageAttachment,
+  onAddTaskApp,
   onDeleteAttachment,
+  onDeleteTaskApp,
   onDeleteTask,
   onFilterChange,
   onSearchChange,
   onSelectTask,
   onSwitchToPin,
   onToggleTask,
+  onStartTaskApps,
   onUpdateTask,
+  onUpdateTaskAppName,
+  onRetryPersistTasks,
   persistenceError,
   saving,
   searchQuery,
@@ -279,11 +302,22 @@ export function NormalModeLayout({
         attachments={attachments}
         attachmentsAdding={attachmentsAdding}
         attachmentsLoading={attachmentsLoading}
+        taskAppError={taskAppError}
+        taskApps={taskApps}
+        taskAppsAdding={taskAppsAdding}
+        taskAppsLaunching={taskAppsLaunching}
+        taskAppsLoading={taskAppsLoading}
+        lastTaskAppsStartedAt={lastTaskAppsStartedAt}
         lastSavedAt={lastSavedAt}
         onAddImageAttachment={onAddImageAttachment}
+        onAddTaskApp={onAddTaskApp}
         onDeleteAttachment={onDeleteAttachment}
+        onDeleteTaskApp={onDeleteTaskApp}
         onDeleteTask={onDeleteTask}
+        onStartTaskApps={onStartTaskApps}
         onUpdateTask={onUpdateTask}
+        onUpdateTaskAppName={onUpdateTaskAppName}
+        onRetryPersistTasks={onRetryPersistTasks}
         persistenceError={persistenceError}
         saving={saving}
         task={selectedTask}
