@@ -34,11 +34,15 @@ export function AppShell() {
   const attachmentLoadingTaskIds = useAttachmentStore((state) => state.loadingTaskIds);
   const attachmentsAdding = useAttachmentStore((state) => state.adding);
   const attachmentsCapturing = useAttachmentStore((state) => state.capturing);
+  const screenshotEditing = useAttachmentStore((state) => state.screenshotEditing);
+  const pendingScreenshot = useAttachmentStore((state) => state.pendingScreenshot);
   const attachmentDeletingIds = useAttachmentStore((state) => state.deletingIds);
   const attachmentError = useAttachmentStore((state) => state.error);
   const loadAttachmentsByTaskId = useAttachmentStore((state) => state.loadByTaskId);
   const addImageAttachment = useAttachmentStore((state) => state.addImageAttachment);
   const addScreenshotAttachment = useAttachmentStore((state) => state.addScreenshotAttachment);
+  const confirmScreenshotAttachment = useAttachmentStore((state) => state.confirmScreenshotAttachment);
+  const cancelScreenshotAttachment = useAttachmentStore((state) => state.cancelScreenshotAttachment);
   const deleteAttachment = useAttachmentStore((state) => state.deleteAttachment);
   const deleteTaskWithAttachmentCleanup = useAttachmentStore((state) => state.deleteTaskWithAttachmentCleanup);
   const appsByTaskId = useTaskAppStore((state) => state.appsByTaskId);
@@ -124,6 +128,8 @@ export function AppShell() {
           attachments={selectedTaskAttachments}
           attachmentsAdding={attachmentsAdding}
           attachmentsCapturing={attachmentsCapturing}
+          screenshotEditing={screenshotEditing}
+          pendingScreenshot={pendingScreenshot}
           attachmentDeletingIds={attachmentDeletingIds}
           attachmentError={attachmentError}
           attachmentsLoading={selectedTaskAttachmentsLoading}
@@ -138,6 +144,10 @@ export function AppShell() {
           }}
           onAddScreenshotAttachment={(taskId) => {
             void addScreenshotAttachment(taskId);
+          }}
+          onCancelScreenshotAttachment={cancelScreenshotAttachment}
+          onConfirmScreenshotAttachment={(screenshot) => {
+            void confirmScreenshotAttachment(screenshot);
           }}
           onAddTaskApp={(taskId) => {
             void addTaskApp(taskId);

@@ -457,6 +457,97 @@ body {
     justify-content: center;
   }
 
+  .screenshot-editor {
+    align-items: center;
+    display: flex;
+    inset: 0;
+    justify-content: center;
+    padding: 2rem;
+    position: fixed;
+    z-index: 90;
+  }
+
+  .screenshot-editor-backdrop {
+    background: rgb(15 23 42 / 0.58);
+    border: 0;
+    cursor: default;
+    inset: 0;
+    padding: 0;
+    position: absolute;
+    -webkit-backdrop-filter: blur(12px) saturate(125%);
+    backdrop-filter: blur(12px) saturate(125%);
+  }
+
+  .screenshot-editor-panel {
+    animation: attachment-lightbox-enter 220ms cubic-bezier(0.22, 1, 0.36, 1);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    max-height: 92vh;
+    max-width: 94vw;
+    min-width: min(34rem, 90vw);
+    position: relative;
+    transform-origin: center;
+    z-index: 1;
+  }
+
+  .screenshot-editor[data-closing="true"] .screenshot-editor-backdrop {
+    animation: attachment-lightbox-backdrop-exit 190ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  }
+
+  .screenshot-editor[data-closing="true"] .screenshot-editor-panel {
+    animation: attachment-lightbox-exit 190ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  }
+
+  .screenshot-editor-toolbar,
+  .screenshot-editor-footer {
+    align-items: center;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+  }
+
+  .screenshot-editor-preview-frame {
+    align-items: center;
+    background: rgb(255 255 255 / 0.10);
+    border: 1px solid rgb(255 255 255 / 0.22);
+    border-radius: 1.5rem;
+    box-shadow:
+      0 24px 70px rgb(0 0 0 / 0.28),
+      0 1px 0 rgb(255 255 255 / 0.18) inset;
+    cursor: crosshair;
+    display: flex;
+    justify-content: center;
+    max-height: 78vh;
+    max-width: 94vw;
+    overflow: hidden;
+    position: relative;
+    user-select: none;
+  }
+
+  .screenshot-editor-image {
+    display: block;
+    height: auto;
+    max-height: 78vh;
+    max-width: 94vw;
+    object-fit: contain;
+    position: relative;
+    width: auto;
+    z-index: 0;
+  }
+
+  .screenshot-editor-selection {
+    background: rgb(215 232 244 / 0.18);
+    border: 1px solid rgb(255 255 255 / 0.86);
+    box-shadow:
+      0 0 0 9999px rgb(15 23 42 / 0.36),
+      0 0 0 1px rgb(52 95 123 / 0.48),
+      0 8px 20px rgb(0 0 0 / 0.20);
+    pointer-events: none;
+    position: absolute;
+    z-index: 2;
+  }
+
   .detail-action-row {
     align-items: stretch;
     display: flex;

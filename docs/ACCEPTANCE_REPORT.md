@@ -841,3 +841,77 @@ Date: 2026-06-12
 - `npm run build`: passed, TypeScript and Vite production build completed.
 - `cargo check`: passed for `src-tauri`.
 - `npm run tauri dev`: verified Vite on port 1420 and `target\debug\tofinal.exe` startup; validation processes were stopped intentionally.
+
+---
+
+# Phase 6C Screenshot Editor MVP
+
+Date: 2026-06-12
+
+## Implemented
+
+- Replaced the previous `Full Screenshot` entry with a single `Screenshot` button in the TaskDetail Attachments section.
+- Clicking `Screenshot` now captures full-screen PNG bytes as temporary in-memory data and opens a Screenshot Editor overlay.
+- The editor supports Confirm, Cancel, Escape cancel, Reset Crop, and drag-to-select rectangular crop.
+- Confirm with no crop saves the full screenshot through the existing attachment file storage and `task_attachments` metadata flow.
+- Confirm with a valid crop saves the cropped PNG and writes final width/height metadata.
+- Cancel and Escape clear the temporary screenshot preview without writing a file or inserting metadata.
+- Reset Crop clears the selection so the next Confirm saves the full screenshot.
+- Tiny crop selections are rejected with a lightweight validation message.
+- Existing attachment thumbnail, delete, missing-file handling, and Lightbox preview are reused.
+
+## Storage And Metadata
+
+- No SQLite schema change was made; `schema_version` remains `3`.
+- No screenshot-specific table was added.
+- Confirmed screenshots continue to use `attachments/images/<taskId>/<attachmentId>.png` in Tauri AppData.
+- Metadata continues to use `task_attachments` with `kind = "screenshot"` and `mime_type = "image/png"`.
+- Temporary screenshot data is held in memory via a preview object URL and revoked on confirm/cancel.
+
+## Not Implemented
+
+- No annotation, OCR, AI, scrolling capture, video capture, global shortcut, tray action, or background screenshot.
+- No separate Region Screenshot button or Full Screen / Select Region menu.
+- No crop resize handles after drag.
+
+## Verification Results
+
+- Targeted regression: `npm test -- --run src/components/task/ScreenshotEditorOverlay.test.tsx src/stores/attachmentStore.test.ts src/app/App.test.tsx` passed, 3 test files, 40 tests.
+- `npm test`: passed, 11 test files, 99 tests.
+- `npm run build`: passed, TypeScript and Vite production build completed.
+- `cargo check`: passed for `src-tauri`.
+- `npm run tauri dev`: verified Vite on port 1420 and `target\debug\tofinal.exe` startup; validation processes were stopped intentionally.
+
+---
+
+# Phase 6C.1 Screenshot Window Exclusion Fix
+
+Date: 2026-06-12
+
+## Fixed
+
+- Fixed the screenshot flow capturing the ToFinal window itself.
+- `screenshotCapture` now hides the current Tauri window before invoking `capture_fullscreen_screenshot`.
+- The adapter waits briefly for the desktop compositor to settle, then captures the screen.
+- The ToFinal window is restored and focused in `finally`, including when capture fails.
+
+## Permissions
+
+- Added only the required current-window permissions:
+  - `core:window:allow-hide`
+  - `core:window:allow-show`
+  - `core:window:allow-set-focus`
+
+## Scope Notes
+
+- No SQLite schema change.
+- No change to screenshot file paths, attachment metadata, Lightbox, image import, task app binding, or task persistence.
+- No background screenshot, tray, global shortcut, OCR, AI, annotation, or region preselection.
+
+## Verification Results
+
+- Added regression tests for hide-before-capture and restore-after-failure behavior.
+- `npm test`: passed, 12 test files, 101 tests.
+- `npm run build`: passed, TypeScript and Vite production build completed.
+- `cargo check`: passed for `src-tauri`.
+- `npm run tauri dev`: verified Vite on port 1420 and `target\debug\tofinal.exe` startup; validation processes were stopped intentionally.

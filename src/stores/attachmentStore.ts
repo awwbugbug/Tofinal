@@ -20,11 +20,27 @@ export type AttachmentView = TaskAttachment & AttachmentPreview & {
   previewUrl: string | null;
 };
 
+export type PendingScreenshot = {
+  taskId: string;
+  pngBytes: Uint8Array;
+  previewUrl: string;
+  width: number;
+  height: number;
+};
+
+export type FinalScreenshot = {
+  pngBytes: Uint8Array;
+  width: number;
+  height: number;
+};
+
 type AttachmentState = {
   itemsByTaskId: Record<string, AttachmentView[]>;
   loadingTaskIds: Record<string, boolean>;
   adding: boolean;
   capturing: boolean;
+  screenshotEditing: boolean;
+  pendingScreenshot: PendingScreenshot | null;
   deletingIds: Record<string, boolean>;
   error: string | null;
 };
@@ -33,6 +49,8 @@ type AttachmentActions = {
   loadByTaskId: (taskId: string) => Promise<void>;
   addImageAttachment: (taskId: string) => Promise<void>;
   addScreenshotAttachment: (taskId: string) => Promise<void>;
+  confirmScreenshotAttachment: (screenshot: FinalScreenshot) => Promise<void>;
+  cancelScreenshotAttachment: () => void;
   deleteAttachment: (attachmentId: string) => Promise<void>;
   deleteTaskWithAttachmentCleanup: (taskId: string, deleteTask: (taskId: string) => void) => Promise<void>;
 };
@@ -56,6 +74,8 @@ const initialState = (): AttachmentState => ({
   loadingTaskIds: {},
   adding: false,
   capturing: false,
+  screenshotEditing: false,
+  pendingScreenshot: null,
   deletingIds: {},
   error: null,
 });
@@ -195,10 +215,37 @@ const createAttachmentStoreState: StateCreator<AttachmentStore> = (set, get) => 
 
       try {
         const screenshot = await dependencies.screenshotCapture.captureFullscreen();
-        if ((screenshot.width !== null && screenshot.width <= 0) || (screenshot.height !== null && screenshot.height <= 0)) {
+        if (!screenshot.width || !screenshot.height || screenshot.width <= 0 || screenshot.height <= 0) {
           throw new Error("Screenshot capture returned invalid dimensions.");
         }
 
+        const previewUrl = dependencies.fileStorage.createPreviewUrl(screenshot.pngBytes, "image/png");
+        set({
+          capturing: false,
+          screenshotEditing: true,
+          pendingScreenshot: {
+            taskId,
+            pngBytes: screenshot.pngBytes,
+            previewUrl,
+            width: screenshot.width,
+            height: screenshot.height,
+          },
+          error: null,
+        });
+      } catch (error) {
+        set({ capturing: false, screenshotEditing: false, pendingScreenshot: null, error: errorMessage(error) });
+      }
+    },
+    confirmScreenshotAttachment: async (screenshot) => {
+      const pendingScreenshot = get().pendingScreenshot;
+      if (!pendingScreenshot) {
+        return;
+      }
+
+      set({ capturing: true, error: null });
+
+      try {
+        const taskId = pendingScreenshot.taskId;
         const existingAttachments = await dependencies.repository.listByTaskId(taskId);
         const sortOrder =
           existingAttachments.reduce((maxSortOrder, attachment) => Math.max(maxSortOrder, attachment.sortOrder), -1) + 1;
@@ -238,10 +285,19 @@ const createAttachmentStoreState: StateCreator<AttachmentStore> = (set, get) => 
         }
 
         await loadAndSetByTaskId(taskId);
-        set({ capturing: false, error: null });
+        dependencies.fileStorage.revokePreviewUrl(pendingScreenshot.previewUrl);
+        set({ capturing: false, screenshotEditing: false, pendingScreenshot: null, error: null });
       } catch (error) {
         set({ capturing: false, error: errorMessage(error) });
       }
+    },
+    cancelScreenshotAttachment: () => {
+      const pendingScreenshot = get().pendingScreenshot;
+      if (pendingScreenshot) {
+        dependencies.fileStorage.revokePreviewUrl(pendingScreenshot.previewUrl);
+      }
+
+      set({ capturing: false, screenshotEditing: false, pendingScreenshot: null, error: null });
     },
     deleteAttachment: async (attachmentId) => {
       const item = Object.values(get().itemsByTaskId)

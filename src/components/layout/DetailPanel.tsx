@@ -1,5 +1,5 @@
 import { TaskDetail } from "@/components/task/TaskDetail";
-import type { AttachmentView } from "@/stores/attachmentStore";
+import type { AttachmentView, FinalScreenshot, PendingScreenshot } from "@/stores/attachmentStore";
 import type { TaskAppView } from "@/stores/taskAppStore";
 import type { Task } from "@/types/task";
 
@@ -9,6 +9,8 @@ type DetailPanelProps = {
   attachmentsLoading: boolean;
   attachmentsAdding: boolean;
   attachmentsCapturing: boolean;
+  screenshotEditing: boolean;
+  pendingScreenshot: PendingScreenshot | null;
   attachmentDeletingIds: Record<string, boolean>;
   attachmentError: string | null;
   taskApps: TaskAppView[];
@@ -22,6 +24,8 @@ type DetailPanelProps = {
   persistenceError: string | null;
   onAddImageAttachment: (taskId: string) => void;
   onAddScreenshotAttachment: (taskId: string) => void;
+  onConfirmScreenshotAttachment: (screenshot: FinalScreenshot) => void;
+  onCancelScreenshotAttachment: () => void;
   onDeleteAttachment: (attachmentId: string) => void;
   onAddTaskApp: (taskId: string) => void;
   onDeleteTaskApp: (appId: string) => void;
@@ -42,6 +46,10 @@ export function DetailPanel({
   attachmentsAdding,
   attachmentsCapturing,
   attachmentsLoading,
+  onCancelScreenshotAttachment,
+  onConfirmScreenshotAttachment,
+  pendingScreenshot,
+  screenshotEditing,
   taskAppError,
   taskApps,
   taskAppsAdding,
@@ -75,6 +83,10 @@ export function DetailPanel({
         attachmentsAdding={attachmentsAdding}
         attachmentsCapturing={attachmentsCapturing}
         attachmentsLoading={attachmentsLoading}
+        onCancelScreenshotAttachment={onCancelScreenshotAttachment}
+        onConfirmScreenshotAttachment={onConfirmScreenshotAttachment}
+        pendingScreenshot={pendingScreenshot}
+        screenshotEditing={screenshotEditing}
         taskAppError={taskAppError}
         taskApps={taskApps}
         taskAppsAdding={taskAppsAdding}

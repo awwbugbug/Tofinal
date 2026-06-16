@@ -61,6 +61,8 @@ export type AttachmentFileStorage = {
   writeScreenshotToAppData: (input: WriteScreenshotInput) => Promise<CopiedAttachmentFile>;
   deleteAttachmentFile: (relativePath: string) => Promise<void>;
   resolvePreview: (relativePath: string, mimeType: string) => Promise<AttachmentPreview>;
+  createPreviewUrl: (data: Uint8Array, mimeType: string) => string;
+  revokePreviewUrl: (url: string) => void;
 };
 
 export type AttachmentFileStorageRuntime = {
@@ -188,6 +190,12 @@ export const createAttachmentFileStorage = (
       missing: false,
       url: runtime.createObjectUrl(data, mimeType),
     };
+  },
+  createPreviewUrl(data, mimeType) {
+    return runtime.createObjectUrl(data, mimeType);
+  },
+  revokePreviewUrl(url) {
+    URL.revokeObjectURL(url);
   },
 });
 

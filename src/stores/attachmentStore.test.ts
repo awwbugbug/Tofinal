@@ -89,6 +89,10 @@ const createFileStorage = (overrides: Partial<AttachmentFileStorage> = {}): Atta
   async resolvePreview(relativePath, mimeType) {
     return { missing: false, url: `blob:${mimeType}:${relativePath}` };
   },
+  createPreviewUrl(data, mimeType) {
+    return `blob:${mimeType}:pending-${data.byteLength}`;
+  },
+  revokePreviewUrl: vi.fn(),
   ...overrides,
 });
 
@@ -144,15 +148,37 @@ describe("attachment store", () => {
 
   it("adds a screenshot attachment using existing attachment metadata", async () => {
     const { repository, rows } = createRepository([attachment({ id: "existing", sortOrder: 0 })]);
+    const writeScreenshotToAppData = vi.fn(createFileStorage().writeScreenshotToAppData);
     const store = createAttachmentStore();
     setAttachmentDependenciesForTest({
-      fileStorage: createFileStorage(),
+      fileStorage: createFileStorage({ writeScreenshotToAppData }),
       repository,
       screenshotCapture: createScreenshotCapture(),
     });
 
     await store.getState().addScreenshotAttachment("task-1");
 
+    expect(rows).toHaveLength(1);
+    expect(store.getState().pendingScreenshot).toMatchObject({
+      taskId: "task-1",
+      previewUrl: "blob:image/png:pending-4",
+      width: 1920,
+      height: 1080,
+    });
+
+    await store.getState().confirmScreenshotAttachment({
+      pngBytes: new Uint8Array([137, 80, 78, 71, 1]),
+      width: 800,
+      height: 450,
+    });
+
+    expect(writeScreenshotToAppData).toHaveBeenCalledWith(
+      expect.objectContaining({
+        height: 450,
+        pngBytes: new Uint8Array([137, 80, 78, 71, 1]),
+        width: 800,
+      }),
+    );
     expect(rows).toHaveLength(2);
     expect(rows[1]).toMatchObject({
       kind: "screenshot",
@@ -169,6 +195,30 @@ describe("attachment store", () => {
       kind: "screenshot",
       previewUrl: expect.stringContaining("blob:image/png:attachments/images/task-1/"),
     });
+    expect(store.getState().pendingScreenshot).toBeNull();
+  });
+
+  it("cancels temporary screenshots without writing files or metadata", async () => {
+    const { repository, rows } = createRepository();
+    const writeScreenshotToAppData = vi.fn();
+    const revokePreviewUrl = vi.fn();
+    const store = createAttachmentStore();
+    setAttachmentDependenciesForTest({
+      fileStorage: createFileStorage({
+        writeScreenshotToAppData,
+        revokePreviewUrl,
+      }),
+      repository,
+      screenshotCapture: createScreenshotCapture(),
+    });
+
+    await store.getState().addScreenshotAttachment("task-1");
+    store.getState().cancelScreenshotAttachment();
+
+    expect(rows).toHaveLength(0);
+    expect(writeScreenshotToAppData).not.toHaveBeenCalled();
+    expect(revokePreviewUrl).toHaveBeenCalledWith("blob:image/png:pending-4");
+    expect(store.getState().pendingScreenshot).toBeNull();
   });
 
   it("surfaces screenshot capture failures without changing attachments", async () => {
@@ -204,6 +254,11 @@ describe("attachment store", () => {
     });
 
     await store.getState().addScreenshotAttachment("task-1");
+    await store.getState().confirmScreenshotAttachment({
+      pngBytes: new Uint8Array([137, 80, 78, 71]),
+      width: 1920,
+      height: 1080,
+    });
 
     expect(rows).toHaveLength(0);
     expect(deleteAttachmentFile).toHaveBeenCalledWith(expect.stringMatching(/^attachments\/images\/task-1\/attachment-.+\.png$/));

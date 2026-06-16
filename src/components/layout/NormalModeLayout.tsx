@@ -7,7 +7,7 @@ import { QuickInput } from "@/components/task/QuickInput";
 import { TaskList } from "@/components/task/TaskList";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { AttachmentView } from "@/stores/attachmentStore";
+import type { AttachmentView, FinalScreenshot, PendingScreenshot } from "@/stores/attachmentStore";
 import type { TaskAppView } from "@/stores/taskAppStore";
 import type { Task, TaskFilter } from "@/types/task";
 
@@ -19,6 +19,8 @@ type NormalModeLayoutProps = {
   attachmentsLoading: boolean;
   attachmentsAdding: boolean;
   attachmentsCapturing: boolean;
+  screenshotEditing: boolean;
+  pendingScreenshot: PendingScreenshot | null;
   attachmentDeletingIds: Record<string, boolean>;
   attachmentError: string | null;
   taskApps: TaskAppView[];
@@ -36,6 +38,8 @@ type NormalModeLayoutProps = {
   onAddTask: (title: string) => void;
   onAddImageAttachment: (taskId: string) => void;
   onAddScreenshotAttachment: (taskId: string) => void;
+  onConfirmScreenshotAttachment: (screenshot: FinalScreenshot) => void;
+  onCancelScreenshotAttachment: () => void;
   onDeleteAttachment: (attachmentId: string) => void;
   onAddTaskApp: (taskId: string) => void;
   onDeleteTaskApp: (appId: string) => void;
@@ -111,6 +115,10 @@ export function NormalModeLayout({
   attachmentsAdding,
   attachmentsCapturing,
   attachmentsLoading,
+  onCancelScreenshotAttachment,
+  onConfirmScreenshotAttachment,
+  pendingScreenshot,
+  screenshotEditing,
   taskAppError,
   taskApps,
   taskAppsAdding,
@@ -307,6 +315,10 @@ export function NormalModeLayout({
         attachmentsAdding={attachmentsAdding}
         attachmentsCapturing={attachmentsCapturing}
         attachmentsLoading={attachmentsLoading}
+        onCancelScreenshotAttachment={onCancelScreenshotAttachment}
+        onConfirmScreenshotAttachment={onConfirmScreenshotAttachment}
+        pendingScreenshot={pendingScreenshot}
+        screenshotEditing={screenshotEditing}
         taskAppError={taskAppError}
         taskApps={taskApps}
         taskAppsAdding={taskAppsAdding}

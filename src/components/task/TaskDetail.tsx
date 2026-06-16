@@ -22,8 +22,9 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { AttachmentLightbox } from "@/components/task/AttachmentLightbox";
+import { ScreenshotEditorOverlay } from "@/components/task/ScreenshotEditorOverlay";
 import { cn } from "@/lib/utils";
-import type { AttachmentView } from "@/stores/attachmentStore";
+import type { AttachmentView, FinalScreenshot, PendingScreenshot } from "@/stores/attachmentStore";
 import type { TaskAppView } from "@/stores/taskAppStore";
 import type { Task, TaskPriority } from "@/types/task";
 
@@ -33,6 +34,8 @@ type TaskDetailProps = {
   attachmentsLoading: boolean;
   attachmentsAdding: boolean;
   attachmentsCapturing: boolean;
+  screenshotEditing: boolean;
+  pendingScreenshot: PendingScreenshot | null;
   attachmentDeletingIds: Record<string, boolean>;
   attachmentError: string | null;
   taskApps: TaskAppView[];
@@ -46,6 +49,8 @@ type TaskDetailProps = {
   persistenceError: string | null;
   onAddImageAttachment: (taskId: string) => void;
   onAddScreenshotAttachment: (taskId: string) => void;
+  onConfirmScreenshotAttachment: (screenshot: FinalScreenshot) => void;
+  onCancelScreenshotAttachment: () => void;
   onDeleteAttachment: (attachmentId: string) => void;
   onAddTaskApp: (taskId: string) => void;
   onDeleteTaskApp: (appId: string) => void;
@@ -131,6 +136,10 @@ export function TaskDetail({
   attachmentsAdding,
   attachmentsCapturing,
   attachmentsLoading,
+  onCancelScreenshotAttachment,
+  onConfirmScreenshotAttachment,
+  pendingScreenshot,
+  screenshotEditing,
   taskAppError,
   taskApps,
   taskAppsAdding,
@@ -360,17 +369,16 @@ export function TaskDetail({
                 {attachmentsAdding ? "Adding..." : "Add Image"}
               </Button>
               <Button
-                aria-label="Add screenshot (full screen)"
+                aria-label="Screenshot"
                 className="detail-action-button"
-                disabled={attachmentsAdding || attachmentsCapturing}
+                disabled={attachmentsAdding || attachmentsCapturing || screenshotEditing}
                 onClick={() => onAddScreenshotAttachment(task.id)}
                 size="sm"
-                title="Captures the full screen for now."
                 type="button"
                 variant="secondary"
               >
                 <Camera className="h-4 w-4" />
-                {attachmentsCapturing ? "Capturing..." : "Full Screenshot"}
+                {attachmentsCapturing ? "Capturing..." : "Screenshot"}
               </Button>
             </div>
           </div>
@@ -603,6 +611,13 @@ export function TaskDetail({
       />
       {lightboxAttachment && (
         <AttachmentLightbox attachment={lightboxAttachment} onClose={() => setLightboxAttachment(null)} />
+      )}
+      {pendingScreenshot && (
+        <ScreenshotEditorOverlay
+          screenshot={pendingScreenshot}
+          onCancel={onCancelScreenshotAttachment}
+          onConfirm={onConfirmScreenshotAttachment}
+        />
       )}
     </div>
   );

@@ -233,30 +233,42 @@ Phase 4B adds local image file handling behind `src/storage/attachmentFileStorag
 
 Deleting an attachment removes metadata first and then attempts to remove the copied file. If file deletion fails, metadata stays deleted and the error is surfaced through attachment store state.
 
-Screenshot capture reuses this boundary in Phase 6B by writing the screenshot PNG into the same attachments directory and inserting a `task_attachments` row with `kind = "screenshot"`.
+Screenshot capture reuses this boundary by writing only confirmed screenshot PNGs into the same attachments directory and inserting a `task_attachments` row with `kind = "screenshot"`.
 
-## Screenshot Capture Boundary
+## Screenshot Capture And Editor Boundary
 
-Phase 6B adds a user-triggered full-screen screenshot MVP without changing SQLite schema version `3`.
+Phase 6B adds a user-triggered full-screen screenshot capture command. Phase 6C changes the UI contract to a single `Screenshot` button that opens a Screenshot Editor before persistence. SQLite schema version remains `3`.
 
 - `src-tauri/src/lib.rs` exposes `capture_fullscreen_screenshot`.
 - The Rust command uses `xcap` to capture available monitors and returns encoded PNG bytes plus image dimensions.
 - `src/storage/screenshotCapture.ts` is the frontend adapter around the Tauri command.
-- `attachmentStore.addScreenshotAttachment(taskId)` captures the PNG, asks `attachmentFileStorage` to write it under AppData, inserts `kind = "screenshot"` metadata through `sqliteAttachmentRepository`, and reloads the selected task attachments.
+- Before invoking the Rust command, the adapter hides the current Tauri window, waits briefly for the desktop compositor to settle, and restores/focuses the window in `finally`.
+- `attachmentStore.addScreenshotAttachment(taskId)` captures the PNG as temporary in-memory data, creates a preview URL, and opens editor state.
+- `TaskDetail` renders `ScreenshotEditorOverlay` from local/detail UI composition; the editor does not query SQLite, mutate tasks, or write files.
+- `ScreenshotEditorOverlay` owns preview display, rectangular crop selection, Reset Crop, Confirm, Cancel, and Escape behavior.
+- `attachmentStore.confirmScreenshotAttachment(finalScreenshot)` writes the confirmed final PNG under AppData, inserts `kind = "screenshot"` metadata through `sqliteAttachmentRepository`, revokes the temporary preview URL, and reloads selected task attachments.
+- `attachmentStore.cancelScreenshotAttachment()` revokes the temporary preview URL and writes no file or metadata.
 - `attachmentFileStorage.writeScreenshotToAppData` stores screenshots under `attachments/images/<taskId>/<attachmentId>.png`.
-- TaskDetail only adds an Add Screenshot button in the existing Attachments section.
-- Phase 6B.1 labels the action as full-screen behavior and uses a responsive action row so attachment/app buttons wrap in narrow DetailPanel widths.
+- TaskDetail exposes a single `Screenshot` button in the existing Attachments section.
+- The responsive action row keeps Add Image and Screenshot from clipping in narrow DetailPanel widths.
 - Existing attachment preview, delete, missing-file state, and Lightbox behavior are reused.
 
 The screenshot flow is:
 
-1. TaskDetail Add Screenshot is clicked by the user.
+1. TaskDetail Screenshot is clicked by the user.
 2. `attachmentStore.addScreenshotAttachment(taskId)` calls `screenshotCapture.captureFullscreen()`.
-3. The captured PNG is written to Tauri AppData through the attachment file storage adapter.
-4. A `task_attachments` row is inserted with `kind = "screenshot"` and `mime_type = "image/png"`.
-5. The selected task attachment list reloads and the screenshot appears as a normal attachment preview.
+3. The screenshot adapter hides the ToFinal window, waits briefly, invokes `capture_fullscreen_screenshot`, then restores/focuses the window.
+4. The captured PNG remains temporary and is shown in `ScreenshotEditorOverlay`.
+5. The user may drag a crop rectangle, Reset Crop, Confirm, Cancel, or press Escape.
+6. Confirm with no crop passes the full PNG back to the store.
+7. Confirm with a valid crop passes cropped PNG bytes and final dimensions back to the store.
+8. The confirmed PNG is written to Tauri AppData through the attachment file storage adapter.
+9. A `task_attachments` row is inserted with `kind = "screenshot"` and `mime_type = "image/png"`.
+10. The selected task attachment list reloads and the screenshot appears as a normal attachment preview.
 
-No background screenshot listener, global shortcut, tray integration, OCR, AI, cloud upload, screenshot table, SQLite blob storage, or region-selection UI is used.
+Cancel and Escape are persistence no-ops: no final PNG and no `task_attachments` row.
+
+No background screenshot listener, global shortcut, tray integration, OCR, AI, cloud upload, screenshot table, SQLite blob storage, annotation UI, or separate Region Screenshot entry is used.
 
 ## Attachment Preview Boundary
 

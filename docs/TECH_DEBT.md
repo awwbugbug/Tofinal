@@ -84,6 +84,23 @@
 - The Apps action row uses the same responsive button wrapping for Add App and Start Task.
 - Screenshot copy now makes the MVP boundary explicit: it captures the full screen for now.
 
+## Resolved By Phase 6C Screenshot Editor MVP
+
+- The Attachments section now has one screenshot entry: `Screenshot`.
+- Screenshot capture opens a preview/editor overlay before persistence.
+- Confirm without crop preserves full-screen screenshot behavior.
+- Confirm with a valid rectangular crop saves the cropped screenshot through the existing attachment system.
+- Cancel and Escape are persistence no-ops and do not write files or metadata.
+- Reset Crop clears the selection and returns Confirm to full-screenshot behavior.
+- Tiny crop selections are rejected instead of producing invalid attachments.
+- Screenshot metadata still reuses `task_attachments`; no screenshot table or schema migration was added.
+
+## Resolved By Phase 6C.1 Screenshot Window Exclusion
+
+- Full-screen screenshot capture now hides the ToFinal window before invoking the Rust capture command.
+- The app window is restored and focused after capture, including failure paths.
+- The fix uses narrow current-window permissions only and does not add tray, global shortcut, shell, OCR, AI, or background capture behavior.
+
 ## Must Fix Before Next Persistence Expansion
 
 - Add a user-facing backup/export and restore strategy.
@@ -99,7 +116,10 @@
 - Add image dimension extraction if UI needs width/height-aware layouts.
 - Add optional Lightbox enhancements only if needed: previous/next navigation, zoom/pan, and rotation.
 - Validate multi-monitor screenshot behavior across real Windows display arrangements, especially mixed scaling and negative monitor coordinates.
-- Design and implement region screenshot separately in Phase 6C if it remains a priority.
+- Validate Screenshot Editor crop mapping across real Windows DPI and multi-monitor arrangements.
+- Validate the hide-before-capture timing on slower Windows machines; adjust the compositor-settle delay only if manual QA still shows window remnants.
+- Consider post-drag crop resize handles if manual QA shows crop adjustment is too rigid.
+- Consider screenshot annotation, quick notes, OCR, or AI review only as separate later phases.
 - Continue ensuring file import never writes images, `tofinal.db`, `*.db`, or `*.sqlite` into the Git working tree.
 
 ## Must Fix Before System Tray Or Global Shortcuts

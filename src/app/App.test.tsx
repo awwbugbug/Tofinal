@@ -114,6 +114,10 @@ const createAttachmentFileStorage = (overrides: Partial<AttachmentFileStorage> =
   async resolvePreview(relativePath, mimeType) {
     return { missing: false, url: `blob:${mimeType}:${relativePath}` };
   },
+  createPreviewUrl(data, mimeType) {
+    return `blob:${mimeType}:pending-${data.byteLength}`;
+  },
+  revokePreviewUrl: vi.fn(),
   ...overrides,
 });
 
@@ -515,7 +519,7 @@ describe("App", () => {
     expect(rows.some((row) => row.id === "attachment-1")).toBe(false);
   });
 
-  it("adds a screenshot attachment and opens it with the existing lightbox", async () => {
+  it("opens the screenshot editor, confirms a full screenshot, and reuses the existing lightbox", async () => {
     const { repository, rows } = createAttachmentRepository();
     setAttachmentDependenciesForTest({
       fileStorage: createAttachmentFileStorage(),
@@ -525,8 +529,17 @@ describe("App", () => {
     await renderApp();
 
     const detailPanel = within(screen.getByTestId("detail-panel"));
-    await userEvent.click(detailPanel.getByRole("button", { name: /add screenshot/i }));
+    expect(detailPanel.queryByText(/full screenshot/i)).not.toBeInTheDocument();
+    await userEvent.click(detailPanel.getByRole("button", { name: /^screenshot$/i }));
 
+    const editor = await screen.findByRole("dialog", { name: /screenshot editor/i });
+    expect(within(editor).getByRole("img", { name: /captured screenshot preview/i })).toHaveAttribute(
+      "src",
+      "blob:image/png:pending-4",
+    );
+    expect(rows).toHaveLength(0);
+
+    await userEvent.click(within(editor).getByRole("button", { name: /^confirm$/i }));
     await waitFor(() => expect(rows).toHaveLength(1));
     expect(rows[0]).toMatchObject({
       kind: "screenshot",
@@ -539,18 +552,38 @@ describe("App", () => {
     expect(screen.getByRole("dialog", { name: new RegExp(`image preview ${rows[0].originalName}`, "i") })).toBeInTheDocument();
   });
 
+  it("cancels screenshot editor with Escape without writing metadata", async () => {
+    const { repository, rows } = createAttachmentRepository();
+    setAttachmentDependenciesForTest({
+      fileStorage: createAttachmentFileStorage(),
+      repository,
+      screenshotCapture: createScreenshotCapture(),
+    });
+    await renderApp();
+
+    const detailPanel = within(screen.getByTestId("detail-panel"));
+    await userEvent.click(detailPanel.getByRole("button", { name: /^screenshot$/i }));
+    expect(await screen.findByRole("dialog", { name: /screenshot editor/i })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: /screenshot editor/i })).not.toBeInTheDocument());
+    expect(rows).toHaveLength(0);
+  });
+
   it("keeps attachment and app action buttons responsive in a narrow detail panel", async () => {
     await renderApp();
 
     const detailPanel = within(screen.getByTestId("detail-panel"));
     const addImageButton = detailPanel.getByRole("button", { name: /add image attachment/i });
-    const addScreenshotButton = detailPanel.getByRole("button", { name: /add screenshot.*full screen/i });
+    const addScreenshotButton = detailPanel.getByRole("button", { name: /^screenshot$/i });
     const addAppButton = detailPanel.getByRole("button", { name: /add app/i });
     const startTaskButton = detailPanel.getByRole("button", { name: /start task/i });
 
     expect(addImageButton).toBeInTheDocument();
     expect(addScreenshotButton).toBeInTheDocument();
-    expect(addScreenshotButton).toHaveAttribute("title", "Captures the full screen for now.");
+    expect(detailPanel.queryByText(/full screenshot/i)).not.toBeInTheDocument();
+    expect(detailPanel.getAllByRole("button", { name: /screenshot/i })).toHaveLength(1);
     expect(addAppButton).toBeInTheDocument();
     expect(startTaskButton).toBeInTheDocument();
 
@@ -576,7 +609,7 @@ describe("App", () => {
     await renderApp();
 
     const detailPanel = within(screen.getByTestId("detail-panel"));
-    await userEvent.click(detailPanel.getByRole("button", { name: /add screenshot/i }));
+    await userEvent.click(detailPanel.getByRole("button", { name: /^screenshot$/i }));
 
     await waitFor(() => expect(detailPanel.getByText(/screenshot unavailable/i)).toBeInTheDocument());
     expect(rows).toHaveLength(0);
