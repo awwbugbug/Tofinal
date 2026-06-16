@@ -19,6 +19,7 @@ import {
   resetTaskAppDependenciesForTest,
   setTaskAppDependenciesForTest,
 } from "@/stores/taskAppStore";
+import { PREFERENCES_STORAGE_KEY, resetPreferencesStore } from "@/stores/preferencesStore";
 import { resetTaskStore } from "@/stores/taskStore";
 import { createMemoryTaskRepository } from "@/test/taskRepositoryTestUtils";
 import type { TaskAttachment } from "@/types/attachment";
@@ -205,6 +206,10 @@ describe("App", () => {
 
   beforeEach(() => {
     localStorage.clear();
+    localStorage.setItem(
+      PREFERENCES_STORAGE_KEY,
+      JSON.stringify({ version: 1, theme: "system", language: "en-US" }),
+    );
     vi.restoreAllMocks();
     resetTaskRepositoryForTest();
     setTaskRepositoryForTest(createMemoryTaskRepository({ tasks: createSeedTasks() }));
@@ -219,6 +224,7 @@ describe("App", () => {
       repository: createTaskAppRepository().repository,
       selection: createTaskAppSelection(),
     });
+    resetPreferencesStore();
     resetTaskStore();
   });
 
@@ -425,6 +431,34 @@ describe("App", () => {
     expect(titleBar.getByRole("button", { name: /minimize window/i })).toBeInTheDocument();
     expect(titleBar.getByRole("button", { name: /maximize or restore window/i })).toBeInTheDocument();
     expect(titleBar.getByRole("button", { name: /close window/i })).toBeInTheDocument();
+  });
+
+  it("opens preferences, persists theme and language, and updates visible labels", async () => {
+    await renderApp();
+
+    await userEvent.click(screen.getByRole("button", { name: /open preferences/i }));
+    const dialog = screen.getByRole("dialog", { name: /preferences/i });
+
+    expect(within(dialog).getByRole("button", { name: /system/i })).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(within(dialog).getByRole("button", { name: /^dark$/i }));
+    await userEvent.click(within(dialog).getByRole("button", { name: /^english$/i }));
+    await userEvent.click(within(dialog).getByRole("checkbox", { name: /task completion celebration/i }));
+
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(JSON.parse(localStorage.getItem("tofinal.preferences.v1") ?? "{}")).toMatchObject({
+      version: 2,
+      theme: "dark",
+      language: "en-US",
+      completionCelebrationsEnabled: false,
+    });
+    expect(screen.getByPlaceholderText(/search tasks/i)).toBeInTheDocument();
+
+    await userEvent.click(within(dialog).getByRole("button", { name: /^chinese$/i }));
+
+    expect(screen.getByPlaceholderText("搜索任务")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /今天 4/i })).toBeInTheDocument();
+    expect(screen.getAllByText("Finalize the first-stage desktop shell").length).toBeGreaterThan(0);
+    expect(within(dialog).getByRole("button", { name: /^中文$/i })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("resizes the three normal-mode panels within their width limits", async () => {

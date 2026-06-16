@@ -915,3 +915,50 @@ Date: 2026-06-12
 - `npm run build`: passed, TypeScript and Vite production build completed.
 - `cargo check`: passed for `src-tauri`.
 - `npm run tauri dev`: verified Vite on port 1420 and `target\debug\tofinal.exe` startup; validation processes were stopped intentionally.
+
+---
+
+# Phase 7B Preferences MVP
+
+Date: 2026-06-16
+
+## Implemented
+
+- Added `src/stores/preferencesStore.ts` for UI preferences.
+- Added localStorage persistence at key `tofinal.preferences.v1` with payload version `1`.
+- Theme preference supports `light`, `dark`, and `system`.
+- `resolvedTheme` is always `light` or `dark`.
+- `system` theme resolves through `window.matchMedia("(prefers-color-scheme: dark)")` when available.
+- The effective theme is applied as `document.documentElement.dataset.theme = "light"` or `"dark"`.
+- Added dark-mode CSS token values through existing CSS variables.
+- Added lightweight key-based i18n with `src/i18n/messages.ts` and `src/i18n/useI18n.ts`.
+- Language preference supports `zh-CN` and `en-US`.
+- Added a compact Preferences panel from the existing Sidebar.
+- Preference changes apply immediately without restart.
+
+## Persistence And Boundaries
+
+- Preferences are not stored in SQLite.
+- SQLite schema was not modified.
+- No new dependency was added.
+- Preferences are separate from `taskStore` and do not use the task save queue.
+- Task titles, notes, tags, attachment original names, and task app names are not translated or mutated.
+- Desktop Pin Mode is not redesigned, but it inherits the active theme and language.
+
+## Not Implemented
+
+- No AI.
+- No MCP.
+- No voice input.
+- No cloud sync.
+- No account/profile system.
+- No online translation.
+- No date/time localization beyond the existing date formatting.
+
+## Verification Results
+
+- Targeted regression: `npm test -- src/stores/preferencesStore.test.ts src/i18n/messages.test.ts src/components/task/ScreenshotEditorOverlay.test.tsx src/app/App.test.tsx` passed, 4 test files, 41 tests.
+- `npm test`: passed, 14 test files, 112 tests.
+- `npm run build`: passed, TypeScript and Vite production build completed.
+- `cargo check`: passed for `src-tauri`.
+- `npm run tauri dev`: verified Vite on port 1420 and `target\debug\tofinal.exe` startup; validation processes were stopped intentionally after startup verification.

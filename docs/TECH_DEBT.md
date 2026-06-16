@@ -3,7 +3,7 @@
 ## Known Issues
 
 - SQLite persistence is now implemented through an async repository boundary, but the store still writes full task snapshots after each mutation instead of row-level changes.
-- localStorage remains in the codebase for v0.2 migration and rollback; it should not regain responsibility for normal runtime persistence.
+- localStorage remains in the codebase for v0.2 task migration and rollback; it should not regain responsibility for normal task data persistence.
 - `Today` is still a default task collection, not a real date-based view.
 - Task ordering is simple insertion order, with Desktop Pin Mode only sorting pinned open tasks first.
 - Normal Mode column widths are session-only and are not persisted.
@@ -15,7 +15,7 @@
 
 - SQLite improves durability over localStorage, but the app still lacks backup/export and database corruption recovery UI.
 - Full-snapshot writes are simple and safe for the current task count, but row-level writes may be needed if task volume grows substantially.
-- More UI preferences in Zustand could blur business state and ephemeral state if not separated.
+- UI preferences now have a separate Zustand store; future preference expansion should keep this boundary and avoid mixing settings into task persistence.
 - Advanced desktop features will expand Tauri permissions and increase platform-specific failure modes.
 - Image attachment import, copying, thumbnail preview, Lightbox preview, and delete UI now exist, but full orphan-file scanning/repair and backup policy are still not implemented.
 - Task App Binding MVP exists, but it is intentionally manual-only and does not scan installed apps, extract icons, track processes, or manage launch arguments.
@@ -100,6 +100,23 @@
 - Full-screen screenshot capture now hides the ToFinal window before invoking the Rust capture command.
 - The app window is restored and focused after capture, including failure paths.
 - The fix uses narrow current-window permissions only and does not add tray, global shortcut, shell, OCR, AI, or background capture behavior.
+
+## Resolved By Phase 7B Preferences MVP
+
+- `preferencesStore` is separate from `taskStore`.
+- UI preferences persist to localStorage key `tofinal.preferences.v1` with payload version `1`.
+- Theme supports `light`, `dark`, and `system`; `system` resolves to `light` or `dark` through `prefers-color-scheme`.
+- The app applies `data-theme="light"` or `data-theme="dark"` on `document.documentElement`; it does not apply `data-theme="system"`.
+- Language supports `zh-CN` and `en-US` through a lightweight key-based dictionary.
+- User task titles, notes, tags, attachment original names, and task app names are not automatically translated.
+- SQLite schema, task persistence, attachment metadata, screenshot files, and task app bindings were not changed.
+- No i18n dependency, AI, MCP, account system, or cloud sync was added.
+
+## Must Fix Before Preferences Expansion
+
+- Decide whether date/time formatting should follow language preference.
+- Decide whether the initial language should eventually follow OS/browser language instead of the current fixed `zh-CN` default.
+- Add export/import or sync semantics only after an account/profile phase is explicitly designed.
 
 ## Must Fix Before Next Persistence Expansion
 

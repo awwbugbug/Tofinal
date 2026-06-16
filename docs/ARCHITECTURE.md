@@ -6,7 +6,7 @@
 - Frontend: React, TypeScript, Vite, Tailwind CSS, shadcn-style local UI primitives.
 - State: Zustand.
 - Icons: lucide-react.
-- Persistence: SQLite through the official Tauri SQL Plugin, with localStorage retained only as a v0.2 migration source.
+- Persistence: SQLite through the official Tauri SQL Plugin for task data; localStorage is retained for v0.2 task migration and Phase 7B UI preferences.
 - Local files: Tauri Dialog and FS plugins for AppData-owned image attachments.
 - Tests: Vitest, Testing Library, jsdom.
 
@@ -30,6 +30,7 @@ ToFinal/
     repositories/
     storage/
     stores/
+    i18n/
     styles/
     test/
     types/
@@ -47,7 +48,8 @@ ToFinal/
 - `src/lib`: shared helpers and Tauri window wrappers.
 - `src/repositories`: async persistence-facing repository interface boundary plus SQLite-backed task and attachment metadata implementations.
 - `src/storage`: localStorage snapshot utilities plus attachment file storage for AppData-owned image copies.
-- `src/stores`: Zustand task store, attachment store, and store tests.
+- `src/stores`: Zustand task, attachment, task app, and preferences stores plus store tests.
+- `src/i18n`: lightweight key-based UI text dictionaries and translation hook.
 - `src/styles`: global CSS tokens and utility classes.
 - `src/test`: test setup.
 - `src/types`: shared TypeScript domain types.
@@ -62,6 +64,9 @@ ToFinal/
 - `src/repositories/sqliteAttachmentRepository.ts`: manages `task_attachments` metadata only; it does not copy files, open file pickers, or render previews.
 - `src/storage/attachmentFileStorage.ts`: owns local image selection, validation, AppData attachment path generation, file copy/delete, and preview URL creation.
 - `src/stores/attachmentStore.ts`: owns selected-task attachment loading, add/delete flows, preview state, stale-load protection, and task-delete file cleanup coordination.
+- `src/stores/preferencesStore.ts`: owns UI preferences, including theme, resolved theme, language, initialization, localStorage persistence, and `data-theme` application.
+- `src/i18n/messages.ts`: centralizes Chinese and English UI text keys for the lightweight dictionary.
+- `src/i18n/useI18n.ts`: exposes the current translator from the preferences language.
 - `src/types/task.ts`: defines `Task`, `TaskPriority`, `AppMode`, and `TaskFilter`.
 - `src/types/attachment.ts`: defines `TaskAttachment` and `AttachmentKind`.
 - `src/lib/windowMode.ts`: applies Normal/Pin Tauri window profiles with try/catch fallback.
@@ -84,6 +89,16 @@ ToFinal/
 8. `taskStore` updates memory immediately and recomputes `selectedTaskId` when filtering, searching, updating, completing, or deleting can change visible tasks.
 9. Mutations call `TaskRepository.saveSnapshot({ tasks })`, which writes the full snapshot to SQLite in a transaction.
 10. UI components do not import SQLite, localStorage, or plugin APIs directly.
+
+Preferences data flow:
+
+1. `AppShell` calls `preferencesStore.loadPreferences()` on startup.
+2. The preferences store reads localStorage key `tofinal.preferences.v1`.
+3. Invalid JSON, unavailable localStorage, or invalid preference values fall back to `theme = "system"` and `language = "zh-CN"`.
+4. `theme = "system"` resolves through `window.matchMedia("(prefers-color-scheme: dark)")` when available.
+5. The store applies `document.documentElement.dataset.theme = "light"` or `"dark"`; it never writes `data-theme="system"`.
+6. UI components read translated labels through `useI18n()`.
+7. User task titles, notes, tags, attachment names, and task app names are not translated or mutated by i18n.
 
 ## Task Schema
 
@@ -114,8 +129,10 @@ type Task = {
 - `completed` and `pinned` are SQLite INTEGER booleans with `CHECK (value IN (0, 1))`.
 - `completedAt` maps to nullable `completed_at`.
 - localStorage key `tofinal.tasks.v1` is retained for v0.2 migration and rollback only.
+- localStorage key `tofinal.preferences.v1` stores UI preferences only with `{ version: 1, theme, language }`.
 - Invalid localStorage snapshots are not migrated; empty SQLite then falls back to seed tasks.
-- Only task data is persisted. Window mode, column widths, active filter, search query, and selection remain session UI state.
+- Task data, attachment metadata, and task app metadata remain in SQLite. UI preferences remain outside SQLite for Phase 7B.
+- Window mode, column widths, active filter, search query, and selection remain session UI state.
 
 ## State Management
 
@@ -158,6 +175,20 @@ Attachment store actions:
 - `deleteTaskWithAttachmentCleanup`
 
 The attachment store is separate from `taskStore` so Desktop Pin Mode and task filtering do not carry image preview state. UI components call attachment store actions; they do not import Tauri dialog/fs APIs or SQLite repositories directly.
+
+Preferences store state:
+- `theme`
+- `resolvedTheme`
+- `language`
+- `initialized`
+
+Preferences store actions:
+- `loadPreferences`
+- `setTheme`
+- `setLanguage`
+- `resetPreferences`
+
+The preferences store is separate from `taskStore`, does not access SQLite repositories, and does not route through the task save queue.
 
 ## Window Modes
 

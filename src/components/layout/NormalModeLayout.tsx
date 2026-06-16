@@ -7,6 +7,7 @@ import { QuickInput } from "@/components/task/QuickInput";
 import { TaskList } from "@/components/task/TaskList";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useI18n } from "@/i18n/useI18n";
 import type { AttachmentView, FinalScreenshot, PendingScreenshot } from "@/stores/attachmentStore";
 import type { TaskAppView } from "@/stores/taskAppStore";
 import type { Task, TaskFilter } from "@/types/task";
@@ -150,18 +151,19 @@ export function NormalModeLayout({
   lastSavedAt,
   tasks,
 }: NormalModeLayoutProps) {
+  const { t } = useI18n();
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [detailWidth, setDetailWidth] = useState(DEFAULT_DETAIL_WIDTH);
   const [activeResizeHandle, setActiveResizeHandle] = useState<"sidebar" | "detail" | null>(null);
   const openTasks = filteredTasks.filter((task) => !task.completed);
   const title =
     activeFilter === "important"
-      ? "Important"
+      ? t("filters.important")
       : activeFilter === "all"
-        ? "All Tasks"
+        ? t("filters.all")
         : activeFilter === "pinned"
-          ? "Pinned"
-          : "Today";
+          ? t("filters.pinned")
+          : t("filters.today");
   const hasSearch = Boolean(searchQuery.trim());
   const gridTemplateColumns = `${sidebarWidth}px minmax(${TASK_LIST_MIN_WIDTH}px, 1fr) ${detailWidth}px`;
 
@@ -249,11 +251,11 @@ export function NormalModeLayout({
           <div>
             <div className="flex items-center gap-2 text-xs font-medium uppercase text-[var(--text-faint)]">
               <MonitorUp className="h-3.5 w-3.5" />
-              Normal Window Mode
+              {t("mode.normal")}
             </div>
             <h2 className="mt-2 text-3xl font-semibold tracking-normal text-[var(--text-primary)]">{title}</h2>
           </div>
-          <Button aria-label="Switch to Desktop Pin Mode" onClick={onSwitchToPin} variant="secondary">
+          <Button aria-label={t("window.switchToPin")} onClick={onSwitchToPin} variant="secondary">
             <Pin className="h-4 w-4" />
             Pin
           </Button>
@@ -264,20 +266,20 @@ export function NormalModeLayout({
         </div>
 
         <label className="relative mt-4 block shrink-0" htmlFor="task-search">
-          <span className="sr-only">Search tasks</span>
+          <span className="sr-only">{t("task.search")}</span>
           <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-faint)]" />
           <Input
             className="pl-10"
             id="task-search"
-            placeholder="Search tasks"
+            placeholder={t("task.search")}
             value={searchQuery}
             onChange={(event) => onSearchChange(event.target.value)}
           />
         </label>
 
         <div className="my-5 flex shrink-0 items-center justify-between text-sm">
-          <span className="text-[var(--text-muted)]">{openTasks.length} open</span>
-          <span className="text-[var(--text-faint)]">{filteredTasks.length - openTasks.length} completed</span>
+          <span className="text-[var(--text-muted)]">{openTasks.length}{t("task.openCount")}</span>
+          <span className="text-[var(--text-faint)]">{filteredTasks.length - openTasks.length}{t("task.completedCount")}</span>
         </div>
 
         {filteredTasks.length > 0 ? (
@@ -289,7 +291,7 @@ export function NormalModeLayout({
           />
         ) : (
           <div className="flex flex-1 items-center justify-center rounded-3xl border border-dashed border-[var(--border-soft)] bg-[var(--surface-card-hover)] p-6 text-center text-sm text-[var(--text-faint)]">
-            {hasSearch ? "No tasks match your search." : "No tasks in this view."}
+            {hasSearch ? t("task.noSearchResults") : t("task.noTasksInView")}
           </div>
         )}
       </section>

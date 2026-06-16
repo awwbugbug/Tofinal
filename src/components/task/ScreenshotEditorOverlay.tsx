@@ -2,6 +2,7 @@ import { type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } f
 import { RotateCcw, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/i18n/useI18n";
 import type { FinalScreenshot, PendingScreenshot } from "@/stores/attachmentStore";
 
 const MIN_CROP_PIXELS = 16;
@@ -114,6 +115,7 @@ export function ScreenshotEditorOverlay({
   onConfirm,
   screenshot,
 }: ScreenshotEditorOverlayProps) {
+  const { t } = useI18n();
   const imageRef = useRef<HTMLImageElement>(null);
   const [dragStart, setDragStart] = useState<Point | null>(null);
   const [selection, setSelection] = useState<Rect | null>(null);
@@ -195,7 +197,7 @@ export function ScreenshotEditorOverlay({
   const handleConfirm = async () => {
     const image = imageRef.current;
     if (!image) {
-      setError("Screenshot preview is unavailable.");
+      setError(t("screenshot.previewUnavailable"));
       return;
     }
 
@@ -217,7 +219,7 @@ export function ScreenshotEditorOverlay({
     const crop = mapSelectionToBitmapCrop(viewportSelection, imageRect, screenshot.width, screenshot.height);
 
     if (crop.width < MIN_CROP_PIXELS || crop.height < MIN_CROP_PIXELS) {
-      setError("Select a larger crop area or reset crop.");
+      setError(t("screenshot.smallCrop"));
       return;
     }
 
@@ -225,20 +227,20 @@ export function ScreenshotEditorOverlay({
       const pngBytes = await cropper(image, crop, crop.width, crop.height);
       onConfirm({ pngBytes, width: crop.width, height: crop.height });
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Unable to crop screenshot.");
+      setError(nextError instanceof Error ? nextError.message : t("screenshot.cropFailed"));
     }
   };
 
   return (
     <div
-      aria-label="Screenshot editor"
+      aria-label={t("screenshot.editor")}
       aria-modal="true"
       className="screenshot-editor"
       data-closing={closing}
       role="dialog"
     >
       <button
-        aria-label="Cancel screenshot editor backdrop"
+        aria-label={t("screenshot.cancelBackdrop")}
         className="screenshot-editor-backdrop"
         data-testid="screenshot-editor-backdrop"
         onClick={requestCancel}
@@ -247,11 +249,11 @@ export function ScreenshotEditorOverlay({
       <div className="screenshot-editor-panel">
         <div className="screenshot-editor-toolbar">
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-white">Screenshot</p>
-            <p className="text-xs text-white/60">Drag to crop, or confirm without a crop for full screen.</p>
+            <p className="truncate text-sm font-medium text-white">{t("screenshot.title")}</p>
+            <p className="text-xs text-white/60">{t("screenshot.hint")}</p>
           </div>
           <Button
-            aria-label="Cancel screenshot editor"
+            aria-label={t("screenshot.cancelEditor")}
             className="bg-white/12 text-white hover:bg-white/20 hover:text-white"
             onClick={requestCancel}
             size="icon"
@@ -268,7 +270,7 @@ export function ScreenshotEditorOverlay({
           onPointerDown={handlePointerDown}
         >
           <img
-            alt="Captured screenshot preview"
+            alt={t("screenshot.previewAlt")}
             className="screenshot-editor-image"
             draggable={false}
             ref={imageRef}
@@ -294,7 +296,7 @@ export function ScreenshotEditorOverlay({
               <p className="text-xs text-[var(--danger-soft)]">{error}</p>
             ) : (
               <p className="text-xs text-white/60">
-                {dragStart ? "Selecting crop..." : selection ? "Crop selected" : "No crop selected"}
+                {dragStart ? t("screenshot.selecting") : selection ? t("screenshot.cropSelected") : t("screenshot.noCropSelected")}
               </p>
             )}
           </div>
@@ -306,7 +308,7 @@ export function ScreenshotEditorOverlay({
               variant="ghost"
             >
               <RotateCcw className="h-4 w-4" />
-              Reset Crop
+              {t("screenshot.resetCrop")}
             </Button>
             <Button
               className="bg-white/12 text-white hover:bg-white/20 hover:text-white"
@@ -314,10 +316,10 @@ export function ScreenshotEditorOverlay({
               type="button"
               variant="ghost"
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button onClick={() => void handleConfirm()} type="button">
-              Confirm
+              {t("common.confirm")}
             </Button>
           </div>
         </div>

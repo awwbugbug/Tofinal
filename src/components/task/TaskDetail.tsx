@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { AttachmentLightbox } from "@/components/task/AttachmentLightbox";
 import { ScreenshotEditorOverlay } from "@/components/task/ScreenshotEditorOverlay";
+import { useI18n } from "@/i18n/useI18n";
 import { cn } from "@/lib/utils";
 import type { AttachmentView, FinalScreenshot, PendingScreenshot } from "@/stores/attachmentStore";
 import type { TaskAppView } from "@/stores/taskAppStore";
@@ -64,22 +65,16 @@ type TaskDetailProps = {
   ) => boolean;
 };
 
-const priorityOptions: Array<{ label: string; value: TaskPriority }> = [
-  { label: "Normal", value: "normal" },
-  { label: "Important", value: "important" },
-  { label: "Urgent", value: "urgent" },
+const priorityOptions: Array<{ labelKey: string; value: TaskPriority; segmentText: string }> = [
+  { labelKey: "priority.normal", value: "normal", segmentText: "var(--normal-text)" },
+  { labelKey: "priority.important", value: "important", segmentText: "var(--important-text)" },
+  { labelKey: "priority.urgent", value: "urgent", segmentText: "var(--urgent-text)" },
 ];
 
 const priorityBadgeClassName = {
   normal: "border-transparent bg-[var(--normal-bg)] text-[var(--normal-text)]",
   important: "border-transparent bg-[var(--important-bg)] text-[var(--important-text)]",
   urgent: "border-transparent bg-[var(--urgent-bg)] text-[var(--urgent-text)]",
-};
-
-const prioritySegmentClassName = {
-  normal: "text-[var(--normal-text)]",
-  important: "text-[var(--important-text)]",
-  urgent: "text-[var(--urgent-text)]",
 };
 
 type PrioritySegmentStyle = CSSProperties & {
@@ -161,6 +156,7 @@ export function TaskDetail({
   saving,
   task,
 }: TaskDetailProps) {
+  const { t } = useI18n();
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("normal");
@@ -197,7 +193,7 @@ export function TaskDetail({
   if (!task) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-[var(--text-faint)]">
-        No task selected
+        {t("task.noTaskSelected")}
       </div>
     );
   }
@@ -215,16 +211,16 @@ export function TaskDetail({
     pinned !== task.pinned ||
     normalizedTags !== currentTags;
   const saveStatus = persistenceError
-    ? `Save failed: ${persistenceError}`
+    ? `${t("task.saveFailed")}: ${persistenceError}`
     : saving
-      ? "Saving locally..."
+      ? t("task.savingLocally")
       : lastSavedAt
-        ? `Saved ${formatDate(lastSavedAt)}`
+        ? `${t("task.saved")} ${formatDate(lastSavedAt)}`
         : "";
 
   const handleSave = () => {
     if (!title.trim()) {
-      setError("Title is required.");
+      setError(t("task.titleRequired"));
       return;
     }
 
@@ -241,7 +237,7 @@ export function TaskDetail({
       pinned,
     });
 
-    setError(saved ? "" : "Title is required.");
+    setError(saved ? "" : t("task.titleRequired"));
   };
 
   const handleDelete = () => {
@@ -261,7 +257,9 @@ export function TaskDetail({
     <div className="flex h-full min-h-0 flex-col">
       <div className="-mx-3 min-h-0 flex-1 space-y-5 overflow-y-auto px-3 py-3">
         <div className="flex items-center justify-between gap-3">
-          <Badge className={cn("capitalize", priorityBadgeClassName[task.priority])}>{task.priority}</Badge>
+          <Badge className={cn("capitalize", priorityBadgeClassName[task.priority])}>
+            {t(`priority.${task.priority}`)}
+          </Badge>
           <label
             className={cn(
               "flex items-center gap-2 rounded-full border border-transparent px-2.5 py-1 text-xs font-medium text-[var(--text-muted)]",
@@ -274,12 +272,12 @@ export function TaskDetail({
               onChange={(event) => setPinned(event.currentTarget.checked)}
             />
             <Pin className={cn("h-3.5 w-3.5", pinned ? "text-[var(--pinned-text)]" : "text-[var(--text-faint)]")} />
-            Pinned
+            {t("task.pinned")}
           </label>
         </div>
 
         <label className="block text-xs font-medium uppercase text-[var(--text-faint)]" htmlFor="task-title">
-          Task title
+          {t("task.title")}
         </label>
         <textarea
           className="focus-soft min-h-12 max-h-[6.75rem] w-full resize-none overflow-y-auto rounded-[18px] border border-[var(--border-soft)] bg-[var(--surface-field)] px-4 py-3 text-2xl font-semibold leading-[1.5] tracking-normal text-[var(--text-primary)] placeholder:text-[var(--text-faint)] outline-none"
@@ -292,7 +290,7 @@ export function TaskDetail({
         {error && <p className="text-xs text-red-500">{error}</p>}
 
         <label className="block text-xs font-medium uppercase text-[var(--text-faint)]" htmlFor="task-note">
-          Task note
+          {t("task.note")}
         </label>
         <textarea
           className="focus-soft min-h-32 w-full resize-none rounded-[22px] border border-[var(--border-soft)] bg-[var(--surface-field)] p-4 text-sm leading-[1.55] text-[var(--text-secondary)] placeholder:text-[var(--text-faint)] outline-none"
@@ -302,7 +300,7 @@ export function TaskDetail({
         />
 
         <div className="block text-xs font-medium uppercase text-[var(--text-faint)]" id="task-priority-label">
-          Task priority
+          {t("task.priority")}
         </div>
         <div
           aria-labelledby="task-priority-label"
@@ -315,21 +313,19 @@ export function TaskDetail({
             <button
               aria-pressed={priority === option.value}
               data-selected={priority === option.value}
-              className={cn(
-                "priority-segment text-center font-medium",
-                prioritySegmentClassName[option.value],
-              )}
+              className="priority-segment text-center font-medium"
               key={option.value}
               onClick={() => handlePriorityChange(option.value)}
+              style={{ "--segment-text": option.segmentText } as CSSProperties}
               type="button"
             >
-              {option.label}
+              {t(option.labelKey)}
             </button>
           ))}
         </div>
 
         <label className="block text-xs font-medium uppercase text-[var(--text-faint)]" htmlFor="task-tags">
-          Task tags
+          {t("task.tags")}
         </label>
         <Input
           className="border-[var(--border-soft)] bg-[var(--surface-field)]"
@@ -343,7 +339,7 @@ export function TaskDetail({
           {task.tags.length > 0 ? (
             task.tags.map((tag) => <Badge key={tag}>{tag}</Badge>)
           ) : (
-            <span className="text-sm text-[var(--text-faint)]">No tags</span>
+            <span className="text-sm text-[var(--text-faint)]">0{t("task.tagCount")}</span>
           )}
         </div>
 
@@ -353,11 +349,11 @@ export function TaskDetail({
               className="text-xs font-medium uppercase text-[var(--text-faint)]"
               id="task-attachments-label"
             >
-              Attachments
+              {t("attachments.title")}
             </div>
             <div className="detail-action-buttons detail-action-buttons-grid">
               <Button
-                aria-label="Add image attachment"
+                aria-label={t("attachments.addImageAction")}
                 className="detail-action-button"
                 disabled={attachmentsAdding || attachmentsCapturing}
                 onClick={() => onAddImageAttachment(task.id)}
@@ -366,10 +362,10 @@ export function TaskDetail({
                 variant="secondary"
               >
                 <Plus className="h-4 w-4" />
-                {attachmentsAdding ? "Adding..." : "Add Image"}
+                {attachmentsAdding ? t("attachments.adding") : t("attachments.addImage")}
               </Button>
               <Button
-                aria-label="Screenshot"
+                aria-label={t("attachments.screenshot")}
                 className="detail-action-button"
                 disabled={attachmentsAdding || attachmentsCapturing || screenshotEditing}
                 onClick={() => onAddScreenshotAttachment(task.id)}
@@ -378,7 +374,7 @@ export function TaskDetail({
                 variant="secondary"
               >
                 <Camera className="h-4 w-4" />
-                {attachmentsCapturing ? "Capturing..." : "Screenshot"}
+                {attachmentsCapturing ? t("attachments.capturing") : t("attachments.screenshot")}
               </Button>
             </div>
           </div>
@@ -386,11 +382,11 @@ export function TaskDetail({
           {attachmentError && <p className="text-xs text-[var(--danger)]">{attachmentError}</p>}
           {attachmentsLoading ? (
             <div className="rounded-3xl border border-dashed border-[var(--border-soft)] bg-[var(--surface-field)] p-4 text-sm text-[var(--text-faint)]">
-              Loading attachments...
+              {t("attachments.loading")}
             </div>
           ) : attachments.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-[var(--border-soft)] bg-[var(--surface-field)] p-4 text-sm text-[var(--text-faint)]">
-              No image attachments
+              {t("attachments.empty")}
             </div>
           ) : (
             <div className="space-y-3">
@@ -403,7 +399,7 @@ export function TaskDetail({
                     key={attachment.id}
                   >
                     <button
-                      aria-label={`Preview attachment ${attachment.originalName}`}
+                      aria-label={`${t("attachments.preview")} ${attachment.originalName}`}
                       className="attachment-preview-trigger"
                       disabled={broken}
                       onClick={() => setLightboxAttachment(attachment)}
@@ -430,11 +426,11 @@ export function TaskDetail({
                         </p>
                       </div>
                       <p className="mt-1 text-xs text-[var(--text-muted)]">
-                        {broken ? "Missing copied file" : `${formatFileSize(attachment.sizeBytes)} local image`}
+                        {broken ? t("attachments.missing") : `${formatFileSize(attachment.sizeBytes)} ${t("attachments.localImage")}`}
                       </p>
                     </div>
                     <Button
-                      aria-label={`Delete attachment ${attachment.originalName}`}
+                      aria-label={`${t("attachments.delete")} ${attachment.originalName}`}
                       disabled={Boolean(attachmentDeletingIds[attachment.id])}
                       onClick={() => onDeleteAttachment(attachment.id)}
                       size="icon"
@@ -453,11 +449,11 @@ export function TaskDetail({
         <section className="space-y-3" aria-labelledby="task-apps-label">
           <div className="detail-action-row">
             <div className="text-xs font-medium uppercase text-[var(--text-faint)]" id="task-apps-label">
-              Apps
+              {t("apps.title")}
             </div>
             <div className="detail-action-buttons detail-action-buttons-grid">
               <Button
-                aria-label="Add App"
+                aria-label={t("apps.addApp")}
                 className="detail-action-button"
                 disabled={taskAppsAdding}
                 onClick={() => onAddTaskApp(task.id)}
@@ -466,10 +462,10 @@ export function TaskDetail({
                 variant="secondary"
               >
                 <Plus className="h-4 w-4" />
-                {taskAppsAdding ? "Adding..." : "Add App"}
+                {taskAppsAdding ? t("apps.adding") : t("apps.addApp")}
               </Button>
               <Button
-                aria-label="Start Task"
+                aria-label={t("apps.startTask")}
                 className="detail-action-button"
                 disabled={taskApps.length === 0 || taskAppsLaunching}
                 onClick={() => onStartTaskApps(task.id)}
@@ -477,7 +473,7 @@ export function TaskDetail({
                 type="button"
               >
                 <Play className="h-4 w-4" />
-                {taskAppsLaunching ? "Starting..." : "Start Task"}
+                {taskAppsLaunching ? t("apps.starting") : t("apps.startTask")}
               </Button>
             </div>
           </div>
@@ -485,16 +481,16 @@ export function TaskDetail({
           {taskAppError && <p className="text-xs text-[var(--danger)]">{taskAppError}</p>}
           {!taskAppError && lastTaskAppsStartedAt && (
             <p aria-live="polite" className="text-xs text-[var(--text-muted)]">
-              Started locally
+              {t("apps.startedLocally")}
             </p>
           )}
           {taskAppsLoading ? (
             <div className="rounded-3xl border border-dashed border-[var(--border-soft)] bg-[var(--surface-field)] p-4 text-sm text-[var(--text-faint)]">
-              Loading apps...
+              {t("apps.loading")}
             </div>
           ) : taskApps.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-[var(--border-soft)] bg-[var(--surface-field)] p-4 text-sm text-[var(--text-faint)]">
-              No bound apps
+              {t("apps.empty")}
             </div>
           ) : (
             <div className="space-y-3">
@@ -521,15 +517,15 @@ export function TaskDetail({
                         {app.appPath}
                       </p>
                       <div className="flex flex-wrap items-center gap-2 text-xs">
-                        <Badge>{app.appKind === "shortcut" ? "Shortcut" : "EXE"}</Badge>
-                        {app.missing && <Badge className="bg-[var(--danger-soft)] text-[var(--danger)]">Missing</Badge>}
+                        <Badge>{app.appKind === "shortcut" ? t("apps.shortcut") : t("apps.exe")}</Badge>
+                        {app.missing && <Badge className="bg-[var(--danger-soft)] text-[var(--danger)]">{t("apps.missing")}</Badge>}
                         {app.lastLaunchError && (
                           <span className="text-[var(--danger)]">{app.lastLaunchError}</span>
                         )}
                       </div>
                     </div>
                     <Button
-                      aria-label={`Delete app ${app.appName}`}
+                      aria-label={`${t("apps.delete")} ${app.appName}`}
                       onClick={() => onDeleteTaskApp(app.id)}
                       size="icon"
                       type="button"
@@ -549,19 +545,19 @@ export function TaskDetail({
         <div className="space-y-3 rounded-3xl border border-[var(--border-soft)] bg-[color-mix(in_srgb,var(--surface-field)_72%,transparent)] p-4 text-sm text-[var(--text-muted)]">
           <div className="flex items-center gap-3">
             <Clock3 className="h-4 w-4 text-[var(--text-faint)]" />
-            <span>Created {formatDate(task.createdAt)}</span>
+            <span>{t("task.created")} {formatDate(task.createdAt)}</span>
           </div>
           <div className="flex items-center gap-3">
             <Calendar className="h-4 w-4 text-[var(--text-faint)]" />
-            <span>Updated {formatDate(task.updatedAt)}</span>
+            <span>{t("task.updated")} {formatDate(task.updatedAt)}</span>
           </div>
           <div className="flex items-center gap-3">
             <CheckCircle2 className="h-4 w-4 text-[var(--text-faint)]" />
-            <span>{task.completed ? `Completed ${formatDate(task.completedAt)}` : "Open task"}</span>
+            <span>{task.completed ? `${t("task.completed")} ${formatDate(task.completedAt)}` : t("task.openTask")}</span>
           </div>
           <div className="flex items-center gap-3">
             <Tag className="h-4 w-4 text-[var(--text-faint)]" />
-            <span>{task.tags.length} tags</span>
+            <span>{task.tags.length}{t("task.tagCount")}</span>
           </div>
         </div>
       </div>
@@ -569,13 +565,13 @@ export function TaskDetail({
       <div className="shrink-0 border-t border-[var(--border-soft)] pt-4">
         <div className="flex items-center justify-between gap-3">
         <Button
-          aria-label="Delete task"
+          aria-label={t("task.deleteTask")}
           className="text-[var(--danger)] hover:bg-[var(--danger-soft)] hover:text-[var(--danger)]"
           onClick={handleDelete}
           variant="ghost"
         >
           <Trash2 className="h-4 w-4" />
-          Delete
+          {t("task.delete")}
         </Button>
         <div className="flex min-w-0 flex-col items-end gap-1">
           {saveStatus && (
@@ -591,21 +587,22 @@ export function TaskDetail({
             </span>
           )}
           <Button
-            aria-label={saving ? "Saving task" : "Save task"}
+            aria-label={saving ? t("task.savingTask") : t("task.saveTask")}
             disabled={!hasDraftChanges && !persistenceError}
             onClick={handleSave}
           >
-            {saving ? "Saving..." : "Save"}
+            {saving ? t("task.saving") : t("task.save")}
           </Button>
         </div>
         </div>
       </div>
 
       <ConfirmDialog
-        confirmLabel="Delete"
-        description={`This will remove "${task.title}" from your local task list. This action cannot be undone.`}
+        cancelLabel={t("common.cancel")}
+        confirmLabel={t("task.delete")}
+        description={t("task.deleteDialogDescription")}
         open={deleteDialogOpen}
-        title="Delete this task?"
+        title={t("task.deleteDialogTitle")}
         onCancel={() => setDeleteDialogOpen(false)}
         onConfirm={handleConfirmDelete}
       />

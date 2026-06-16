@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ImageOff, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/i18n/useI18n";
 import type { AttachmentView } from "@/stores/attachmentStore";
 
 type AttachmentLightboxProps = {
@@ -12,6 +13,7 @@ type AttachmentLightboxProps = {
 const CLOSE_ANIMATION_MS = 190;
 
 export function AttachmentLightbox({ attachment, onClose }: AttachmentLightboxProps) {
+  const { t } = useI18n();
   const [closing, setClosing] = useState(false);
   const [broken, setBroken] = useState(attachment.missing);
 
@@ -49,7 +51,7 @@ export function AttachmentLightbox({ attachment, onClose }: AttachmentLightboxPr
       role="dialog"
     >
       <button
-        aria-label="Dismiss image preview backdrop"
+        aria-label={t("lightbox.backdrop")}
         className="attachment-lightbox-backdrop"
         data-testid="attachment-lightbox-backdrop"
         onClick={requestClose}
@@ -59,10 +61,10 @@ export function AttachmentLightbox({ attachment, onClose }: AttachmentLightboxPr
         <div className="attachment-lightbox-toolbar">
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-white">{attachment.originalName}</p>
-            <p className="text-xs text-white/60">Local copied attachment</p>
+            <p className="text-xs text-white/60">{t("lightbox.localCopied")}</p>
           </div>
           <Button
-            aria-label="Close image preview"
+            aria-label={t("lightbox.close")}
             className="bg-white/12 text-white hover:bg-white/20 hover:text-white"
             onClick={requestClose}
             size="icon"
@@ -84,7 +86,7 @@ export function AttachmentLightbox({ attachment, onClose }: AttachmentLightboxPr
           ) : (
             <div className="attachment-lightbox-missing">
               <ImageOff className="h-8 w-8" />
-              <span>Unable to preview image</span>
+              <span>{t("lightbox.unableToPreview")}</span>
             </div>
           )}
         </div>

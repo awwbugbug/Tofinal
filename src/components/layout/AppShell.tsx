@@ -3,12 +3,15 @@ import { useEffect } from "react";
 import { DesktopPinLayout } from "@/components/layout/DesktopPinLayout";
 import { NormalModeLayout } from "@/components/layout/NormalModeLayout";
 import { WindowTitleBar } from "@/components/layout/WindowTitleBar";
+import { useI18n } from "@/i18n/useI18n";
 import { applyWindowMode } from "@/lib/windowMode";
 import { useAttachmentStore } from "@/stores/attachmentStore";
+import { usePreferencesStore } from "@/stores/preferencesStore";
 import { useTaskAppStore } from "@/stores/taskAppStore";
 import { useTaskStore } from "@/stores/taskStore";
 
 export function AppShell() {
+  const { t } = useI18n();
   const tasks = useTaskStore((state) => state.tasks);
   const selectedTaskId = useTaskStore((state) => state.selectedTaskId);
   const mode = useTaskStore((state) => state.mode);
@@ -20,6 +23,7 @@ export function AppShell() {
   const lastSavedAt = useTaskStore((state) => state.lastSavedAt);
   const error = useTaskStore((state) => state.error);
   const hydrateTasks = useTaskStore((state) => state.hydrateTasks);
+  const loadPreferences = usePreferencesStore((state) => state.loadPreferences);
   const addTask = useTaskStore((state) => state.addTask);
   const updateTask = useTaskStore((state) => state.updateTask);
   const retryPersistTasks = useTaskStore((state) => state.retryPersistTasks);
@@ -64,6 +68,10 @@ export function AppShell() {
   const selectedTaskAppsLoading = selectedTaskId ? Boolean(appLoadingTaskIds[selectedTaskId]) : false;
 
   useEffect(() => {
+    loadPreferences();
+  }, [loadPreferences]);
+
+  useEffect(() => {
     void hydrateTasks();
   }, [hydrateTasks]);
 
@@ -92,7 +100,7 @@ export function AppShell() {
       <div className="app-shell-bg flex h-screen flex-col">
         <WindowTitleBar mode={mode} />
         <div className="flex min-h-0 flex-1 items-center justify-center px-6 text-sm text-[color:var(--text-secondary)]">
-          {loading ? "Loading local tasks..." : error ? "Unable to load local tasks." : "Preparing local tasks..."}
+          {loading ? t("app.loadingTasks") : error ? t("app.loadFailed") : t("app.preparingTasks")}
         </div>
       </div>
     );

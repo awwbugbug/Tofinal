@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   mapSelectionToBitmapCrop,
@@ -9,6 +9,7 @@ import {
   type ScreenshotCropper,
 } from "@/components/task/ScreenshotEditorOverlay";
 import type { PendingScreenshot } from "@/stores/attachmentStore";
+import { resetPreferencesStore, usePreferencesStore } from "@/stores/preferencesStore";
 
 const screenshot = (overrides: Partial<PendingScreenshot> = {}): PendingScreenshot => ({
   taskId: "task-1",
@@ -60,6 +61,11 @@ const renderEditor = (options: {
 };
 
 describe("ScreenshotEditorOverlay", () => {
+  beforeEach(() => {
+    resetPreferencesStore();
+    usePreferencesStore.getState().setLanguage("en-US");
+  });
+
   it("maps normalized preview selections to bitmap crop bounds", () => {
     expect(normalizeSelection({ x: 300, y: 260 }, { x: -20, y: 20 }, { width: 500, height: 400 })).toEqual({
       left: 0,

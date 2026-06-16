@@ -1,10 +1,12 @@
+@import url("https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 
 :root {
   font-family:
-    -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI",
-    system-ui, sans-serif;
+    "SF Pro Text", "SF Pro SC", "SF Pro Display", "PingFang SC", "Hiragino Sans GB",
+    "Noto Sans SC", "Noto Sans CJK SC", "Microsoft YaHei UI", "Segoe UI",
+    -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   color: #172033;
   background: #e5ebf2;
   --bg-base: #e5ebf2;
@@ -35,6 +37,10 @@
     0 1px 0 rgb(255 255 255 / 0.62) inset,
     0 8px 18px rgb(39 58 78 / 0.08),
     0 0 0 1px rgb(86 108 132 / 0.06);
+  --detail-panel-shadow: 0 22px 48px rgb(39 58 78 / 0.10);
+  --detail-panel-highlight:
+    0 1px 0 rgb(255 255 255 / 0.34) inset,
+    0 12px 22px rgb(255 255 255 / 0.02) inset;
   --ios-spring-motion: 520ms cubic-bezier(0.22, 1, 0.36, 1);
   --text-primary: #172033;
   --text-secondary: #4d5b70;
@@ -90,6 +96,91 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  color: #e7edf5;
+  background: #101722;
+  --bg-base: #101722;
+  --bg-warm: #1c2430;
+  --bg-canvas: linear-gradient(135deg, #0e1621 0%, #151f2b 48%, #202631 100%);
+  --surface-sidebar: #131d28;
+  --surface-main: #172230;
+  --surface-detail: #1b2735;
+  --surface-detail-end: #141f2b;
+  --surface-card: rgb(30 42 56 / 0.78);
+  --surface-card-hover: #263445;
+  --surface-elevated: #223040;
+  --surface-input: #1d2a38;
+  --surface-input-focus: #263645;
+  --surface-field: #202d3b;
+  --surface-field-focus: #293847;
+  --surface-segment: #1d2a38;
+  --surface-muted: #263445;
+  --glass-highlight: rgb(255 255 255 / 0.12);
+  --glass-shadow:
+    0 1px 0 rgb(255 255 255 / 0.12) inset,
+    0 12px 24px rgb(0 0 0 / 0.26),
+    0 0 14px rgb(75 127 164 / 0.10);
+  --selected-glass-bg: rgb(76 115 145 / 0.28);
+  --selected-glass-border: rgb(150 184 213 / 0.22);
+  --selected-glass-highlight: rgb(255 255 255 / 0.16);
+  --selected-glass-shadow:
+    0 1px 0 rgb(255 255 255 / 0.14) inset,
+    0 12px 24px rgb(0 0 0 / 0.24),
+    0 0 0 1px rgb(150 184 213 / 0.06);
+  --detail-panel-shadow: 0 24px 52px rgb(0 0 0 / 0.24);
+  --detail-panel-highlight:
+    0 1px 0 rgb(255 255 255 / 0.08) inset,
+    0 10px 18px rgb(255 255 255 / 0.015) inset;
+  --text-primary: #edf4fb;
+  --text-secondary: #c3ceda;
+  --text-muted: #98a8ba;
+  --text-faint: #6f8093;
+  --border-soft: rgb(164 185 206 / 0.16);
+  --border-medium: rgb(164 185 206 / 0.28);
+  --ring-soft: rgb(111 164 207 / 0.26);
+  --accent: #79aed4;
+  --accent-hover: #a9d4f1;
+  --accent-soft: #2c4e66;
+  --accent-surface: #21384b;
+  --normal-bg: #253544;
+  --normal-text: #b8c6d4;
+  --important-bg: #2d4b72;
+  --important-text: #c9ddfb;
+  --urgent-bg: #643728;
+  --urgent-text: #ffd0bd;
+  --pinned-bg: #3c3154;
+  --pinned-text: #d9c8ff;
+  --danger: #ff9a84;
+  --danger-soft: #4a2b28;
+  --app-bg: var(--bg-base);
+  --app-chrome: var(--surface-main);
+  --surface-panel: var(--surface-main);
+  --surface-tint: var(--accent-surface);
+  --border-strong: var(--border-medium);
+  --text-strong: var(--text-primary);
+  --text-main: var(--text-secondary);
+  --accent-strong: var(--accent-hover);
+  --accent-softer: var(--accent-surface);
+  --priority-normal-bg: var(--normal-bg);
+  --priority-normal-text: var(--normal-text);
+  --priority-important-bg: var(--important-bg);
+  --priority-important-text: var(--important-text);
+  --priority-urgent-bg: var(--urgent-bg);
+  --priority-urgent-text: var(--urgent-text);
+  --shadow-soft: 0 24px 54px rgb(0 0 0 / 0.32);
+  --shadow-card: 0 16px 36px rgb(0 0 0 / 0.26);
+  --shadow-card-around:
+    0 0 0 1px rgb(150 184 213 / 0.08),
+    0 0 24px rgb(75 127 164 / 0.12),
+    0 14px 30px rgb(0 0 0 / 0.26);
+  --shadow-card-hover:
+    0 0 0 1px rgb(150 184 213 / 0.09),
+    0 0 18px rgb(75 127 164 / 0.10),
+    0 10px 22px rgb(0 0 0 / 0.20);
+  --shadow-subtle: 0 8px 20px rgb(0 0 0 / 0.22);
 }
 
 * {
@@ -154,8 +245,8 @@ body {
       linear-gradient(180deg, var(--surface-detail) 0%, var(--surface-detail-end) 100%);
     border-color: var(--border-soft);
     box-shadow:
-      0 22px 48px rgb(39 58 78 / 0.10),
-      0 1px 0 rgb(255 255 255 / 0.52) inset;
+      var(--detail-panel-shadow),
+      var(--detail-panel-highlight);
   }
 
   .surface-card {
@@ -309,7 +400,7 @@ body {
 
   .priority-segment-thumb {
     background:
-      linear-gradient(180deg, var(--selected-glass-highlight), rgb(255 255 255 / 0.14)),
+      linear-gradient(180deg, var(--selected-glass-highlight), rgb(255 255 255 / 0.10)),
       color-mix(in srgb, var(--segment-bg) 62%, var(--selected-glass-bg));
     border: 1px solid var(--selected-glass-border);
     border-radius: 18px;
@@ -317,7 +408,7 @@ body {
     box-shadow:
       var(--selected-glass-shadow),
       0 0 0 1px var(--segment-ring),
-      0 0 0 3px rgb(255 255 255 / 0.14) inset;
+      0 0 0 2px rgb(255 255 255 / 0.08) inset;
     left: var(--priority-left);
     pointer-events: none;
     position: absolute;
@@ -356,8 +447,10 @@ body {
     opacity: 0.76;
   }
 
-  .priority-segment:not([aria-pressed="true"]):hover {
-    background: rgb(255 255 255 / 0.18);
+  .priority-segment:not([aria-pressed="true"]):hover,
+  .priority-segment:not([aria-pressed="true"]):focus-visible {
+    background: transparent;
+    color: color-mix(in srgb, var(--segment-text) 82%, var(--text-primary) 18%);
     opacity: 1;
   }
 

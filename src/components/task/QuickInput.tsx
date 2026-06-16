@@ -3,6 +3,7 @@ import { Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useI18n } from "@/i18n/useI18n";
 
 type QuickInputProps = {
   compact?: boolean;
@@ -10,6 +11,7 @@ type QuickInputProps = {
 };
 
 export function QuickInput({ compact = false, onAddTask }: QuickInputProps) {
+  const { t } = useI18n();
   const [title, setTitle] = useState("");
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -27,15 +29,15 @@ export function QuickInput({ compact = false, onAddTask }: QuickInputProps) {
   return (
     <form className="flex items-center gap-2" onSubmit={handleSubmit}>
       <Input
-        aria-label="Add a task"
+        aria-label={t("task.addTask")}
         className={compact ? "h-9 px-3 text-xs" : undefined}
         onChange={(event) => setTitle(event.currentTarget.value)}
-        placeholder="Add a task..."
+        placeholder={t("task.addPlaceholder")}
         value={title}
       />
-      <Button aria-label="Add task" size={compact ? "icon" : "default"} type="submit">
+      <Button aria-label={t("task.addTask")} size={compact ? "icon" : "default"} type="submit">
         <Plus className="h-4 w-4" />
-        {!compact && <span>Add</span>}
+        {!compact && <span>{t("task.add")}</span>}
       </Button>
     </form>
   );
