@@ -52,7 +52,7 @@ export function Sidebar({ activeFilter, onFilterChange, tasks }: SidebarProps) {
       </div>
 
       <nav aria-label="Task filters" className="filter-nav mt-8" style={navStyle}>
-        <span aria-hidden="true" className="filter-nav-thumb selected-glass-pill" />
+        <span aria-hidden="true" className="filter-nav-thumb glass-soft selected-glass-pill" />
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = item.filter === activeFilter;

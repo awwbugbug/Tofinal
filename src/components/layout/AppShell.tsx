@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { DesktopPinLayout } from "@/components/layout/DesktopPinLayout";
 import { NormalModeLayout } from "@/components/layout/NormalModeLayout";
@@ -9,6 +9,12 @@ import { useAttachmentStore } from "@/stores/attachmentStore";
 import { usePreferencesStore } from "@/stores/preferencesStore";
 import { useTaskAppStore } from "@/stores/taskAppStore";
 import { useTaskStore } from "@/stores/taskStore";
+import type { AppMode } from "@/types/task";
+
+const MODE_EXIT_MS = 140;
+const MODE_ENTER_MS = 220;
+
+type ModeTransition = "normal-exit" | "normal-enter" | "pin-exit" | "pin-enter" | null;
 
 export function AppShell() {
   const { t } = useI18n();
@@ -66,10 +72,48 @@ export function AppShell() {
   const selectedTaskAttachmentsLoading = selectedTaskId ? Boolean(attachmentLoadingTaskIds[selectedTaskId]) : false;
   const selectedTaskApps = selectedTaskId ? (appsByTaskId[selectedTaskId] ?? []) : [];
   const selectedTaskAppsLoading = selectedTaskId ? Boolean(appLoadingTaskIds[selectedTaskId]) : false;
+  const [modeTransition, setModeTransition] = useState<ModeTransition>(null);
+  const modeTransitionTimeoutsRef = useRef<number[]>([]);
+
+  const clearModeTransitionTimers = useCallback(() => {
+    modeTransitionTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
+    modeTransitionTimeoutsRef.current = [];
+  }, []);
+
+  const switchModeWithTransition = useCallback(
+    (nextMode: AppMode) => {
+      if (nextMode === mode) {
+        return;
+      }
+
+      clearModeTransitionTimers();
+      setModeTransition(`${mode}-exit`);
+
+      const exitTimeoutId = window.setTimeout(() => {
+        setMode(nextMode);
+        setModeTransition(`${nextMode}-enter`);
+
+        const enterTimeoutId = window.setTimeout(() => {
+          setModeTransition(null);
+        }, MODE_ENTER_MS);
+
+        modeTransitionTimeoutsRef.current.push(enterTimeoutId);
+      }, MODE_EXIT_MS);
+
+      modeTransitionTimeoutsRef.current.push(exitTimeoutId);
+    },
+    [clearModeTransitionTimers, mode, setMode],
+  );
 
   useEffect(() => {
     loadPreferences();
   }, [loadPreferences]);
+
+  useEffect(() => {
+    return () => {
+      clearModeTransitionTimers();
+    };
+  }, [clearModeTransitionTimers]);
 
   useEffect(() => {
     void hydrateTasks();
@@ -112,9 +156,10 @@ export function AppShell() {
         <WindowTitleBar mode={mode} />
         <div className="min-h-0 flex-1">
           <DesktopPinLayout
+            modeTransition={modeTransition}
             onAddTask={addTask}
             onSelectTask={selectTask}
-            onSwitchToNormal={() => setMode("normal")}
+            onSwitchToNormal={() => switchModeWithTransition("normal")}
             onToggleTask={toggleTask}
             selectedTaskId={selectedTaskId}
             tasks={tasks}
@@ -125,7 +170,7 @@ export function AppShell() {
   }
 
   return (
-    <div className="app-shell-bg flex h-screen flex-col">
+    <div className="app-shell-bg normal-mode-shell flex h-screen flex-col">
       <WindowTitleBar mode={mode} />
       <div className="min-h-0 flex-1">
         <NormalModeLayout
@@ -176,9 +221,10 @@ export function AppShell() {
           onFilterChange={setActiveFilter}
           onSelectTask={selectTask}
           onSearchChange={setSearchQuery}
-          onSwitchToPin={() => setMode("pin")}
+          onSwitchToPin={() => switchModeWithTransition("pin")}
           onToggleTask={toggleTask}
           onUpdateTask={updateTask}
+          modeTransition={modeTransition}
           persistenceError={error}
           saving={saving}
           searchQuery={searchQuery}

@@ -1,5 +1,5 @@
 import { type PointerEvent as ReactPointerEvent, useEffect, useState } from "react";
-import { MonitorUp, Pin, Search } from "lucide-react";
+import { PanelTopOpen, Search } from "lucide-react";
 
 import { Sidebar } from "@/components/layout/Sidebar";
 import { DetailPanel } from "@/components/layout/DetailPanel";
@@ -57,6 +57,7 @@ type NormalModeLayoutProps = {
     update: Partial<Pick<Task, "title" | "note" | "priority" | "tags" | "pinned">>,
   ) => boolean;
   onSwitchToPin: () => void;
+  modeTransition?: string | null;
 };
 
 const DEFAULT_SIDEBAR_WIDTH = 248;
@@ -149,6 +150,7 @@ export function NormalModeLayout({
   selectedTask,
   selectedTaskId,
   lastSavedAt,
+  modeTransition = null,
   tasks,
 }: NormalModeLayoutProps) {
   const { t } = useI18n();
@@ -227,6 +229,7 @@ export function NormalModeLayout({
   return (
     <main
       className="app-shell-bg relative grid h-full min-h-0 gap-4 overflow-hidden p-5"
+      data-mode-transition={modeTransition ?? undefined}
       data-testid="normal-mode-layout"
       style={{ gridTemplateColumns }}
     >
@@ -246,18 +249,19 @@ export function NormalModeLayout({
         tabIndex={0}
       />
 
-      <section className="surface-panel flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-[var(--radius-panel)] border p-5">
+      <section className="surface-panel flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-[var(--radius-panel)] border px-5 pb-5 pt-8">
         <header className="mb-5 flex shrink-0 items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 text-xs font-medium uppercase text-[var(--text-faint)]">
-              <MonitorUp className="h-3.5 w-3.5" />
-              {t("mode.normal")}
-            </div>
-            <h2 className="mt-2 text-3xl font-semibold tracking-normal text-[var(--text-primary)]">{title}</h2>
+            <h2 className="text-3xl font-semibold tracking-normal text-[var(--text-primary)]">{title}</h2>
           </div>
-          <Button aria-label={t("window.switchToPin")} onClick={onSwitchToPin} variant="secondary">
-            <Pin className="h-4 w-4" />
-            Pin
+          <Button
+            aria-label={t("window.switchToPin")}
+            className="mode-switch-button"
+            onClick={onSwitchToPin}
+            size="icon"
+            variant="secondary"
+          >
+            <PanelTopOpen className="h-4 w-4" />
           </Button>
         </header>
 

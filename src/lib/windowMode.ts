@@ -8,6 +8,8 @@ const windowProfiles = {
     height: 760,
     minWidth: 920,
     minHeight: 620,
+    maxWidth: null,
+    maxHeight: null,
     alwaysOnTop: false,
     skipTaskbar: false,
   },
@@ -16,10 +18,12 @@ const windowProfiles = {
     height: 520,
     minWidth: 320,
     minHeight: 420,
+    maxWidth: 480,
+    maxHeight: 680,
     alwaysOnTop: true,
     skipTaskbar: true,
   },
-} satisfies Record<AppMode, Record<string, number | boolean>>;
+} satisfies Record<AppMode, Record<string, number | boolean | null>>;
 
 export async function applyWindowMode(mode: AppMode) {
   try {
@@ -30,11 +34,16 @@ export async function applyWindowMode(mode: AppMode) {
     await appWindow.setMinSize(
       new tauriWindow.LogicalSize(profile.minWidth as number, profile.minHeight as number),
     );
+    await appWindow.setMaxSize(
+      profile.maxWidth && profile.maxHeight
+        ? new tauriWindow.LogicalSize(profile.maxWidth as number, profile.maxHeight as number)
+        : null,
+    );
+    await appWindow.setResizable(true);
     await appWindow.setSize(new tauriWindow.LogicalSize(profile.width as number, profile.height as number));
     await appWindow.setAlwaysOnTop(profile.alwaysOnTop as boolean);
     await appWindow.setSkipTaskbar(profile.skipTaskbar as boolean);
   } catch {
-    // Implemented Tauri behavior: resize, min-size, always-on-top, skip-taskbar.
-    // Fallback: browser preview or restricted window permissions still keep UI mode switching usable.
+    // Browser preview or restricted Tauri permissions still keep the UI mode switch usable.
   }
 }

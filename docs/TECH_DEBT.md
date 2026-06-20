@@ -1,5 +1,13 @@
 # ToFinal Technical Debt
 
+## Phase 8 Widget Experiment Withdrawn
+
+- The dual-window transparent Widget Mode experiment has been removed from active code.
+- Current Desktop Pin Mode is the original single-window compact layout: QuickInput, up to five unfinished tasks, completion checkboxes, and one return-to-Normal control.
+- Removed active code paths include `WidgetCard`, `useWidgetController`, `windowHandoff`, `windowState`, `widgetGeometry`, the hidden `widget` Tauri window, and widget-specific CSS/tests.
+- Reason: the dual-window/transparent/strip-panel-rescue approach added too much desktop-window complexity for the current product value and created unstable behavior.
+- Legacy Phase 8B notes below are historical context only and no longer describe the active implementation.
+
 ## Known Issues
 
 - SQLite persistence is now implemented through an async repository boundary, but the store still writes full task snapshots after each mutation instead of row-level changes.
@@ -10,6 +18,7 @@
 - Visual styles are mostly tokenized, but a few component-level `color-mix(...)`, shadow, and status-color classes remain inline for local visual states.
 - App version in `package.json` and `tauri.conf.json` is still `0.1.0`; product baseline can be named v0.2 in docs/tagging even if package version has not yet been bumped.
 - There is no formal SQLite backup/export/recovery flow yet.
+- Desktop Pin Mode is intentionally basic. It is not a true desktop widget, WorkerW/Progman embed, tray surface, global shortcut surface, or edge dock.
 
 ## Current Risks
 
@@ -19,6 +28,62 @@
 - Advanced desktop features will expand Tauri permissions and increase platform-specific failure modes.
 - Image attachment import, copying, thumbnail preview, Lightbox preview, and delete UI now exist, but full orphan-file scanning/repair and backup policy are still not implemented.
 - Task App Binding MVP exists, but it is intentionally manual-only and does not scan installed apps, extract icons, track processes, or manage launch arguments.
+- Runtime window decoration changes are not used. The main window is configured with `decorations: false`, so frameless behavior is stable without runtime decoration toggling.
+- Desktop Pin Mode still relies on best-effort Tauri window size/topmost/taskbar calls; UI mode switching remains usable if these native calls fail.
+
+## Resolved By Phase 8B.7 Widget Dual-Window Handoff
+
+- Normal Mode and Widget Mode no longer share one native OS window for large-to-small geometry transitions.
+- Tauri configuration now defines static `main` and `widget` windows.
+- React routes by current window label, so the `main` window never renders `WidgetCard` and the `widget` window never renders the Normal Mode three-column shell.
+- Widget handoff shows/focuses the target window, emits an enter event, and hides the previous window after the handoff delay.
+- Returning to Normal Mode emits a task hydrate event so the hidden main-window Zustand store refreshes task changes written from the widget window.
+- Widget sizing remains bounded and single-shot; the large-window native resize flash is avoided by not resizing `main` into the widget shape.
+- SQLite schema, dependencies, Edge Dock, tray, global shortcut, AI, and MCP remained unchanged.
+
+## Resolved By Phase 8B.8 Widget Stability And Bounded Resize
+
+- Widget resize and surface sync no longer reapply saved widget position, preventing jumps back to the saved corner during resize adjustment.
+- Widget enter resets hidden Widget state to `strip`, preventing stale `panel` or half-expanded state from appearing after re-entry.
+- Widget resize supports bounded width and height: strip range is `280x56` to `380x140`, and panel range is `300x300` to `400x560`.
+- Legacy `tofinal.window.v1` widget sizes are clamped on load and save.
+- Widget CSS no longer animates width, height, translate, or scale, reducing transparent-window residual artifacts.
+- `useWidgetController` now owns Widget surface/frame/resize state so AppShell only coordinates app-level window handoff.
+- SQLite schema, dependencies, Edge Dock, tray, global shortcut, AI, and MCP remained unchanged.
+
+## Resolved By Phase 8B.4 Widget Interaction Closure
+
+- `applyWindowMode` now returns a verified result object instead of a blind fire-and-forget promise.
+- Widget Mode validates the actual Tauri outer window size after applying each widget surface.
+- If Widget sizing fails or returns a clearly mismatched actual size, AppShell enters a `rescue` surface instead of rendering a compact tag inside a large stale window.
+- `rescue` provides Restore Widget and Open Normal Mode controls.
+- `strip`, `panel`, and `rescue` all provide a path back to Normal Mode.
+- The earlier `dockedTag` recovery path was superseded by removing the unreliable count-only tag mode from the active state machine.
+- Widget-specific CSS no longer uses `border-radius: 999px`, avoiding the giant oval failure mode when transparent-window resizing is unreliable.
+- SQLite schema, dependencies, Edge Dock, tray, global shortcut, AI, and MCP remained unchanged.
+
+## Resolved By Phase 8B.5 Widget Drag And Size Constraints
+
+- The unreliable count-only `dockedTag` mode was removed from the active Widget state machine.
+- The strip surface now has a dedicated drag region instead of relying on action buttons for dragging.
+- Widget Mode now applies tight min/max size constraints for the strip and panel surfaces.
+- Widget Mode sets the main window always-on-top; Normal Mode clears always-on-top on return.
+- Normal Mode clears the Widget max-size constraint so the full app window can resize normally.
+- Added the required Tauri permissions for `setMaxSize` and `setResizable`.
+
+## Resolved By Phase 8B.6 Widget Edge Snap And Motion
+
+- Widget Mode now disables native window resizing with `setResizable(false)` so Windows edge Snap cannot enlarge the widget while dragging.
+- Widget strip and panel now support custom in-widget resizing within bounded ranges, without enabling native window resize handles.
+- Normal Mode restores `setResizable(true)` and clears Widget max-size constraints.
+- The strip surface now prioritizes the next task title over the app identity.
+- Strip and panel share a fixed two-slot control rail so expand/collapse controls do not jump when changing surfaces.
+- WidgetCard now uses one outer card container and no timeout-based rendered-surface mirror state.
+- Widget native window resizing now uses single-shot frame syncs instead of multiple programmatic `setSize` animation steps.
+- Normal-to-Widget and Widget-to-Normal transitions now use React-local staging plus CSS enter/exit animations, without reintroducing repeated native window resize animation.
+- Widget visual dimensions are driven by CSS variables, and resizing disables expensive transitions/backdrop intensity while the pointer is active.
+- Widget surface CSS motion uses non-linear easing and respects `prefers-reduced-motion: reduce`.
+- `tofinal.window.v1` now stores recent strip and panel widget sizes; SQLite schema remained unchanged.
 
 ## Resolved By Phase 3 SQLite
 
@@ -111,6 +176,40 @@
 - User task titles, notes, tags, attachment original names, and task app names are not automatically translated.
 - SQLite schema, task persistence, attachment metadata, screenshot files, and task app bindings were not changed.
 - No i18n dependency, AI, MCP, account system, or cloud sync was added.
+
+## Resolved By Phase 8B Widget Mode MVP
+
+- Desktop Pin Mode was redefined in the UI as Widget Mode.
+- Widget Mode now renders a dedicated `WidgetCard` instead of the Normal Mode three-column shell.
+- Widget Mode no longer renders the custom `WindowTitleBar`, DetailPanel, attachments, Screenshot Editor entry, Lightbox entry, task app bindings, Start Task controls, settings panel, search, priority editor, tags editor, or note editor.
+- Widget Mode supports a default strip, temporary panel quick-add, visible unfinished task count, up to three unfinished tasks in the panel, task completion, and one Open Normal Mode control.
+- Widget Mode reuses `taskStore`; quick-add and completion still use the existing task save queue and SQLite repository boundary.
+- Widget Mode reuses `preferencesStore`; current theme, resolved theme, and language continue to apply.
+- Window placement is persisted separately from preferences at localStorage key `tofinal.window.v1`.
+- SQLite schema was not changed.
+- No dependency, Edge Dock, system tray, global shortcut, WorkerW/Progman desktop hack, AI, or MCP was added.
+
+## Resolved By Phase 8B.2 Transparent Widget Surface
+
+- The main Tauri window is created with `transparent: true`.
+- Widget Mode root is transparent and no longer renders the normal app background.
+- Widget Mode defaults to a strip surface around `300x64`.
+- Clicking the strip opens a temporary panel surface around `320x260`.
+- Moving the Widget window to the top edge automatically switches it to a top-docked tag surface around `92x32`.
+- The tag surface shows only the unfinished task count and expands back to the strip when clicked.
+- Normal Mode continues to paint the full app background through `app-shell-bg`.
+- `html`, `body`, and `#root` do not provide the Normal Mode background.
+- No runtime transparent toggle, runtime decorations toggle, Edge Dock, tray, global shortcut, AI, MCP, dependency, or SQLite schema change was added.
+
+## Must Fix Before Further Transparent Widget Polish
+
+- Validate Windows transparent-window click regions and background behavior on real hardware.
+- Validate whether outer card shadows are clipped by the transparent window bounds and whether extra transparent margin is worth the tradeoff.
+- Reconsider larger rounded widget corners only after real Windows QA proves transparent corners are clean across DPI settings.
+- Validate Normal Mode on a transparent Tauri window across light/dark/system themes.
+- Avoid runtime `transparent` toggling unless Tauri exposes a stable, permissioned API for the target platforms.
+- If runtime `setDecorations` is considered later, add `core:window:allow-set-decorations` only after manual QA proves it is stable. Phase 8B intentionally did not add this permission.
+- Consider an optional always-on-top preference later. Phase 8B intentionally does not force Widget Mode to stay on top.
 
 ## Must Fix Before Preferences Expansion
 

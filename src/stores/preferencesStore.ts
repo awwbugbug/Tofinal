@@ -3,6 +3,7 @@ import { createStore } from "zustand/vanilla";
 
 export type ThemePreference = "light" | "dark" | "system";
 export type LanguagePreference = "zh-CN" | "en-US";
+export type GlassLevelPreference = "subtle" | "standard" | "strong";
 export type ResolvedTheme = "light" | "dark";
 
 type PreferencesState = {
@@ -10,6 +11,8 @@ type PreferencesState = {
   resolvedTheme: ResolvedTheme;
   language: LanguagePreference;
   completionCelebrationsEnabled: boolean;
+  softGlassLevel: GlassLevelPreference;
+  highlightGlassLevel: GlassLevelPreference;
   initialized: boolean;
 };
 
@@ -18,6 +21,8 @@ type PreferencesActions = {
   setTheme: (theme: ThemePreference) => void;
   setLanguage: (language: LanguagePreference) => void;
   setCompletionCelebrationsEnabled: (enabled: boolean) => void;
+  setSoftGlassLevel: (level: GlassLevelPreference) => void;
+  setHighlightGlassLevel: (level: GlassLevelPreference) => void;
   resetPreferences: () => void;
 };
 
@@ -28,6 +33,7 @@ export const PREFERENCES_STORAGE_KEY = "tofinal.preferences.v1";
 const DEFAULT_THEME: ThemePreference = "system";
 const DEFAULT_LANGUAGE: LanguagePreference = "zh-CN";
 const DEFAULT_COMPLETION_CELEBRATIONS_ENABLED = true;
+const DEFAULT_GLASS_LEVEL: GlassLevelPreference = "standard";
 
 const isThemePreference = (value: unknown): value is ThemePreference =>
   value === "light" || value === "dark" || value === "system";
@@ -35,11 +41,16 @@ const isThemePreference = (value: unknown): value is ThemePreference =>
 const isLanguagePreference = (value: unknown): value is LanguagePreference =>
   value === "zh-CN" || value === "en-US";
 
+const isGlassLevelPreference = (value: unknown): value is GlassLevelPreference =>
+  value === "subtle" || value === "standard" || value === "strong";
+
 const initialState = (): PreferencesState => ({
   theme: DEFAULT_THEME,
   resolvedTheme: "light",
   language: DEFAULT_LANGUAGE,
   completionCelebrationsEnabled: DEFAULT_COMPLETION_CELEBRATIONS_ENABLED,
+  softGlassLevel: DEFAULT_GLASS_LEVEL,
+  highlightGlassLevel: DEFAULT_GLASS_LEVEL,
   initialized: false,
 });
 
@@ -55,15 +66,25 @@ const getStorage = () => {
   }
 };
 
-const readPersistedPreferences = (): Pick<PreferencesState, "theme" | "language" | "completionCelebrationsEnabled"> => {
+const defaultPersistedPreferences = (): Pick<
+  PreferencesState,
+  "theme" | "language" | "completionCelebrationsEnabled" | "softGlassLevel" | "highlightGlassLevel"
+> => ({
+  theme: DEFAULT_THEME,
+  language: DEFAULT_LANGUAGE,
+  completionCelebrationsEnabled: DEFAULT_COMPLETION_CELEBRATIONS_ENABLED,
+  softGlassLevel: DEFAULT_GLASS_LEVEL,
+  highlightGlassLevel: DEFAULT_GLASS_LEVEL,
+});
+
+const readPersistedPreferences = (): Pick<
+  PreferencesState,
+  "theme" | "language" | "completionCelebrationsEnabled" | "softGlassLevel" | "highlightGlassLevel"
+> => {
   try {
     const raw = getStorage()?.getItem(PREFERENCES_STORAGE_KEY);
     if (!raw) {
-      return {
-        theme: DEFAULT_THEME,
-        language: DEFAULT_LANGUAGE,
-        completionCelebrationsEnabled: DEFAULT_COMPLETION_CELEBRATIONS_ENABLED,
-      };
+      return defaultPersistedPreferences();
     }
 
     const parsed = JSON.parse(raw) as {
@@ -71,13 +92,11 @@ const readPersistedPreferences = (): Pick<PreferencesState, "theme" | "language"
       theme?: unknown;
       language?: unknown;
       completionCelebrationsEnabled?: unknown;
+      softGlassLevel?: unknown;
+      highlightGlassLevel?: unknown;
     };
     if (!isThemePreference(parsed.theme) || !isLanguagePreference(parsed.language)) {
-      return {
-        theme: DEFAULT_THEME,
-        language: DEFAULT_LANGUAGE,
-        completionCelebrationsEnabled: DEFAULT_COMPLETION_CELEBRATIONS_ENABLED,
-      };
+      return defaultPersistedPreferences();
     }
 
     if (parsed.version === 1) {
@@ -85,6 +104,8 @@ const readPersistedPreferences = (): Pick<PreferencesState, "theme" | "language"
         theme: parsed.theme,
         language: parsed.language,
         completionCelebrationsEnabled: DEFAULT_COMPLETION_CELEBRATIONS_ENABLED,
+        softGlassLevel: DEFAULT_GLASS_LEVEL,
+        highlightGlassLevel: DEFAULT_GLASS_LEVEL,
       };
     }
 
@@ -93,20 +114,29 @@ const readPersistedPreferences = (): Pick<PreferencesState, "theme" | "language"
         theme: parsed.theme,
         language: parsed.language,
         completionCelebrationsEnabled: parsed.completionCelebrationsEnabled,
+        softGlassLevel: DEFAULT_GLASS_LEVEL,
+        highlightGlassLevel: DEFAULT_GLASS_LEVEL,
       };
     }
 
-    return {
-      theme: DEFAULT_THEME,
-      language: DEFAULT_LANGUAGE,
-      completionCelebrationsEnabled: DEFAULT_COMPLETION_CELEBRATIONS_ENABLED,
-    };
+    if (
+      parsed.version === 3 &&
+      typeof parsed.completionCelebrationsEnabled === "boolean" &&
+      isGlassLevelPreference(parsed.softGlassLevel) &&
+      isGlassLevelPreference(parsed.highlightGlassLevel)
+    ) {
+      return {
+        theme: parsed.theme,
+        language: parsed.language,
+        completionCelebrationsEnabled: parsed.completionCelebrationsEnabled,
+        softGlassLevel: parsed.softGlassLevel,
+        highlightGlassLevel: parsed.highlightGlassLevel,
+      };
+    }
+
+    return defaultPersistedPreferences();
   } catch {
-    return {
-      theme: DEFAULT_THEME,
-      language: DEFAULT_LANGUAGE,
-      completionCelebrationsEnabled: DEFAULT_COMPLETION_CELEBRATIONS_ENABLED,
-    };
+    return defaultPersistedPreferences();
   }
 };
 
@@ -114,11 +144,20 @@ const persistPreferences = (
   theme: ThemePreference,
   language: LanguagePreference,
   completionCelebrationsEnabled: boolean,
+  softGlassLevel: GlassLevelPreference,
+  highlightGlassLevel: GlassLevelPreference,
 ) => {
   try {
     getStorage()?.setItem(
       PREFERENCES_STORAGE_KEY,
-      JSON.stringify({ version: 2, theme, language, completionCelebrationsEnabled }),
+      JSON.stringify({
+        version: 3,
+        theme,
+        language,
+        completionCelebrationsEnabled,
+        softGlassLevel,
+        highlightGlassLevel,
+      }),
     );
   } catch {
     // Preferences are best-effort UI state; failed writes must not block the app.
@@ -148,6 +187,13 @@ const resolveTheme = (theme: ThemePreference): ResolvedTheme => {
 const applyTheme = (resolvedTheme: ResolvedTheme) => {
   if (typeof document !== "undefined") {
     document.documentElement.dataset.theme = resolvedTheme;
+  }
+};
+
+const applyGlassLevels = (softGlassLevel: GlassLevelPreference, highlightGlassLevel: GlassLevelPreference) => {
+  if (typeof document !== "undefined") {
+    document.documentElement.dataset.softGlass = softGlassLevel;
+    document.documentElement.dataset.highlightGlass = highlightGlassLevel;
   }
 };
 
@@ -197,12 +243,23 @@ const createPreferencesStoreState: StateCreator<PreferencesStore> = (set, get) =
     theme: ThemePreference,
     language: LanguagePreference,
     completionCelebrationsEnabled: boolean,
+    softGlassLevel: GlassLevelPreference,
+    highlightGlassLevel: GlassLevelPreference,
     persist: boolean,
   ) => {
     const resolvedTheme = resolveTheme(theme);
 
-    set({ theme, resolvedTheme, language, completionCelebrationsEnabled, initialized: true });
+    set({
+      theme,
+      resolvedTheme,
+      language,
+      completionCelebrationsEnabled,
+      softGlassLevel,
+      highlightGlassLevel,
+      initialized: true,
+    });
     applyTheme(resolvedTheme);
+    applyGlassLevels(softGlassLevel, highlightGlassLevel);
 
     if (theme === "system") {
       startSystemThemeListener();
@@ -211,7 +268,7 @@ const createPreferencesStoreState: StateCreator<PreferencesStore> = (set, get) =
     }
 
     if (persist) {
-      persistPreferences(theme, language, completionCelebrationsEnabled);
+      persistPreferences(theme, language, completionCelebrationsEnabled, softGlassLevel, highlightGlassLevel);
     }
   };
 
@@ -219,19 +276,74 @@ const createPreferencesStoreState: StateCreator<PreferencesStore> = (set, get) =
     ...initialState(),
     loadPreferences: () => {
       const next = readPersistedPreferences();
-      commitPreferences(next.theme, next.language, next.completionCelebrationsEnabled, false);
+      commitPreferences(
+        next.theme,
+        next.language,
+        next.completionCelebrationsEnabled,
+        next.softGlassLevel,
+        next.highlightGlassLevel,
+        false,
+      );
     },
     setTheme: (theme) => {
-      commitPreferences(theme, get().language, get().completionCelebrationsEnabled, true);
+      commitPreferences(
+        theme,
+        get().language,
+        get().completionCelebrationsEnabled,
+        get().softGlassLevel,
+        get().highlightGlassLevel,
+        true,
+      );
     },
     setLanguage: (language) => {
-      commitPreferences(get().theme, language, get().completionCelebrationsEnabled, true);
+      commitPreferences(
+        get().theme,
+        language,
+        get().completionCelebrationsEnabled,
+        get().softGlassLevel,
+        get().highlightGlassLevel,
+        true,
+      );
     },
     setCompletionCelebrationsEnabled: (completionCelebrationsEnabled) => {
-      commitPreferences(get().theme, get().language, completionCelebrationsEnabled, true);
+      commitPreferences(
+        get().theme,
+        get().language,
+        completionCelebrationsEnabled,
+        get().softGlassLevel,
+        get().highlightGlassLevel,
+        true,
+      );
+    },
+    setSoftGlassLevel: (softGlassLevel) => {
+      commitPreferences(
+        get().theme,
+        get().language,
+        get().completionCelebrationsEnabled,
+        softGlassLevel,
+        get().highlightGlassLevel,
+        true,
+      );
+    },
+    setHighlightGlassLevel: (highlightGlassLevel) => {
+      commitPreferences(
+        get().theme,
+        get().language,
+        get().completionCelebrationsEnabled,
+        get().softGlassLevel,
+        highlightGlassLevel,
+        true,
+      );
     },
     resetPreferences: () => {
-      commitPreferences(DEFAULT_THEME, DEFAULT_LANGUAGE, DEFAULT_COMPLETION_CELEBRATIONS_ENABLED, true);
+      commitPreferences(
+        DEFAULT_THEME,
+        DEFAULT_LANGUAGE,
+        DEFAULT_COMPLETION_CELEBRATIONS_ENABLED,
+        DEFAULT_GLASS_LEVEL,
+        DEFAULT_GLASS_LEVEL,
+        true,
+      );
     },
   };
 };
@@ -244,4 +356,6 @@ export const usePreferencesStore: UseBoundStore<StoreApi<PreferencesStore>> =
 export const resetPreferencesStore = () => {
   usePreferencesStore.setState(initialState());
   document.documentElement.removeAttribute("data-theme");
+  document.documentElement.removeAttribute("data-soft-glass");
+  document.documentElement.removeAttribute("data-highlight-glass");
 };

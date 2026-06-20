@@ -15,7 +15,7 @@ export function WindowTitleBar({ mode }: WindowTitleBarProps) {
 
   return (
     <header
-      className="app-chrome flex h-11 shrink-0 items-center justify-between border-b px-3"
+      className="app-chrome flex h-12 shrink-0 items-center justify-between overflow-visible border-b px-3"
       data-testid="window-title-bar"
       onMouseDown={() => {
         void startWindowDrag();
@@ -28,23 +28,36 @@ export function WindowTitleBar({ mode }: WindowTitleBarProps) {
       </div>
 
       <div
-        className="flex items-center gap-1"
+        className="button-halo-safe flex items-center gap-1 overflow-visible"
         onMouseDown={(event) => {
           event.stopPropagation();
         }}
       >
-        <Button aria-label={t("window.minimize")} onClick={() => void minimizeWindow()} size="icon" variant="ghost">
+        <Button
+          aria-label={t("window.minimize")}
+          edgeSafe
+          onClick={() => void minimizeWindow()}
+          size="icon"
+          variant="ghost"
+        >
           <Minus className="h-4 w-4" />
         </Button>
         <Button
           aria-label={t("window.maximizeRestore")}
+          edgeSafe
           onClick={() => void toggleMaximizeWindow()}
           size="icon"
           variant="ghost"
         >
           <Square className="h-3.5 w-3.5" />
         </Button>
-        <Button aria-label={t("window.close")} onClick={() => void closeWindow()} size="icon" variant="ghost">
+        <Button
+          aria-label={t("window.close")}
+          edgeSafe
+          onClick={() => void closeWindow()}
+          size="icon"
+          variant="ghost"
+        >
           <X className="h-4 w-4" />
         </Button>
       </div>

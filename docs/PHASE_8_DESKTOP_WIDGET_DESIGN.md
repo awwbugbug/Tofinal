@@ -4,6 +4,112 @@ Date: 2026-06-16
 
 Current stable baseline: `v0.7b-preferences-baseline`.
 
+## Status: Withdrawn / Paused
+
+Date: 2026-06-19
+
+This design is no longer the active implementation direction.
+
+- The dual-window transparent Widget Mode experiment was removed.
+- Current behavior is the original single-window Desktop Pin Mode using `DesktopPinLayout`.
+- Do not implement further work from the Phase 8B dual-window/WidgetCard/strip-panel-rescue direction without a new design decision.
+- Future desktop-widget work should start from a fresh design that proves product value and Windows/Tauri reliability before adding runtime window complexity.
+
+## Phase 8B.8 Implementation Addendum: Stability First
+
+Phase 8B.8 prioritizes stable desktop behavior over complex motion.
+
+Current decisions:
+
+- Widget enter always resets to `strip`; stale hidden-window `panel` state is not reused.
+- Widget surface and resize synchronization preserves current window position after the widget is already open.
+- `openWidgetWindow` is the only path that applies saved widget position during mode entry.
+- Strip can be resized from `280x56` to `380x140`; horizontal growth is restrained and vertical growth is more flexible.
+- Panel can be resized from `300x300` to `400x560`.
+- Legacy saved widget sizes are clamped when reading/writing `tofinal.window.v1`.
+- Widget CSS avoids native/window width-height animation and uses lightweight strip/panel content entry motion.
+- `useWidgetController` owns Widget surface, frame, reset, and resize state.
+
+## Phase 8B.7 Implementation Addendum: Dual-Window Handoff
+
+Phase 8B.7 changes Widget Mode switching from a single-window native geometry morph to a two-window handoff.
+
+Current decisions:
+
+- Tauri statically configures a `main` Normal Mode window and a hidden `widget` Widget Mode window.
+- The React entry checks the current Tauri window label and renders only the matching shell.
+- `main` renders the full Normal Mode app and never renders the WidgetCard.
+- `widget` renders `WidgetCard` strip/panel/rescue and never renders the Normal Mode three-column shell.
+- Normal -> Widget no longer resizes the main OS window down to widget dimensions. It plays a main-window exit state, shows/focuses `widget`, emits widget enter, then hides `main`.
+- Widget -> Normal shows/focuses `main`, emits normal enter and task hydrate events, then hides `widget`.
+- The two windows have separate Zustand instances; SQLite remains the shared source of truth for task changes, and returning to Normal Mode forces a task hydrate.
+- `tofinal.window.v1` continues to store best-effort normal/widget bounds and strip/panel sizes.
+- Native window opacity animation is not implemented; current smoothing is content-level exit/enter plus avoiding the single-window resize flash.
+
+## Phase 8B.6 Implementation Addendum: Edge Snap, Layout Priority, And Motion
+
+Phase 8B.6 fixes the remaining Widget Mode interaction issues around Windows edge snap, unstable controls, strip information hierarchy, and abrupt surface changes.
+
+Current decisions:
+
+- Widget Mode disables native window resizing with `setResizable(false)` so dragging the widget to a Windows screen edge cannot trigger OS Snap enlargement.
+- Widget default dimensions are controlled by program surfaces, but strip and panel can be resized through the custom in-widget resize handle.
+- Strip resize range is `280x56` to `380x140`; panel resize range is `300x300` to `400x560`; rescue remains fixed at `320x104`.
+- Normal Mode restores `setResizable(true)`, clears max-size constraints, and clears always-on-top.
+- Widget Mode remains always-on-top.
+- The `strip` surface is task-first: the primary line is the next unfinished task title or an empty state, and the secondary line carries `ToFinal / Today` plus unfinished count.
+- `strip` and `panel` use the same two-slot control rail so the expand/collapse control remains in the same visual position.
+- The strip drag region is limited to the task-information area and does not cover action buttons.
+- Surface entry uses CSS-only non-linear motion with `cubic-bezier(0.22, 1, 0.36, 1)` and respects `prefers-reduced-motion: reduce`.
+
+Performance and resize correction:
+
+- WidgetCard no longer keeps a separate rendered surface with timeout-based exit/enter state.
+- The Widget uses one outer card container; strip/panel content changes inside it while CSS variables drive width and height transitions.
+- Tauri widget resizing no longer animates through repeated `setSize` calls. `applyWindowMode` receives an explicit frame and performs a single native size sync.
+- The custom resize handle updates React/CSS dimensions immediately, sends throttled current-window size previews during drag, and syncs the final verified native size on pointer release.
+- `tofinal.window.v1` stores recent strip and panel sizes alongside window position, without changing SQLite schema.
+
+## Phase 8B.4 Implementation Addendum: Recoverable Widget State Machine
+
+Phase 8B.4 changes the immediate priority from visual roundness to interaction closure and safe recovery.
+
+Current Widget surfaces:
+
+- `strip`: default entry, around `300x64`, with unfinished count, next-task summary, panel entry, add entry, and Open Normal Mode.
+- `panel`: temporary action surface, around `320x340`, with quick-add, up to three open tasks, completion, return-to-strip, and Open Normal Mode.
+- `rescue`: safety surface, around `320x104`, rendered when the Tauri window API fails or actual size verification fails.
+- The previous count-only `dockedTag` surface is removed from the active implementation because the current Windows/Tauri transparent-window route did not make it reliable enough.
+
+State-machine rules:
+
+- AppShell must not assume a surface switch succeeded until `applyWindowMode` returns a successful verified result.
+- `applyWindowMode` returns target size, actual size, success flag, and failure reason.
+- If requested Widget size and actual Tauri outer size are clearly mismatched, AppShell must render `rescue`.
+- `rescue` must always provide Restore Widget and Open Normal Mode controls.
+- `strip`, `panel`, and `rescue` must always provide a path back to Normal Mode.
+- Restore clicks must not be bound to `startWindowDrag()` on mouse down.
+- `strip` must provide a dedicated drag region that is separate from action buttons.
+- Widget Mode must set the window always-on-top; Normal Mode must clear it.
+- Widget Mode must apply tight min/max size constraints for `strip` and `panel`.
+
+Visual safety fallback:
+
+- Widget-specific CSS must not use `border-radius: 999px`.
+- Current Widget surfaces use small-radius rectangular glass fallback surfaces.
+- Larger pill/capsule corners should not return until real Windows/Tauri QA proves transparent corners and size transitions are reliable across DPI settings.
+
+## Phase 8B.3 Implementation Addendum: Low-Interruption Strip Widget
+
+The current Widget Mode implementation direction is:
+
+- Default surface: `strip`, around `300x64`, shown as a low-interruption iOS-style glass task capsule.
+- Temporary action surface: `panel`, around `320x260`, opened from the strip for quick-add and completing up to three open tasks.
+- Count-only top auto-shrink is no longer implemented in the active MVP because it was not reliable on the current Windows/Tauri route.
+- This is not full Edge Dock Mode: left/right/bottom docking, tray behavior, global shortcuts, and desktop-layer integration remain out of scope.
+
+The implementation must continue to reuse the existing task store, preferences, theme, language, transparent frameless main window, and localStorage window-state persistence. It must not change SQLite schema or add dependencies.
+
 Phase 8A is design-only. It defines a new product direction for the current Desktop Pin Mode and prepares the implementation plan for Phase 8B. It must not change runtime code, UI, Tauri configuration, SQLite schema, dependencies, MCP, AI, system tray behavior, global shortcuts, or Edge Dock auto-hide behavior.
 
 ## 1. Current Problem Diagnosis

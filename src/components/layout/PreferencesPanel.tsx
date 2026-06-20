@@ -4,7 +4,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n/useI18n";
-import { usePreferencesStore, type LanguagePreference, type ThemePreference } from "@/stores/preferencesStore";
+import {
+  usePreferencesStore,
+  type GlassLevelPreference,
+  type LanguagePreference,
+  type ThemePreference,
+} from "@/stores/preferencesStore";
 
 type PreferencesPanelProps = {
   open: boolean;
@@ -22,14 +27,24 @@ const languageOptions: Array<{ value: LanguagePreference; labelKey: string }> = 
   { value: "en-US", labelKey: "settings.languageEnglish" },
 ];
 
+const glassLevelOptions: Array<{ value: GlassLevelPreference; labelKey: string }> = [
+  { value: "subtle", labelKey: "settings.glassSubtle" },
+  { value: "standard", labelKey: "settings.glassStandard" },
+  { value: "strong", labelKey: "settings.glassStrong" },
+];
+
 export function PreferencesPanel({ onClose, open }: PreferencesPanelProps) {
   const { t } = useI18n();
   const theme = usePreferencesStore((state) => state.theme);
   const language = usePreferencesStore((state) => state.language);
   const completionCelebrationsEnabled = usePreferencesStore((state) => state.completionCelebrationsEnabled);
+  const softGlassLevel = usePreferencesStore((state) => state.softGlassLevel);
+  const highlightGlassLevel = usePreferencesStore((state) => state.highlightGlassLevel);
   const setTheme = usePreferencesStore((state) => state.setTheme);
   const setLanguage = usePreferencesStore((state) => state.setLanguage);
   const setCompletionCelebrationsEnabled = usePreferencesStore((state) => state.setCompletionCelebrationsEnabled);
+  const setSoftGlassLevel = usePreferencesStore((state) => state.setSoftGlassLevel);
+  const setHighlightGlassLevel = usePreferencesStore((state) => state.setHighlightGlassLevel);
   const resetPreferences = usePreferencesStore((state) => state.resetPreferences);
 
   if (!open) {
@@ -52,7 +67,14 @@ export function PreferencesPanel({ onClose, open }: PreferencesPanelProps) {
             </div>
             <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">{t("settings.description")}</p>
           </div>
-          <Button aria-label={t("settings.close")} onClick={onClose} size="icon" type="button" variant="ghost">
+          <Button
+            aria-label={t("settings.close")}
+            edgeSafe
+            onClick={onClose}
+            size="icon"
+            type="button"
+            variant="ghost"
+          >
             <X className="h-4 w-4" />
           </Button>
         </header>
@@ -69,12 +91,7 @@ export function PreferencesPanel({ onClose, open }: PreferencesPanelProps) {
                 return (
                   <button
                     aria-pressed={selected}
-                    className={cn(
-                      "h-9 rounded-[16px] border px-2 text-xs font-medium transition-colors",
-                      selected
-                        ? "border-[color-mix(in_srgb,var(--accent)_44%,var(--border-medium))] bg-[var(--accent)] text-white"
-                        : "border-[var(--border-soft)] bg-[var(--surface-field)] text-[var(--text-muted)] hover:bg-[var(--accent-surface)] hover:text-[var(--accent-hover)]",
-                    )}
+                    className={cn("preferences-choice", selected && "glass-soft preferences-choice-selected")}
                     key={option.value}
                     onClick={() => setTheme(option.value)}
                     type="button"
@@ -97,12 +114,7 @@ export function PreferencesPanel({ onClose, open }: PreferencesPanelProps) {
                 return (
                   <button
                     aria-pressed={selected}
-                    className={cn(
-                      "h-9 rounded-[16px] border px-2 text-xs font-medium transition-colors",
-                      selected
-                        ? "border-[color-mix(in_srgb,var(--accent)_44%,var(--border-medium))] bg-[var(--accent)] text-white"
-                        : "border-[var(--border-soft)] bg-[var(--surface-field)] text-[var(--text-muted)] hover:bg-[var(--accent-surface)] hover:text-[var(--accent-hover)]",
-                    )}
+                    className={cn("preferences-choice", selected && "glass-soft preferences-choice-selected")}
                     key={option.value}
                     onClick={() => setLanguage(option.value)}
                     type="button"
@@ -111,6 +123,56 @@ export function PreferencesPanel({ onClose, open }: PreferencesPanelProps) {
                   </button>
                 );
               })}
+            </div>
+          </section>
+
+          <section aria-labelledby="preferences-glass-label" className="space-y-3">
+            <div className="text-xs font-medium uppercase text-[var(--text-faint)]" id="preferences-glass-label">
+              {t("settings.glass")}
+            </div>
+            <div className="space-y-3 rounded-[20px] border border-[var(--border-soft)] bg-[var(--surface-field)] p-3">
+              <div className="space-y-2">
+                <div className="text-xs font-medium text-[var(--text-muted)]">{t("settings.softGlass")}</div>
+                <div className="grid grid-cols-3 gap-2">
+                  {glassLevelOptions.map((option) => {
+                    const selected = softGlassLevel === option.value;
+
+                    return (
+                      <button
+                        aria-label={`${t("settings.softGlass")} ${t(option.labelKey)}`}
+                        aria-pressed={selected}
+                        className={cn("preferences-choice", selected && "glass-soft preferences-choice-selected")}
+                        key={option.value}
+                        onClick={() => setSoftGlassLevel(option.value)}
+                        type="button"
+                      >
+                        {t(option.labelKey)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="text-xs font-medium text-[var(--text-muted)]">{t("settings.buttonGlass")}</div>
+                <div className="grid grid-cols-3 gap-2">
+                  {glassLevelOptions.map((option) => {
+                    const selected = highlightGlassLevel === option.value;
+
+                    return (
+                      <button
+                        aria-label={`${t("settings.buttonGlass")} ${t(option.labelKey)}`}
+                        aria-pressed={selected}
+                        className={cn("preferences-choice", selected && "glass-soft preferences-choice-selected")}
+                        key={option.value}
+                        onClick={() => setHighlightGlassLevel(option.value)}
+                        type="button"
+                      >
+                        {t(option.labelKey)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </section>
 
@@ -137,12 +199,9 @@ export function PreferencesPanel({ onClose, open }: PreferencesPanelProps) {
           </section>
         </div>
 
-        <footer className="mt-6 flex justify-between gap-2">
+        <footer className="mt-6 flex justify-start">
           <Button onClick={resetPreferences} type="button" variant="secondary">
             {t("settings.reset")}
-          </Button>
-          <Button onClick={onClose} type="button">
-            {t("settings.close")}
           </Button>
         </footer>
       </section>

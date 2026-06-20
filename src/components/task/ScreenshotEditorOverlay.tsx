@@ -254,7 +254,8 @@ export function ScreenshotEditorOverlay({
           </div>
           <Button
             aria-label={t("screenshot.cancelEditor")}
-            className="bg-white/12 text-white hover:bg-white/20 hover:text-white"
+            className="overlay-edge-icon-button"
+            edgeSafe
             onClick={requestCancel}
             size="icon"
             type="button"

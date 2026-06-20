@@ -2,6 +2,341 @@
 
 Date: 2026-06-09
 
+---
+
+# Desktop Pin Mode Rollback Addendum
+
+Date: 2026-06-19
+
+## 1. Current Decision
+
+- The Phase 8 dual-window Widget Mode experiment has been removed from active code.
+- The app is back to the original single-window Desktop Pin Mode.
+- Desktop Pin Mode uses `taskStore.mode === "pin"` and renders `DesktopPinLayout` in the same Tauri `main` window.
+- The hidden transparent `widget` window, `WidgetCard`, strip/panel/rescue surfaces, custom widget resize, handoff events, and widget window-state persistence were removed.
+
+## 2. Current Desktop Pin Capability
+
+- QuickInput adds tasks through the existing task store and SQLite save queue.
+- Up to five unfinished tasks are shown, with pinned tasks first.
+- Completion checkboxes work and state is shared when returning to Normal Mode.
+- Return to Normal Mode uses the same window and does not hydrate through a second hidden window.
+- Desktop Pin Mode intentionally does not show DetailPanel, attachments, Screenshot Editor, Lightbox, task app bindings, Start Task, settings, search, or task editing controls.
+
+## 3. Configuration Cleanup
+
+- `src-tauri/tauri.conf.json` now defines only the `main` window.
+- `src-tauri/capabilities/default.json` now scopes permissions only to `main`.
+- Removed Widget-only permissions: get-all-windows, set-position, set-resizable, set-max-size.
+- Kept current feature permissions: window size/min-size/topmost/taskbar for mode switching, show/hide/focus for screenshot capture, plus existing dialog/fs/sql/opener permissions.
+
+## 4. Verification
+
+- Targeted rollback regression: `npm test -- --run src/app/App.test.tsx src/lib/windowMode.test.ts` passed, 2 test files, 30 tests.
+- Frontend build: `npm run build` passed.
+- Full regression, Rust check, and desktop smoke verification are recorded in the final task report for this rollback.
+
+---
+
+# Phase 8B.8 Widget Stability And Bounded Resize Addendum
+
+Date: 2026-06-18
+
+## 1. Real Implemented Functions
+
+- Widget window size sync no longer re-applies saved `x/y` during resize or surface changes.
+- `openWidgetWindow` remains responsible for initial widget placement, show, focus, and always-on-top.
+- Widget enter now resets the hidden widget React instance back to a complete `strip` surface.
+- Widget -> Normal handoff first syncs the widget back to the stable strip frame before showing the main window.
+- Widget custom resize now adjusts bounded width and height; strip range is `280x56` to `380x140`, panel range is `300x300` to `400x560`.
+- Legacy localStorage widget sizes are clamped on load and save.
+- Widget CSS no longer animates native/window width, height, translate, or scale; strip/panel content uses lightweight opacity and clip-path entry motion.
+- AppShell now delegates Widget surface/frame/resize state to `useWidgetController`.
+
+## 2. Explicitly Not Implemented
+
+- No SQLite schema change.
+- No new dependency.
+- No Edge Dock, tray, global shortcut, AI, or MCP.
+- No commit or tag was created.
+
+## 3. Test Coverage Added Or Updated
+
+- Window handoff tests cover size sync without position changes.
+- Widget geometry and window-state tests cover bounded width/height and legacy size clamping.
+- App tests cover strip reset before returning to Normal, throttled drag-time native resize previews, and final verified resize sync without max-frame expansion.
+- CSS tests reject width/height and translate/scale widget animations.
+
+## 4. Verification Results
+
+- Targeted stability regression: `npm test -- --run src/lib/widgetGeometry.test.ts src/lib/windowState.test.ts src/lib/windowMode.test.ts src/lib/windowHandoff.test.ts src/app/App.test.tsx src/styles/widgetCss.test.ts` passed, 6 test files, 57 tests.
+- Full regression: `npm test` passed, 21 test files, 154 tests.
+- Frontend build: `npm run build` passed.
+- Rust verification: `cargo check` passed.
+- Desktop smoke verification: `npm run tauri dev` started Vite on port `1420` and launched `target\debug\tofinal.exe`.
+
+---
+
+# Phase 8B.7 Widget Dual-Window Handoff Addendum
+
+Date: 2026-06-18
+
+## 1. Real Implemented Functions
+
+- Tauri now defines two static windows: `main` for Normal Mode and `widget` for Widget Mode.
+- The `main` window is shown by default and remains the full resizable task app.
+- The `widget` window is hidden by default, transparent, frameless, always-on-top, and non-native-resizable.
+- React routes by current Tauri window label: `main` renders only Normal Mode; `widget` renders only `WidgetCard`.
+- Normal -> Widget handoff now plays a main-window exit state, shows/focuses the widget window, emits widget enter state, then hides `main`.
+- Widget -> Normal handoff now plays a widget exit state, shows/focuses `main`, emits normal enter and task hydrate events, then hides `widget`.
+- The previous single-window large-to-small native resize morph is no longer used for mode switching.
+- Widget quick-add and completion still write through the existing task store and SQLite save queue.
+- Returning to Normal Mode emits a hydrate event so the main-window store refreshes task data written while hidden.
+- `tofinal.window.v1` remains the localStorage key for normal/widget bounds and strip/panel sizes.
+
+## 2. Explicitly Not Implemented
+
+- No SQLite schema change.
+- No new dependency.
+- No runtime window creation.
+- No native opacity animation.
+- No system tray, global shortcut, Edge Dock, AI, or MCP.
+- No commit or tag was created.
+
+## 3. Test Coverage Added Or Updated
+
+- Added `src/lib/windowHandoff.test.ts` for static-window show/focus/hide handoff behavior.
+- App tests now verify `main` renders Normal Mode only and `widget` renders Widget Mode only.
+- Handoff tests verify mode switching calls the other window instead of rendering both shells in one window.
+- Regression tests still cover Widget quick-add, completion, preferences, Screenshot Editor, attachments, Lightbox, Task App Binding, Start Task, and save queue behavior.
+
+## 4. Verification Results
+
+- Targeted dual-window regression: `npm test -- --run src/lib/windowHandoff.test.ts src/app/App.test.tsx` passed, 2 test files, 34 tests.
+- Full regression: `npm test` passed, 21 test files, 148 tests.
+- `npm run build` passed.
+- `cargo check` passed.
+- `npm run tauri dev` restarted successfully with Vite on `http://localhost:1420/` and `target\debug\tofinal.exe` running.
+
+---
+
+# Phase 8B.6 Widget Edge Snap, Layout, And Motion Addendum
+
+Date: 2026-06-18
+
+## 1. Real Implemented Functions
+
+- Widget Mode now calls `setResizable(false)` while Normal Mode restores `setResizable(true)`.
+- Widget `strip` and `panel` surfaces use bounded min/max dimensions that match their custom resize ranges; `rescue` stays fixed-size.
+- Widget Mode remains always-on-top; Normal Mode clears always-on-top and max-size constraints.
+- Strip primary text now shows the next unfinished task title or an empty state instead of `ToFinal / Today`.
+- Strip secondary text shows `ToFinal / Today` plus unfinished count when tasks exist.
+- Strip and panel use a fixed two-slot control rail so expand/collapse controls keep a stable position.
+- WidgetCard now uses one outer container; strip/panel content is not mirrored through timeout-based exit/enter state.
+- Widget native sizing uses explicit single-shot frame syncs instead of repeated `setSize` animation steps.
+- Normal Mode and Widget Mode switching now uses React-local exit/enter staging plus CSS animations, so the current surface fades/scales out before the actual mode branch changes.
+- Widget visual sizing uses CSS variables with non-linear width/height transitions and reduced-motion support.
+- Widget strip and panel now support bounded custom resizing through an in-widget resize handle while native `setResizable(false)` remains active.
+- Widget resize state is persisted in `tofinal.window.v1` under strip/panel size entries; SQLite schema is unchanged.
+
+## 2. Explicitly Not Implemented
+
+- No SQLite schema change.
+- No new dependency.
+- No count-only tag mode was restored.
+- No full Edge Dock, system tray, global shortcut, AI, or MCP.
+- No commit or tag was created.
+
+## 3. Test Coverage Added Or Updated
+
+- Window mode tests cover Widget `setResizable(false)`, Normal `setResizable(true)`, Normal `setMaxSize(null)`, Widget always-on-top, and single-shot widget frame sizing.
+- WidgetCard tests cover task-first strip copy, secondary app/count metadata, stable outer container, separate drag region, resize handle, panel quick-add/list visibility, and rescue controls.
+- CSS tests cover the non-linear easing token and reduced-motion fallback.
+- CSS tests cover Normal/Widget mode switch enter/exit selectors and keyframes.
+- CSS tests cover CSS-variable sizing and resize-dragging transition suppression.
+- App tests cover Widget-only rendering, staged Normal/Widget mode switching, and Widget Mode regressions.
+
+## 4. Verification Results
+
+- Targeted regression: `npm test -- --run src/lib/widgetGeometry.test.ts src/lib/windowState.test.ts src/lib/windowMode.test.ts src/components/widget/WidgetCard.test.tsx src/styles/widgetCss.test.ts src/app/App.test.tsx` passed, 6 test files, 53 tests.
+- Targeted mode transition regression: `npm test -- --run src/app/App.test.tsx src/components/widget/WidgetCard.test.tsx src/styles/widgetCss.test.ts` passed, 3 test files, 41 tests.
+- Full regression: `npm test` passed, 20 test files, 144 tests.
+- `npm run build` passed.
+- `cargo check` passed.
+- `npm run tauri dev` was already running for this workspace with Vite on `http://localhost:1420/` and `target\debug\tofinal.exe`; it was not restarted to avoid interrupting the active validation window.
+
+# Phase 8B.4 Widget Interaction Closure And Safety Fallback Addendum
+
+Date: 2026-06-17
+
+## 0. Follow-Up Bugfix
+
+- Fixed a false-positive rescue state where normal Windows/Tauri `outerSize()` overhead could make a correctly small Widget strip look like a `size-mismatch`.
+- Widget size verification now uses surface-specific "clearly mismatched" limits instead of an 8px exact-match tolerance.
+- `strip` accepts small platform outer-size overhead such as `300x64` requested and about `320x104` reported.
+- The top auto-shrink count-only tag mode was removed because the current Windows/Tauri transparent-window route was not reliable enough for that interaction.
+- `strip` now has a dedicated drag region that calls the existing current-window drag wrapper.
+- Widget Mode now sets the window always-on-top while Normal Mode clears it.
+- `strip` and `panel` now apply tight min/max size ranges so the user can make only small adjustments instead of freely resizing the widget.
+- Normal Mode clears the Widget max-size constraint when returning from Widget Mode.
+- Clearly stale large-window sizes are still rejected, so the giant-oval failure path remains guarded.
+- Added a regression test for the strip overhead case.
+
+## 1. Real Implemented Functions
+
+- Widget Mode now treats window resizing as a verified operation instead of assuming success.
+- `applyWindowMode` returns a result object with requested target size, actual outer size, success flag, and failure reason.
+- `strip` and `panel` window sizes are verified after Tauri applies them.
+- If Tauri window APIs fail or the actual Widget window size is clearly mismatched, Widget Mode renders a `rescue` surface instead of drawing a giant tag inside the old large window.
+- `rescue` provides two explicit exits: restore the widget strip or open Normal Mode.
+- `strip` and `panel` both retain an explicit Open Normal Mode control.
+- Widget CSS no longer uses `border-radius: 999px` in the widget block, avoiding the giant oval failure mode when transparent-window resizing is unreliable.
+- Widget surfaces now use small-radius rectangular glass fallback surfaces until Windows/Tauri transparent corners are manually proven reliable.
+
+## 2. Explicitly Not Implemented
+
+- No SQLite schema change.
+- No new dependency.
+- No full Edge Dock.
+- No system tray.
+- No global shortcut.
+- No AI.
+- No MCP.
+- No commit or tag was created.
+
+## 3. Test Coverage Added Or Updated
+
+- Size mismatch returns a failed `size-mismatch` result with actual and target sizes.
+- AppShell renders `rescue` when Widget window sizing cannot be verified.
+- `rescue` exposes restore-widget and Open Normal Mode controls.
+- Widget Mode applies tight size constraints and always-on-top behavior.
+- The strip surface exposes a dedicated drag region.
+- Widget CSS safety test rejects `999px` radii inside the widget-specific CSS block.
+
+## 4. Verification Results
+
+- Targeted regression: `npm test -- --run src/lib/windowMode.test.ts src/components/widget/WidgetCard.test.tsx src/app/App.test.tsx src/styles/widgetCss.test.ts` passed, 4 test files, 38 tests.
+- Full regression: `npm test` passed, 19 test files, 131 tests.
+- `npm run build` passed.
+- `cargo check` passed.
+- `npm run tauri dev` launched Vite on `http://localhost:1420/` and started `target\debug\tofinal.exe`; validation processes were stopped intentionally after startup verification.
+
+## 5. Follow-Up Verification Results
+
+- Widget drag/size/topmost regression: `npm test -- --run src/lib/windowMode.test.ts src/components/widget/WidgetCard.test.tsx` passed, 2 test files, 9 tests.
+- Targeted app/style regression: `npm test -- --run src/lib/windowMode.test.ts src/components/widget/WidgetCard.test.tsx src/app/App.test.tsx src/styles/widgetCss.test.ts` passed, 4 test files, 39 tests.
+- Full regression: `npm test` passed, 19 test files, 132 tests.
+- `npm run build` passed.
+- `cargo check` passed.
+- `npm run tauri dev` launched Vite on `http://localhost:1420/` and started `target\debug\tofinal.exe`; validation processes were stopped intentionally after startup verification.
+
+---
+
+# Phase 8B.2 Transparent Widget Surface Addendum
+
+Date: 2026-06-16
+
+## 1. Real Implemented Functions
+
+- The main Tauri window is now created with `transparent: true`.
+- The main window remains frameless with `decorations: false`.
+- Normal Mode still paints its full app background through React/CSS wrappers.
+- Widget Mode root is transparent and does not render `app-shell-bg`.
+- Widget Mode visually renders only the rounded `WidgetCard` surface.
+- Widget Mode now defaults to a low-interruption strip surface around `300x64`.
+- Clicking the strip opens a temporary panel surface around `320x260`.
+- When the Widget window is moved to the top edge of the screen, it automatically switches to a top-docked tag surface around `92x32`.
+- The strip surface shows unfinished count, ToFinal/Today identity, the next open task, an add entry, and one Open Normal Mode control.
+- The panel surface shows quick-add, up to three unfinished tasks, completion checkboxes, a strip-return control, and one Open Normal Mode control.
+- The docked tag surface shows only the unfinished task count and expands back to the strip when clicked.
+- The previous manual compact/expanded controls and duplicate Exit Widget control were removed.
+
+## 2. Transparent Window Audit Result
+
+- `transparent: true` is safe enough for the main-window route because Normal Mode no longer depends on the Tauri/webview default background.
+- `html`, `body`, and `#root` no longer need to paint the Normal Mode background.
+- Screenshot hide/show remains unchanged because it uses current-window hide/show/focus APIs, not background painting.
+- Dragging remains unchanged because WidgetCard and WindowTitleBar continue to call the existing `startDragging()` wrapper.
+- Window controls remain unchanged in Normal Mode and Widget Mode controls are rendered inside the card.
+
+## 3. Explicitly Not Implemented
+
+- No SQLite schema change.
+- No new dependency.
+- No full Edge Dock; only top-edge auto-shrink for Widget Mode.
+- No system tray.
+- No global shortcut.
+- No WorkerW / Progman / Windows desktop-layer hack.
+- No AI.
+- No MCP.
+- No runtime transparent toggle.
+- No runtime decorations toggle.
+
+## 4. Test Coverage Added Or Updated
+
+- Widget Mode root does not render the normal app background.
+- WidgetCard still renders inside Widget Mode.
+- Normal Mode still renders the full app background.
+- Widget strip surface renders by default.
+- Widget panel surface renders after user action.
+- Top-docked tag surface renders as the auto-shrink state.
+- Theme and language preferences still apply in Widget Mode.
+- Existing Screenshot Editor, image attachment, Lightbox, task app binding, Start Task, task CRUD, and save queue app tests remain in the regression suite.
+
+---
+
+# Phase 8B Widget Mode MVP Addendum
+
+Date: 2026-06-16
+
+## 1. Real Implemented Functions
+
+- Desktop Pin Mode is now presented as Widget Mode in user-facing UI.
+- Widget Mode renders `WidgetCard` only, without the Normal Mode three-column layout.
+- Widget Mode does not render the custom `WindowTitleBar`, DetailPanel, attachments, Screenshot Editor controls, Lightbox entry, app bindings, Start Task controls, settings panel, search, note editor, priority editor, or tag editor.
+- Widget Mode shows `ToFinal`, Today identity, unfinished task count, next-task strip summary, panel quick-add, up to three unfinished tasks, completion checkboxes, and one Open Normal Mode control.
+- Quick-add in Widget Mode creates normal tasks through the existing `taskStore.addTask`.
+- Completing a task in Widget Mode uses the existing `taskStore.toggleTask` path and existing save queue.
+- Current theme and language preferences apply to Widget Mode through the existing preferences store and i18n hook.
+- Window state is persisted separately from preferences at localStorage key `tofinal.window.v1`.
+- Widget Mode restarts are intentionally safe: app startup still enters Normal Mode first.
+
+## 2. Tauri Window Capability Audit
+
+- `src-tauri/tauri.conf.json` already sets the main window to `"decorations": false`, so the app is already frameless.
+- `src-tauri/capabilities/default.json` already allowed size, min-size, always-on-top, skip-taskbar, drag, minimize, maximize/restore, close, hide/show, and focus.
+- Phase 8B added only `core:window:allow-set-position` so the existing main window can move between saved Normal Mode and Widget Mode bounds.
+- Tauri API types expose `setDecorations`, but Phase 8B did not add `allow-set-decorations` and does not toggle decorations at runtime.
+- Tauri window creation options include `transparent`; Phase 8B initially did not force runtime transparency, and Phase 8B.2 later enabled main-window `transparent: true`.
+
+## 3. Implementation Route
+
+- Adopted Option A safe fallback: reuse the current main Tauri window.
+- Widget Mode changes real window size/position and renders only `WidgetCard`.
+- Transparent background is handled by the Phase 8B.2 main-window transparent route; a separate widget window remains unnecessary for the MVP.
+- Separate widget window Option B was not used because the MVP can meet the product boundary without adding multi-window lifecycle risk.
+- Option C pseudo-widget was avoided: Widget Mode no longer shows a large Normal Mode background with a card inside.
+
+## 4. Explicitly Not Implemented
+
+- SQLite schema changes.
+- New dependencies.
+- Edge Dock auto-hide.
+- System tray.
+- Global shortcuts.
+- WorkerW / Progman / Windows desktop-layer hack.
+- AI.
+- MCP.
+- Transparent Tauri window.
+- Runtime decorations toggling.
+- Forced always-on-top.
+
+## 5. Test And Build Status
+
+- Added `src/lib/windowState.test.ts` for `tofinal.window.v1`, localStorage fallback, preference separation, and screen-bound clamping.
+- Updated `src/app/App.test.tsx` to cover Widget Mode rendering, WidgetCard-only layout, quick-add, completion, count updates, Open Normal Mode, preference regression, Screenshot Editor regression, image attachment regression, and task app binding / Start Task regression.
+- Full verification results for this addendum are recorded in the Phase 8B completion report for the implementation turn.
+
 ## 1. Real Implemented Functions
 
 - Tauri v2 desktop app starts through `npm run tauri dev` and reaches `target\debug\tofinal.exe`.

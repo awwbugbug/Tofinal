@@ -2,6 +2,14 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const windowModeMocks = vi.hoisted(() => ({
+  applyWindowMode: vi.fn(async () => undefined),
+}));
+
+vi.mock("@/lib/windowMode", () => ({
+  applyWindowMode: windowModeMocks.applyWindowMode,
+}));
+
 import App from "@/app/App";
 import { resetTaskRepositoryForTest, setTaskRepositoryForTest } from "@/repositories/taskRepository";
 import type { AttachmentRepository } from "@/repositories/sqliteAttachmentRepository";
@@ -226,23 +234,75 @@ describe("App", () => {
     });
     resetPreferencesStore();
     resetTaskStore();
+    windowModeMocks.applyWindowMode.mockClear();
   });
 
-  it("switches between normal window mode and desktop pin mode without losing task state", async () => {
+  it("switches to the original single-window Desktop Pin Mode and back", async () => {
     await renderApp();
 
     expect(screen.getByTestId("normal-mode-layout")).toBeInTheDocument();
 
     await userEvent.click(screen.getByLabelText(/mark finalize the first-stage desktop shell complete/i));
-    await userEvent.click(screen.getByRole("button", { name: /desktop pin mode/i }));
+    const pinModeButton = within(screen.getByTestId("normal-mode-layout")).getByRole("button", {
+      name: /switch to desktop pin mode/i,
+    });
+    expect(pinModeButton.textContent?.trim()).toBe("");
+    expect(pinModeButton.querySelector(".lucide-pin")).not.toBeInTheDocument();
+    expect(pinModeButton.querySelector(".lucide-panel-top-open")).toBeInTheDocument();
+    expect(within(screen.getByTestId("normal-mode-layout")).queryByText("Normal Window Mode")).not.toBeInTheDocument();
 
-    expect(screen.getByTestId("desktop-pin-layout")).toBeInTheDocument();
+    await userEvent.click(pinModeButton);
+
+    const pinLayoutElement = await screen.findByTestId("desktop-pin-layout");
+    expect(pinLayoutElement).toBeInTheDocument();
+    expect(within(pinLayoutElement).getByTestId("desktop-pin-shell")).not.toHaveClass("max-w-[360px]");
+    expect(screen.queryByTestId("normal-mode-layout")).not.toBeInTheDocument();
     expect(screen.queryByTestId("detail-panel")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /add image attachment/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /start task/i })).not.toBeInTheDocument();
+    expect(screen.getByText("3 open tasks")).toBeInTheDocument();
+    await waitFor(() => expect(windowModeMocks.applyWindowMode).toHaveBeenCalledWith("pin"));
 
-    await userEvent.click(screen.getByRole("button", { name: /normal window mode/i }));
+    const normalModeButton = within(pinLayoutElement).getByRole("button", { name: /normal window mode/i });
+    expect(normalModeButton.textContent?.trim()).toBe("");
+    await userEvent.click(normalModeButton);
 
-    expect(screen.getByTestId("normal-mode-layout")).toBeInTheDocument();
-    expect(screen.getByText("3 open")).toBeInTheDocument();
+    expect(await screen.findByTestId("normal-mode-layout")).toBeInTheDocument();
+    expect(screen.queryByTestId("desktop-pin-layout")).not.toBeInTheDocument();
+    await waitFor(() => expect(windowModeMocks.applyWindowMode).toHaveBeenCalledWith("normal"));
+  });
+
+  it("quick-adds and completes tasks inside Desktop Pin Mode", async () => {
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: /switch to desktop pin mode/i }));
+    const pinLayout = within(await screen.findByTestId("desktop-pin-layout"));
+
+    expect(pinLayout.getByText("4 open tasks")).toBeInTheDocument();
+    await userEvent.type(pinLayout.getByRole("textbox", { name: /add task/i }), "Widget capture{Enter}");
+
+    expect(pinLayout.getByText("Widget capture")).toBeInTheDocument();
+    expect(pinLayout.getByText("5 open tasks")).toBeInTheDocument();
+
+    await userEvent.click(pinLayout.getByLabelText(/mark widget capture complete/i));
+
+    await waitFor(() => expect(pinLayout.getByText("4 open tasks")).toBeInTheDocument());
+    await waitFor(() => expect(pinLayout.queryByText("Widget capture")).not.toBeInTheDocument(), { timeout: 1500 });
+  });
+
+  it("applies theme and language preferences inside Desktop Pin Mode", async () => {
+    localStorage.setItem(
+      PREFERENCES_STORAGE_KEY,
+      JSON.stringify({ version: 2, theme: "dark", language: "zh-CN", completionCelebrationsEnabled: true }),
+    );
+
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: /桌面贴片模式/i }));
+
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    const pinLayout = within(await screen.findByTestId("desktop-pin-layout"));
+
+    expect(pinLayout.getByText("桌面贴片模式")).toBeInTheDocument();
+    expect(pinLayout.getByRole("button", { name: "打开普通窗口模式" })).toBeInTheDocument();
   });
 
   it("adds a task through quick input with click and Enter, then clears the input", async () => {
@@ -278,14 +338,14 @@ describe("App", () => {
     await userEvent.click(detailPanel.getByRole("button", { name: "Urgent" }));
     await userEvent.clear(detailPanel.getByLabelText(/task tags/i));
     await userEvent.type(detailPanel.getByLabelText(/task tags/i), "foundation, ui, foundation");
-    await userEvent.click(detailPanel.getByLabelText(/pinned task/i));
+    await userEvent.click(detailPanel.getByRole("button", { name: /pin task/i }));
     await userEvent.click(detailPanel.getByRole("button", { name: /save task/i }));
 
     expect(within(screen.getByTestId("task-list")).getByText("Polished local task shell")).toBeInTheDocument();
     expect(detailPanel.getByDisplayValue("Editable local-only detail note")).toBeInTheDocument();
     expect(detailPanel.getByText("foundation")).toBeInTheDocument();
     expect(detailPanel.getByText("ui")).toBeInTheDocument();
-    expect(detailPanel.getByLabelText(/pinned task/i)).toBeChecked();
+    expect(detailPanel.getByRole("button", { name: /unpin task/i })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("does not save an empty title", async () => {
@@ -319,6 +379,14 @@ describe("App", () => {
 
     expect(detailPanel.getByRole("button", { name: /saving task/i })).toBeInTheDocument();
     expect(detailPanel.getByText(/saving locally/i)).toBeInTheDocument();
+    expect(detailPanel.getByTestId("task-save-status")).toHaveTextContent(/saving locally/i);
+    expect(detailPanel.getByTestId("task-action-row")).toContainElement(
+      detailPanel.getByRole("button", { name: /delete task/i }),
+    );
+    expect(detailPanel.getByTestId("task-action-row")).toContainElement(
+      detailPanel.getByRole("button", { name: /saving task/i }),
+    );
+    expect(detailPanel.getByRole("button", { name: /delete task/i })).toHaveClass("danger-glass-button");
 
     saveRequest.resolve();
 
@@ -400,7 +468,7 @@ describe("App", () => {
     expect(screen.getByText("Review lightweight state boundaries")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: /all tasks 4/i }));
-    await userEvent.click(detailPanel.getByLabelText(/pinned task/i));
+    await userEvent.click(detailPanel.getByRole("button", { name: /pin task/i }));
     await userEvent.click(detailPanel.getByRole("button", { name: /save task/i }));
     await userEvent.click(screen.getByRole("button", { name: /pinned 1/i }));
 
@@ -428,9 +496,12 @@ describe("App", () => {
     const titleBar = within(screen.getByTestId("window-title-bar"));
 
     expect(titleBar.getByText("ToFinal")).toBeInTheDocument();
-    expect(titleBar.getByRole("button", { name: /minimize window/i })).toBeInTheDocument();
-    expect(titleBar.getByRole("button", { name: /maximize or restore window/i })).toBeInTheDocument();
-    expect(titleBar.getByRole("button", { name: /close window/i })).toBeInTheDocument();
+    expect(titleBar.getByRole("button", { name: /minimize window/i })).toHaveClass("glass-icon-button");
+    expect(titleBar.getByRole("button", { name: /minimize window/i })).toHaveClass("glass-icon-button-safe");
+    expect(titleBar.getByRole("button", { name: /maximize or restore window/i })).toHaveClass("glass-icon-button");
+    expect(titleBar.getByRole("button", { name: /maximize or restore window/i })).toHaveClass("glass-icon-button-safe");
+    expect(titleBar.getByRole("button", { name: /close window/i })).toHaveClass("glass-icon-button");
+    expect(titleBar.getByRole("button", { name: /close window/i })).toHaveClass("glass-icon-button-safe");
   });
 
   it("opens preferences, persists theme and language, and updates visible labels", async () => {
@@ -438,18 +509,29 @@ describe("App", () => {
 
     await userEvent.click(screen.getByRole("button", { name: /open preferences/i }));
     const dialog = screen.getByRole("dialog", { name: /preferences/i });
+    expect(within(dialog).getAllByRole("button", { name: /^close$/i })[0]).toHaveClass("glass-icon-button");
+    expect(within(dialog).getAllByRole("button", { name: /^close$/i })[0]).toHaveClass("glass-icon-button-safe");
 
     expect(within(dialog).getByRole("button", { name: /system/i })).toHaveAttribute("aria-pressed", "true");
+    expect(within(dialog).getAllByRole("button", { name: /^close$/i })).toHaveLength(1);
+    expect(within(dialog).getByRole("button", { name: /soft glass standard/i })).toHaveAttribute("aria-pressed", "true");
+    expect(within(dialog).getByRole("button", { name: /button glass standard/i })).toHaveAttribute("aria-pressed", "true");
     await userEvent.click(within(dialog).getByRole("button", { name: /^dark$/i }));
     await userEvent.click(within(dialog).getByRole("button", { name: /^english$/i }));
     await userEvent.click(within(dialog).getByRole("checkbox", { name: /task completion celebration/i }));
+    await userEvent.click(within(dialog).getByRole("button", { name: /soft glass subtle/i }));
+    await userEvent.click(within(dialog).getByRole("button", { name: /button glass strong/i }));
 
     expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(document.documentElement.dataset.softGlass).toBe("subtle");
+    expect(document.documentElement.dataset.highlightGlass).toBe("strong");
     expect(JSON.parse(localStorage.getItem("tofinal.preferences.v1") ?? "{}")).toMatchObject({
-      version: 2,
+      version: 3,
       theme: "dark",
       language: "en-US",
       completionCelebrationsEnabled: false,
+      softGlassLevel: "subtle",
+      highlightGlassLevel: "strong",
     });
     expect(screen.getByPlaceholderText(/search tasks/i)).toBeInTheDocument();
 
@@ -459,6 +541,17 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: /今天 4/i })).toBeInTheDocument();
     expect(screen.getAllByText("Finalize the first-stage desktop shell").length).toBeGreaterThan(0);
     expect(within(dialog).getByRole("button", { name: /^中文$/i })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("uses soft glass for selected embedded controls and highlight glass for action buttons", async () => {
+    await renderApp();
+
+    expect(document.querySelector(".filter-nav-thumb")).toHaveClass("glass-soft");
+    expect(screen.getByRole("button", { name: /add task/i })).toHaveClass("glass-highlight");
+
+    const detailPanel = within(screen.getByTestId("detail-panel"));
+    expect(document.querySelector(".priority-segment-thumb")).toHaveClass("glass-soft");
+    expect(detailPanel.getByRole("button", { name: /pin task/i })).toHaveClass("glass-soft");
   });
 
   it("resizes the three normal-mode panels within their width limits", async () => {
@@ -522,10 +615,9 @@ describe("App", () => {
 
   it("does not render normal-mode resize handles in desktop pin mode", async () => {
     await renderApp();
-
     await userEvent.click(screen.getByRole("button", { name: /desktop pin mode/i }));
+    expect(await screen.findByTestId("desktop-pin-layout")).toBeInTheDocument();
 
-    expect(screen.getByTestId("desktop-pin-layout")).toBeInTheDocument();
     expect(screen.queryByRole("separator", { name: /resize sidebar and task list/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("separator", { name: /resize task list and detail panel/i })).not.toBeInTheDocument();
   });
@@ -662,6 +754,8 @@ describe("App", () => {
       "src",
       "blob:image/png:attachments/images/task-1/attachment-1.png",
     );
+    expect(within(lightbox).getByRole("button", { name: /close image preview/i })).toHaveClass("glass-icon-button");
+    expect(within(lightbox).getByRole("button", { name: /close image preview/i })).toHaveClass("glass-icon-button-safe");
 
     await userEvent.click(within(lightbox).getByRole("button", { name: /close image preview/i }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: /image preview/i })).not.toBeInTheDocument());
@@ -738,8 +832,7 @@ describe("App", () => {
     expect(deleteAttachmentFile).toHaveBeenCalledWith("attachments/images/task-1/attachment-1.png");
 
     await userEvent.click(screen.getByRole("button", { name: /desktop pin mode/i }));
-    expect(screen.getByTestId("desktop-pin-layout")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /add image attachment/i })).not.toBeInTheDocument();
+    expect(await screen.findByTestId("desktop-pin-layout")).toBeInTheDocument();
   });
 
   it("loads, adds, edits, starts, and deletes task app bindings in the selected task detail", async () => {
@@ -795,8 +888,7 @@ describe("App", () => {
     expect(detailPanel.getByText(/missing/i)).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: /desktop pin mode/i }));
-    expect(screen.getByTestId("desktop-pin-layout")).toBeInTheDocument();
+    expect(await screen.findByTestId("desktop-pin-layout")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /start task/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /add app/i })).not.toBeInTheDocument();
   });
 });

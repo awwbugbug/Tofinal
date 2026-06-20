@@ -147,6 +147,9 @@ describe("ScreenshotEditorOverlay", () => {
     const onConfirm = vi.fn();
     let editor = renderEditor({ onCancel, onConfirm });
 
+    const closeButton = screen.getByRole("button", { name: /^cancel screenshot editor$/i });
+    expect(closeButton).toHaveClass("glass-icon-button");
+    expect(closeButton).toHaveClass("glass-icon-button-safe");
     await userEvent.click(screen.getByRole("button", { name: /^cancel$/i }));
     await waitFor(() => expect(onCancel).toHaveBeenCalledTimes(1));
     expect(onConfirm).not.toHaveBeenCalled();

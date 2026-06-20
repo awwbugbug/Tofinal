@@ -2,7 +2,7 @@
 
 ## Current Stack
 
-- Desktop shell: Tauri v2 with custom window chrome.
+- Desktop shell: Tauri v2 with custom window chrome and one primary app window (`main`).
 - Frontend: React, TypeScript, Vite, Tailwind CSS, shadcn-style local UI primitives.
 - State: Zustand.
 - Icons: lucide-react.
@@ -42,7 +42,7 @@ ToFinal/
 ```
 
 - `src/app`: React app entry component and app-level interaction tests.
-- `src/components/layout`: window title bar, app shell, Normal Mode, Desktop Pin Mode, Sidebar, and DetailPanel composition.
+- `src/components/layout`: window title bar, app shell, Normal Mode, Sidebar, and DetailPanel composition.
 - `src/components/task`: task input, list, item, and editable detail components.
 - `src/components/ui`: small local UI primitives used by the app.
 - `src/lib`: shared helpers and Tauri window wrappers.
@@ -69,13 +69,13 @@ ToFinal/
 - `src/i18n/useI18n.ts`: exposes the current translator from the preferences language.
 - `src/types/task.ts`: defines `Task`, `TaskPriority`, `AppMode`, and `TaskFilter`.
 - `src/types/attachment.ts`: defines `TaskAttachment` and `AttachmentKind`.
-- `src/lib/windowMode.ts`: applies Normal/Pin Tauri window profiles with try/catch fallback.
+- `src/lib/windowMode.ts`: best-effort single-window Normal/Desktop Pin mode window profile helper. It changes size, minimum size, always-on-top, and taskbar visibility through Tauri window APIs.
 - `src/lib/windowControls.ts`: wraps Tauri current-window controls for dragging, minimize, maximize/restore, and close.
 - `src/components/layout/*`: composes app-level surfaces, window modes, navigation, title bar, details, and resizable Normal Mode columns.
 - `src/components/task/*`: implements task creation, list rendering, completion, selection, and detail editing.
 - `src/components/task/AttachmentLightbox.tsx`: owns enlarged image preview rendering, local close animation, backdrop click, close button, and Escape handling.
-- `src-tauri/tauri.conf.json`: product metadata, dev/build commands, main window dimensions, custom titlebar decorations setting, and bundle icons.
-- `src-tauri/capabilities/default.json`: grants the main window only the current core/window permissions plus opener default.
+- `src-tauri/tauri.conf.json`: product metadata, dev/build commands, the single `main` window, and bundle icons.
+- `src-tauri/capabilities/default.json`: grants the `main` window the current core/window permissions plus opener, SQL, dialog, and scoped filesystem permissions.
 
 ## Data Flow
 
@@ -129,10 +129,11 @@ type Task = {
 - `completed` and `pinned` are SQLite INTEGER booleans with `CHECK (value IN (0, 1))`.
 - `completedAt` maps to nullable `completed_at`.
 - localStorage key `tofinal.tasks.v1` is retained for v0.2 migration and rollback only.
-- localStorage key `tofinal.preferences.v1` stores UI preferences only with `{ version: 1, theme, language }`.
+- localStorage key `tofinal.preferences.v1` stores UI preferences only.
+- Window mode and column width state are session UI state. The app no longer persists a separate widget/window-state key for Desktop Pin Mode.
 - Invalid localStorage snapshots are not migrated; empty SQLite then falls back to seed tasks.
 - Task data, attachment metadata, and task app metadata remain in SQLite. UI preferences remain outside SQLite for Phase 7B.
-- Window mode, column widths, active filter, search query, and selection remain session UI state.
+- Window mode remains session UI state and restarts in Normal Mode. Widget/normal window bounds are best-effort local UI state. Column widths, active filter, search query, and selection remain session UI state.
 
 ## State Management
 
@@ -193,22 +194,35 @@ The preferences store is separate from `taskStore`, does not access SQLite repos
 ## Window Modes
 
 - Normal Mode uses the full three-column layout: Sidebar, TaskList, DetailPanel.
-- Desktop Pin Mode uses the same task store and shows QuickInput plus up to five open tasks, with pinned tasks sorted first.
-- `applyWindowMode` attempts Tauri window size, min size, always-on-top, and skip-taskbar changes. Browser/dev fallback keeps UI switching usable.
+- Desktop Pin Mode is the original compact single-window mode. It uses `DesktopPinLayout` inside the same Tauri `main` window instead of a second transparent widget window.
+- `taskStore.mode` is the only mode state: `normal` renders `NormalModeLayout`; `pin` renders `DesktopPinLayout`.
+- `DesktopPinLayout` shows QuickInput, the current open task count, up to five unfinished tasks with pinned tasks first, completion checkboxes, task selection, and one return-to-Normal control.
+- Desktop Pin Mode intentionally does not load or render DetailPanel, attachments, Screenshot Editor, Lightbox, task app bindings, Start Task, settings, search, priority editor, tag editor, or note editor.
+- `applyWindowMode(mode)` is best-effort. It resizes the current window to about `1120x760` for Normal Mode and `360x520` for Desktop Pin Mode, applies minimum sizes, toggles always-on-top, and toggles skip-taskbar.
+- If Tauri window APIs fail or the app is running in browser preview, React mode switching still works.
+- The dual-window WidgetCard/Handoff experiment was removed because it added too much complexity for the current product value and caused unstable desktop behavior.
+- The main window is frameless through `tauri.conf.json` with `"decorations": false`.
 - Normal Mode column widths are session-only React state and are clamped on drag and window resize.
 
 ## Tauri Permissions
 
 Current capability permissions:
 - `core:default`
+- `core:window:allow-get-all-windows`
 - `core:window:allow-set-size`
 - `core:window:allow-set-min-size`
+- `core:window:allow-set-max-size`
+- `core:window:allow-set-resizable`
+- `core:window:allow-set-position`
 - `core:window:allow-set-always-on-top`
 - `core:window:allow-set-skip-taskbar`
 - `core:window:allow-start-dragging`
 - `core:window:allow-minimize`
 - `core:window:allow-toggle-maximize`
 - `core:window:allow-close`
+- `core:window:allow-hide`
+- `core:window:allow-show`
+- `core:window:allow-set-focus`
 - `opener:default`
 - `sql:default`
 - `sql:allow-execute`
@@ -222,7 +236,7 @@ Current capability permissions:
 - `fs:allow-write-file`
 - scoped filesystem access for `$APPDATA/attachments/**`
 
-These permissions are narrow for the current feature set. SQL permissions are limited to the plugin defaults plus select/execute. Dialog permission is limited to open-file selection. Filesystem writes/removes are scoped to AppData attachments; selected source files are read through the temporary scope granted by the dialog plugin. No shell, clipboard, global shortcut, tray, screenshot, or notification permissions are currently granted.
+These permissions are narrow for the current feature set. Size, min-size, always-on-top, and skip-taskbar support the single-window Normal/Desktop Pin mode switch. Show/hide/focus support user-triggered screenshot capture without including the ToFinal window. SQL permissions are limited to the plugin defaults plus select/execute. Dialog permission is limited to open-file selection. Filesystem writes/removes are scoped to AppData attachments; selected source files are read through the temporary scope granted by the dialog plugin. No shell, clipboard, global shortcut, tray, notification, runtime-transparent, set-position, resizable, max-size, or set-decorations permission is currently granted.
 
 ## SQLite Repository Boundary
 

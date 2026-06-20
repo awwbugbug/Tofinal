@@ -65,7 +65,8 @@ export function AttachmentLightbox({ attachment, onClose }: AttachmentLightboxPr
           </div>
           <Button
             aria-label={t("lightbox.close")}
-            className="bg-white/12 text-white hover:bg-white/20 hover:text-white"
+            className="overlay-edge-icon-button"
+            edgeSafe
             onClick={requestClose}
             size="icon"
             type="button"

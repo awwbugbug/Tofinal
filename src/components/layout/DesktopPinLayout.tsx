@@ -15,9 +15,11 @@ type DesktopPinLayoutProps = {
   onSelectTask: (id: string) => void;
   onToggleTask: (id: string) => void;
   onSwitchToNormal: () => void;
+  modeTransition?: string | null;
 };
 
 export function DesktopPinLayout({
+  modeTransition = null,
   onAddTask,
   onSelectTask,
   onSwitchToNormal,
@@ -78,32 +80,44 @@ export function DesktopPinLayout({
 
   return (
     <main
-      className="app-shell-bg flex h-full items-start justify-center p-3"
+      className="app-shell-bg flex h-full min-h-0 items-stretch justify-center overflow-hidden p-3"
+      data-mode-transition={modeTransition ?? undefined}
       data-testid="desktop-pin-layout"
     >
-      <section className="surface-detail flex h-full w-full max-w-[360px] flex-col rounded-[1.75rem] border p-4">
+      <section
+        className="surface-detail flex h-full min-h-0 w-full flex-col overflow-hidden rounded-[1.75rem] border p-4"
+        data-testid="desktop-pin-shell"
+      >
         <header className="mb-4 flex items-center justify-between">
           <div>
             <p className="text-xs font-medium uppercase text-[var(--text-faint)]">{t("mode.pin")}</p>
             <h1 className="mt-1 text-xl font-semibold tracking-normal text-[var(--text-primary)]">{t("sidebar.tasks")}</h1>
           </div>
-          <Button aria-label={t("window.switchToNormal")} onClick={onSwitchToNormal} size="icon" variant="secondary">
+          <Button
+            aria-label={t("window.switchToNormal")}
+            className="mode-switch-button"
+            onClick={onSwitchToNormal}
+            size="icon"
+            variant="secondary"
+          >
             <Maximize2 className="h-4 w-4" />
           </Button>
         </header>
 
         <QuickInput compact onAddTask={onAddTask} />
 
-        <div className="my-3 text-xs text-[var(--text-faint)]">{openTasks.length}{t("sidebar.openTasks")}</div>
+        <div className="my-3 shrink-0 text-xs text-[var(--text-faint)]">{openTasks.length}{t("sidebar.openTasks")}</div>
 
-        <TaskList
-          compact
-          limit={5}
-          onSelect={onSelectTask}
-          onToggle={handleToggleTask}
-          selectedTaskId={selectedTaskId}
-          tasks={openTasks}
-        />
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <TaskList
+            compact
+            limit={5}
+            onSelect={onSelectTask}
+            onToggle={handleToggleTask}
+            selectedTaskId={selectedTaskId}
+            tasks={openTasks}
+          />
+        </div>
       </section>
     </main>
   );

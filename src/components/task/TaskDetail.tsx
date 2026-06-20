@@ -17,7 +17,6 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
@@ -260,20 +259,15 @@ export function TaskDetail({
           <Badge className={cn("capitalize", priorityBadgeClassName[task.priority])}>
             {t(`priority.${task.priority}`)}
           </Badge>
-          <label
-            className={cn(
-              "flex items-center gap-2 rounded-full border border-transparent px-2.5 py-1 text-xs font-medium text-[var(--text-muted)]",
-              pinned && "selected-glass-pill text-[var(--pinned-text)]",
-            )}
+          <button
+            aria-label={pinned ? t("task.unpinTask") : t("task.pinTask")}
+            aria-pressed={pinned}
+            className="pin-icon-toggle glass-soft"
+            onClick={() => setPinned((currentPinned) => !currentPinned)}
+            type="button"
           >
-            <Checkbox
-              aria-label="Pinned task"
-              checked={pinned}
-              onChange={(event) => setPinned(event.currentTarget.checked)}
-            />
-            <Pin className={cn("h-3.5 w-3.5", pinned ? "text-[var(--pinned-text)]" : "text-[var(--text-faint)]")} />
-            {t("task.pinned")}
-          </label>
+            <Pin className="h-3.5 w-3.5" />
+          </button>
         </div>
 
         <label className="block text-xs font-medium uppercase text-[var(--text-faint)]" htmlFor="task-title">
@@ -308,7 +302,7 @@ export function TaskDetail({
           role="group"
           style={prioritySegmentStyle[priority] as CSSProperties}
         >
-          <span aria-hidden="true" className="priority-segment-thumb" />
+          <span aria-hidden="true" className="priority-segment-thumb glass-soft" />
           {priorityOptions.map((option) => (
             <button
               aria-pressed={priority === option.value}
@@ -562,30 +556,32 @@ export function TaskDetail({
         </div>
       </div>
 
-      <div className="shrink-0 border-t border-[var(--border-soft)] pt-4">
-        <div className="flex items-center justify-between gap-3">
-        <Button
-          aria-label={t("task.deleteTask")}
-          className="text-[var(--danger)] hover:bg-[var(--danger-soft)] hover:text-[var(--danger)]"
-          onClick={handleDelete}
-          variant="ghost"
-        >
-          <Trash2 className="h-4 w-4" />
-          {t("task.delete")}
-        </Button>
-        <div className="flex min-w-0 flex-col items-end gap-1">
+      <div className="shrink-0 border-t border-[var(--border-soft)] pt-3">
+        <div className="flex min-h-5 justify-end">
           {saveStatus && (
             <span
               aria-live="polite"
               className={cn(
-                "max-w-56 text-right text-xs leading-snug text-[var(--text-faint)]",
-                persistenceError && "text-[var(--danger)]",
+                "max-w-64 truncate text-right text-xs leading-5 text-[var(--text-faint)]",
+                persistenceError && "text-[color-mix(in_srgb,var(--danger)_82%,var(--text-muted))]",
               )}
+              data-testid="task-save-status"
               title={saveStatus}
             >
               {saveStatus}
             </span>
           )}
+        </div>
+        <div className="mt-2 flex items-center justify-between gap-3" data-testid="task-action-row">
+          <Button
+            aria-label={t("task.deleteTask")}
+            className="danger-glass-button"
+            onClick={handleDelete}
+            variant="ghost"
+          >
+            <Trash2 className="h-4 w-4" />
+            {t("task.delete")}
+          </Button>
           <Button
             aria-label={saving ? t("task.savingTask") : t("task.saveTask")}
             disabled={!hasDraftChanges && !persistenceError}
@@ -593,7 +589,6 @@ export function TaskDetail({
           >
             {saving ? t("task.saving") : t("task.save")}
           </Button>
-        </div>
         </div>
       </div>
 

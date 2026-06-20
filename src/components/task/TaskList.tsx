@@ -22,7 +22,7 @@ export function TaskList({
   const visibleTasks = typeof limit === "number" ? tasks.slice(0, limit) : tasks;
 
   return (
-    <ScrollArea className={compact ? "-mx-3 max-h-[330px] px-3 py-1" : "-mx-5 min-h-0 flex-1 px-5 py-2"}>
+    <ScrollArea className={compact ? "-mx-3 h-full min-h-0 px-3 py-1" : "-mx-5 min-h-0 flex-1 px-5 py-2"}>
       <div className={compact ? "space-y-2 px-1 py-1.5" : "space-y-3 px-3 pb-7 pt-3"} data-testid="task-list">
         {visibleTasks.map((task) => (
           <TaskItem

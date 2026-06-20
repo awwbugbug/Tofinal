@@ -4,14 +4,13 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex shrink-0 items-center justify-center gap-2 rounded-[18px] text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[var(--ring-soft)] disabled:pointer-events-none disabled:opacity-45",
+  "glass-button glass-highlight inline-flex shrink-0 items-center justify-center gap-2 rounded-[18px] text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring-soft)] disabled:pointer-events-none disabled:opacity-45",
   {
     variants: {
       variant: {
-        default: "bg-[var(--accent)] text-white shadow-[var(--shadow-subtle)] hover:bg-[var(--accent-hover)] active:bg-[var(--accent-hover)]",
-        secondary:
-          "border border-[var(--border-soft)] bg-[var(--accent-surface)] text-[var(--accent-hover)] hover:bg-[var(--accent-soft)] active:bg-[var(--accent-soft)]",
-        ghost: "text-[var(--text-muted)] hover:bg-[var(--accent-surface)] hover:text-[var(--accent-hover)] active:bg-[var(--accent-soft)]",
+        default: "glass-button-primary text-white",
+        secondary: "glass-button-secondary text-[var(--accent-hover)]",
+        ghost: "glass-button-ghost text-[var(--text-muted)] hover:text-[var(--accent-hover)]",
       },
       size: {
         default: "h-10 px-4",
@@ -27,12 +26,16 @@ const buttonVariants = cva(
 );
 
 export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> &
-  VariantProps<typeof buttonVariants>;
+  VariantProps<typeof buttonVariants> & {
+    edgeSafe?: boolean;
+  };
 
-export function Button({ className, variant, size, type = "button", ...props }: ButtonProps) {
+export function Button({ className, edgeSafe = false, variant, size, type = "button", ...props }: ButtonProps) {
+  const edgeSafeClassName = edgeSafe && size === "icon" ? "glass-icon-button glass-icon-button-safe" : undefined;
+
   return (
     <button
-      className={cn(buttonVariants({ variant, size, className }))}
+      className={cn(buttonVariants({ variant, size }), edgeSafeClassName, className)}
       type={type}
       {...props}
     />
