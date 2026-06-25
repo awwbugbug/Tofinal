@@ -15,6 +15,14 @@ export type StoredTaskSnapshotResult =
 
 const nowIso = () => new Date().toISOString();
 
+const getLocalDateKey = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+};
+
 const createSeedTask = (
   id: string,
   title: string,
@@ -22,6 +30,7 @@ const createSeedTask = (
   priority: Task["priority"],
   tags: string[],
   createdAt: string,
+  plannedDate: string | null = null,
 ): Task => ({
   id,
   title,
@@ -32,43 +41,52 @@ const createSeedTask = (
   tags,
   createdAt,
   updatedAt: createdAt,
+  plannedDate,
   completedAt: null,
 });
 
-export const createSeedTasks = (): Task[] => [
-  createSeedTask(
-    "task-1",
-    "Finalize the first-stage desktop shell",
-    "Keep the foundation focused: Tauri, React, Tailwind, shadcn/ui, Zustand, and the two UI modes.",
-    "important",
-    ["foundation", "ui"],
-    "2026-06-08T08:20:00.000Z",
-  ),
-  createSeedTask(
-    "task-2",
-    "Sketch the desktop pin interaction",
-    "Prototype the compact state without WorkerW or advanced Windows desktop embedding.",
-    "normal",
-    ["prototype"],
-    "2026-06-08T08:35:00.000Z",
-  ),
-  createSeedTask(
-    "task-3",
-    "Review lightweight state boundaries",
-    "Keep all task data in memory for this stage and avoid persistence.",
-    "urgent",
-    ["state"],
-    "2026-06-08T09:00:00.000Z",
-  ),
-  createSeedTask(
-    "task-4",
-    "Tune quiet macOS-style spacing",
-    "Prefer soft borders, clear hierarchy, and a restrained neutral palette.",
-    "normal",
-    ["visual"],
-    "2026-06-08T09:20:00.000Z",
-  ),
-];
+export const createSeedTasks = (): Task[] => {
+  const today = getLocalDateKey();
+
+  return [
+    createSeedTask(
+      "task-1",
+      "Finalize the first-stage desktop shell",
+      "Keep the foundation focused: Tauri, React, Tailwind, shadcn/ui, Zustand, and the two UI modes.",
+      "important",
+      ["foundation", "ui"],
+      "2026-06-08T08:20:00.000Z",
+      today,
+    ),
+    createSeedTask(
+      "task-2",
+      "Sketch the desktop pin interaction",
+      "Prototype the compact state without WorkerW or advanced Windows desktop embedding.",
+      "normal",
+      ["prototype"],
+      "2026-06-08T08:35:00.000Z",
+      today,
+    ),
+    createSeedTask(
+      "task-3",
+      "Review lightweight state boundaries",
+      "Keep all task data in memory for this stage and avoid persistence.",
+      "urgent",
+      ["state"],
+      "2026-06-08T09:00:00.000Z",
+      today,
+    ),
+    createSeedTask(
+      "task-4",
+      "Tune quiet macOS-style spacing",
+      "Prefer soft borders, clear hierarchy, and a restrained neutral palette.",
+      "normal",
+      ["visual"],
+      "2026-06-08T09:20:00.000Z",
+      today,
+    ),
+  ];
+};
 
 const isPriority = (value: unknown): value is Task["priority"] =>
   value === "normal" || value === "important" || value === "urgent";
@@ -102,6 +120,7 @@ export const normalizeStoredTask = (value: unknown): Task | null => {
     tags: candidate.tags.filter((tag): tag is string => typeof tag === "string"),
     createdAt: candidate.createdAt,
     updatedAt: candidate.updatedAt,
+    plannedDate: typeof candidate.plannedDate === "string" ? candidate.plannedDate : null,
     completedAt: typeof candidate.completedAt === "string" ? candidate.completedAt : null,
   };
 };

@@ -21,6 +21,7 @@ type TaskRow = {
   created_at: string;
   updated_at: string;
   completed_at: string | null;
+  planned_date: string | null;
   sort_order: number;
 };
 
@@ -35,6 +36,7 @@ const task = (overrides: Partial<Task> = {}): Task => ({
   createdAt: "2026-06-10T08:00:00.000Z",
   updatedAt: "2026-06-10T08:00:00.000Z",
   completedAt: null,
+  plannedDate: null,
   ...overrides,
 });
 
@@ -42,6 +44,20 @@ class FakeSqlDatabase implements SqlDatabaseClient {
   rows: TaskRow[] = [];
   meta = new Map<string, string>();
   executed: string[] = [];
+  taskColumns = new Set([
+    "id",
+    "title",
+    "note",
+    "completed",
+    "priority",
+    "pinned",
+    "tags",
+    "created_at",
+    "updated_at",
+    "completed_at",
+    "planned_date",
+    "sort_order",
+  ]);
   failWrites = false;
   delayTaskInserts = false;
   activeTaskInserts = 0;
@@ -64,6 +80,11 @@ class FakeSqlDatabase implements SqlDatabaseClient {
       return;
     }
 
+    if (sql.includes("ALTER TABLE tasks ADD COLUMN planned_date TEXT NULL")) {
+      this.taskColumns.add("planned_date");
+      return;
+    }
+
     if (sql.startsWith("INSERT INTO tasks")) {
       this.activeTaskInserts += 1;
       this.maxConcurrentTaskInserts = Math.max(this.maxConcurrentTaskInserts, this.activeTaskInserts);
@@ -82,6 +103,7 @@ class FakeSqlDatabase implements SqlDatabaseClient {
         createdAt,
         updatedAt,
         completedAt,
+        plannedDate,
         sortOrder,
       ] = params as [
         string,
@@ -93,6 +115,7 @@ class FakeSqlDatabase implements SqlDatabaseClient {
         string,
         string,
         string,
+        string | null,
         string | null,
         number,
       ];
@@ -108,6 +131,7 @@ class FakeSqlDatabase implements SqlDatabaseClient {
         created_at: createdAt,
         updated_at: updatedAt,
         completed_at: completedAt,
+        planned_date: plannedDate,
         sort_order: sortOrder,
       });
       this.activeTaskInserts -= 1;
@@ -115,6 +139,10 @@ class FakeSqlDatabase implements SqlDatabaseClient {
   }
 
   async select<T>(sql: string): Promise<T[]> {
+    if (sql.includes("PRAGMA table_info(tasks)")) {
+      return [...this.taskColumns].map((name) => ({ name })) as T[];
+    }
+
     if (sql.includes("COUNT(*)")) {
       return [{ count: this.rows.length }] as T[];
     }
@@ -140,8 +168,8 @@ describe("sqlite task repository", () => {
     localStorage.clear();
   });
 
-  it("maps tasks to SQLite rows with integer booleans, JSON tags, and nullable completed_at", () => {
-    const openTask = task({ completed: false, pinned: true, tags: ["a", "b"], completedAt: null });
+  it("maps tasks to SQLite rows with integer booleans, JSON tags, nullable completed_at, and planned_date", () => {
+    const openTask = task({ completed: false, pinned: true, tags: ["a", "b"], completedAt: null, plannedDate: "2026-06-20" });
     const doneTask = task({ completed: true, pinned: false, completedAt: "2026-06-10T08:30:00.000Z" });
 
     expect(taskToSqlParams(openTask, 2)).toEqual([
@@ -155,6 +183,7 @@ describe("sqlite task repository", () => {
       openTask.createdAt,
       openTask.updatedAt,
       null,
+      "2026-06-20",
       2,
     ]);
 
@@ -169,7 +198,20 @@ describe("sqlite task repository", () => {
       pinned: false,
       tags: ["a", "b"],
       completedAt: null,
+      plannedDate: "2026-06-20",
     });
+  });
+
+  it("adds planned_date during schema migration and writes schema version 4", async () => {
+    const db = new FakeSqlDatabase();
+    db.taskColumns.delete("planned_date");
+    const repository = createRepository(db);
+
+    await repository.loadSnapshot();
+
+    expect(db.executed.some((sql) => sql.includes("ALTER TABLE tasks ADD COLUMN planned_date TEXT NULL"))).toBe(true);
+    expect(db.taskColumns.has("planned_date")).toBe(true);
+    expect(db.meta.get("schema_version")).toBe("4");
   });
 
   it("migrates a valid localStorage snapshot when SQLite is empty", async () => {
@@ -181,7 +223,7 @@ describe("sqlite task repository", () => {
     const snapshot = await repository.loadSnapshot();
 
     expect(snapshot.tasks).toEqual([localTask]);
-    expect(db.meta.get("schema_version")).toBe("3");
+    expect(db.meta.get("schema_version")).toBe("4");
     expect(db.meta.get("localstorage_v1_migrated")).toBe("true");
     expect(localStorage.getItem(TASK_STORAGE_KEY)).toContain("Migrated from localStorage");
   });
@@ -195,7 +237,7 @@ describe("sqlite task repository", () => {
 
     expect(snapshot.tasks).toHaveLength(createSeedTasks().length);
     expect(snapshot.tasks[0].title).toBe("Finalize the first-stage desktop shell");
-    expect(db.meta.get("schema_version")).toBe("3");
+    expect(db.meta.get("schema_version")).toBe("4");
     expect(db.meta.get("seed_initialized")).toBe("true");
   });
 
@@ -281,5 +323,6 @@ const taskToRow = (value: Task, sortOrder: number): TaskRow => ({
   created_at: value.createdAt,
   updated_at: value.updatedAt,
   completed_at: value.completedAt,
+  planned_date: value.plannedDate,
   sort_order: sortOrder,
 });

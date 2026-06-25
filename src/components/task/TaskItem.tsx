@@ -106,12 +106,19 @@ export function TaskItem({ compact = false, onSelect, onToggle, selected = false
   const PriorityIcon = priorityIcon[task.priority];
   const itemRef = useRef<HTMLElement | null>(null);
   const previousCompletedRef = useRef(task.completed);
+  const completionCelebrationHandledRef = useRef(false);
 
   useEffect(() => {
     const wasCompleted = previousCompletedRef.current;
     previousCompletedRef.current = task.completed;
 
-    if (!wasCompleted && task.completed && completionCelebrationsEnabled) {
+    if (!task.completed) {
+      completionCelebrationHandledRef.current = false;
+      return;
+    }
+
+    if (!wasCompleted && !completionCelebrationHandledRef.current && completionCelebrationsEnabled) {
+      completionCelebrationHandledRef.current = true;
       fireCompletionConfetti(itemRef.current);
     }
   }, [completionCelebrationsEnabled, task.completed]);
@@ -119,44 +126,55 @@ export function TaskItem({ compact = false, onSelect, onToggle, selected = false
   return (
     <article
       className={cn(
-        "group relative flex origin-center cursor-pointer items-start gap-3 rounded-[22px] border p-3.5 transition-all duration-200 ease-out hover:z-10 active:scale-[1.01]",
+        "task-card-shell group relative cursor-pointer rounded-[22px] border p-3.5 transition-all duration-200 ease-out hover:z-10 active:scale-[1.004]",
         selected
-          ? "z-10 scale-[1.018] border-[color-mix(in_srgb,var(--accent)_38%,var(--border-medium))] bg-[color-mix(in_srgb,var(--accent-surface)_82%,var(--surface-elevated))] shadow-[var(--shadow-card-around)]"
-          : "scale-100 border-[var(--border-soft)] bg-[color-mix(in_srgb,var(--surface-card)_64%,transparent)] hover:scale-[1.008] hover:border-[var(--border-medium)] hover:bg-[var(--surface-card-hover)] hover:shadow-[var(--shadow-card-hover)]",
+          ? "z-10 scale-[1.012] border-[color-mix(in_srgb,var(--accent)_38%,var(--border-medium))] bg-[color-mix(in_srgb,var(--accent-surface)_82%,var(--surface-elevated))] shadow-[var(--shadow-card-around)]"
+          : "scale-100 border-[var(--border-soft)] bg-[color-mix(in_srgb,var(--surface-card)_64%,transparent)] hover:scale-[1.004] hover:border-[var(--border-medium)] hover:bg-[var(--surface-card-hover)] hover:shadow-[var(--shadow-card-hover)]",
         task.completed && "opacity-70",
         compact && "rounded-[18px] p-2.5 hover:bg-[var(--surface-card-hover)]",
       )}
+      data-testid="task-card"
       onClick={() => onSelect(task.id)}
       ref={itemRef}
     >
-      <Checkbox
-        aria-label={task.completed ? `Mark ${task.title} incomplete` : `Mark ${task.title} complete`}
-        checked={task.completed}
-        onChange={(event) => {
-          event.stopPropagation();
-          onToggle(task.id);
-        }}
-      />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2">
-          <h3
-            className={cn(
-              "min-w-0 flex-1 truncate text-sm font-medium",
-              task.completed ? "text-[var(--text-faint)] line-through" : "text-[var(--text-secondary)]",
-            )}
-          >
-            {task.title}
-          </h3>
-          {!compact && (
-            <Badge className={cn("shrink-0 self-start gap-1", priorityClassName[task.priority])}>
-              <PriorityIcon className="h-3 w-3" />
-              {t(`priority.${task.priority}`)}
-            </Badge>
+      <div
+        className={cn(
+          "task-card-grid grid min-w-0 items-start gap-x-3 gap-y-1",
+          compact ? "grid-cols-[auto_minmax(0,1fr)]" : "grid-cols-[auto_minmax(0,1fr)_auto]",
+        )}
+        data-testid="task-card-grid"
+      >
+        <Checkbox
+          aria-label={task.completed ? `Mark ${task.title} incomplete` : `Mark ${task.title} complete`}
+          checked={task.completed}
+          onChange={(event) => {
+            event.stopPropagation();
+            if (!task.completed && completionCelebrationsEnabled) {
+              completionCelebrationHandledRef.current = true;
+              fireCompletionConfetti(itemRef.current);
+            }
+            onToggle(task.id);
+          }}
+        />
+        <h3
+          className={cn(
+            "min-w-0 truncate text-sm font-medium leading-5",
+            task.completed ? "text-[var(--text-faint)] line-through" : "text-[var(--text-secondary)]",
           )}
-        </div>
-        {!compact && <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--text-muted)]">{task.note}</p>}
-        {compact && task.tags[0] && <p className="mt-1 truncate text-[11px] text-[var(--text-faint)]">{task.tags[0]}</p>}
+        >
+          {task.title}
+        </h3>
+        {!compact && (
+          <Badge className={cn("shrink-0 justify-self-end gap-1 self-start", priorityClassName[task.priority])}>
+            <PriorityIcon className="h-3 w-3" />
+            {t(`priority.${task.priority}`)}
+          </Badge>
+        )}
+        {!compact && <p className="col-start-2 min-w-0 line-clamp-2 text-xs leading-5 text-[var(--text-muted)]">{task.note}</p>}
+        {compact && task.tags[0] && <p className="col-start-2 min-w-0 truncate text-[11px] text-[var(--text-faint)]">{task.tags[0]}</p>}
       </div>
     </article>
   );
 }
+
+

@@ -18,6 +18,7 @@ const task = (overrides: Partial<Task> = {}): Task => ({
   tags: [],
   createdAt: "2026-06-09T00:00:00.000Z",
   updatedAt: "2026-06-09T00:00:00.000Z",
+  plannedDate: null,
   completedAt: null,
   ...overrides,
 });
@@ -70,6 +71,17 @@ describe("task storage", () => {
 
     expect(snapshot.tasks).toHaveLength(1);
     expect(snapshot.tasks[0].pinned).toBe(false);
+  });
+
+  it("migrates legacy tasks without plannedDate to backlog", () => {
+    const legacyTask = task();
+    const { plannedDate: _plannedDate, ...withoutPlannedDate } = legacyTask;
+    localStorage.setItem(TASK_STORAGE_KEY, JSON.stringify({ version: 1, tasks: [withoutPlannedDate] }));
+
+    const snapshot = loadTaskSnapshot();
+
+    expect(snapshot.tasks).toHaveLength(1);
+    expect(snapshot.tasks[0].plannedDate).toBeNull();
   });
 
   it("returns a valid stored snapshot for SQLite migration without deleting localStorage", () => {

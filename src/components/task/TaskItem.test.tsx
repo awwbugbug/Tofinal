@@ -1,4 +1,4 @@
-import { act, render } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TaskItem } from "@/components/task/TaskItem";
@@ -21,6 +21,7 @@ const baseTask: Task = {
   tags: [],
   createdAt: "2026-06-16T10:00:00.000Z",
   updatedAt: "2026-06-16T10:00:00.000Z",
+  plannedDate: "2026-06-16",
   completedAt: null,
 };
 
@@ -97,4 +98,43 @@ describe("TaskItem completion celebrations", () => {
 
     expect(confettiMock).not.toHaveBeenCalled();
   });
+
+  it("fires confetti before the task can be removed by completion filters", () => {
+    const { unmount } = render(
+      <TaskItem
+        onSelect={() => {}}
+        onToggle={() => {
+          unmount();
+        }}
+        task={baseTask}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /mark ship celebration polish complete/i }));
+
+    expect(confettiMock).toHaveBeenCalledTimes(5);
+  });
+
+  it("uses a stable grid layout so long titles cannot sit under the priority badge", () => {
+    render(
+      <TaskItem
+        onSelect={() => {}}
+        onToggle={() => {}}
+        selected
+        task={{
+          ...baseTask,
+          title: "Merge a very long task title into another parent task without overlapping the priority badge",
+          priority: "urgent",
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId("task-card")).toHaveClass("task-card-shell");
+    expect(screen.getByTestId("task-card-grid")).toHaveClass("grid-cols-[auto_minmax(0,1fr)_auto]");
+    expect(screen.getByText(/Merge a very long task title/)).toHaveClass("truncate");
+    expect(screen.getByText("Urgent")).toHaveClass("shrink-0");
+  });
 });
+
+
+

@@ -2,7 +2,7 @@ import { createSeedTasks, loadStoredTaskSnapshot, type TaskSnapshot } from "@/st
 import type { Task, TaskPriority } from "@/types/task";
 
 export const SQLITE_DATABASE_PATH = "sqlite:tofinal.db";
-export const SQLITE_SCHEMA_VERSION = "3";
+export const SQLITE_SCHEMA_VERSION = "4";
 
 export type SqlValue = string | number | null;
 
@@ -30,6 +30,7 @@ type SqlTaskRow = {
   created_at: unknown;
   updated_at: unknown;
   completed_at: unknown;
+  planned_date?: unknown;
   sort_order?: unknown;
 };
 
@@ -50,6 +51,7 @@ const SCHEMA_SQL = [
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     completed_at TEXT NULL,
+    planned_date TEXT NULL,
     sort_order INTEGER NOT NULL
   )`,
   "CREATE INDEX IF NOT EXISTS idx_tasks_sort_order ON tasks(sort_order)",
@@ -100,6 +102,7 @@ const SELECT_TASKS_SQL = `SELECT
   created_at,
   updated_at,
   completed_at,
+  planned_date,
   sort_order
 FROM tasks
 ORDER BY sort_order ASC, created_at DESC, id ASC`;
@@ -117,8 +120,9 @@ const UPSERT_TASK_SQL = `INSERT INTO tasks (
   created_at,
   updated_at,
   completed_at,
+  planned_date,
   sort_order
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
   title = excluded.title,
   note = excluded.note,
@@ -129,6 +133,7 @@ ON CONFLICT(id) DO UPDATE SET
   created_at = excluded.created_at,
   updated_at = excluded.updated_at,
   completed_at = excluded.completed_at,
+  planned_date = excluded.planned_date,
   sort_order = excluded.sort_order`;
 
 const isPriority = (value: unknown): value is TaskPriority =>
@@ -171,6 +176,11 @@ export const taskFromSqlRow = (row: SqlTaskRow): Task => {
     throw new Error("Invalid SQLite completed_at field.");
   }
 
+  const plannedDate = row.planned_date ?? null;
+  if (plannedDate !== null && typeof plannedDate !== "string") {
+    throw new Error("Invalid SQLite planned_date field.");
+  }
+
   return {
     id: stringField(row.id, "id"),
     title: stringField(row.title, "title"),
@@ -181,6 +191,7 @@ export const taskFromSqlRow = (row: SqlTaskRow): Task => {
     tags,
     createdAt: stringField(row.created_at, "created_at"),
     updatedAt: stringField(row.updated_at, "updated_at"),
+    plannedDate,
     completedAt,
   };
 };
@@ -196,6 +207,7 @@ export const taskToSqlParams = (task: Task, sortOrder: number): SqlValue[] => [
   task.createdAt,
   task.updatedAt,
   task.completedAt,
+  task.plannedDate,
   sortOrder,
 ];
 
@@ -204,6 +216,11 @@ const nowIso = () => new Date().toISOString();
 const schemaMetaHasUpdatedAt = async (db: SqlDatabaseClient) => {
   const columns = await db.select<{ name: unknown }>("PRAGMA table_info(schema_meta)");
   return columns.some((column) => column.name === "updated_at");
+};
+
+const tableHasColumn = async (db: SqlDatabaseClient, tableName: string, columnName: string) => {
+  const columns = await db.select<{ name: unknown }>(`PRAGMA table_info(${tableName})`);
+  return columns.some((column) => column.name === columnName);
 };
 
 export const writeSchemaMeta = async (db: SqlDatabaseClient, key: string, value: string) => {
@@ -265,6 +282,9 @@ export const ensureSqliteSchema = async (db: SqlDatabaseClient) => {
   await db.execute("PRAGMA busy_timeout = 5000");
   for (const sql of SCHEMA_SQL) {
     await db.execute(sql);
+  }
+  if (!(await tableHasColumn(db, "tasks", "planned_date"))) {
+    await db.execute("ALTER TABLE tasks ADD COLUMN planned_date TEXT NULL");
   }
   await writeSchemaMeta(db, "schema_version", SQLITE_SCHEMA_VERSION);
 };

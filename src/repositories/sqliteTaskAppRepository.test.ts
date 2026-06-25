@@ -24,6 +24,7 @@ type TaskRow = {
   created_at: string;
   updated_at: string;
   completed_at: string | null;
+  planned_date: string | null;
   sort_order: number;
 };
 
@@ -49,6 +50,7 @@ const task = (overrides: Partial<Task> = {}): Task => ({
   tags: [],
   createdAt: "2026-06-11T08:00:00.000Z",
   updatedAt: "2026-06-11T08:00:00.000Z",
+  plannedDate: null,
   completedAt: null,
   ...overrides,
 });
@@ -191,7 +193,7 @@ describe("sqlite task app repository", () => {
     localStorage.clear();
   });
 
-  it("migrates schema v2 to v3, keeps tasks and attachments, and enables foreign keys", async () => {
+  it("migrates to the current schema, keeps tasks and attachments, and enables foreign keys", async () => {
     const db = new FakeSqlDatabase();
     db.tasks = [taskToRow(task(), 0)];
     const repository = createSqliteTaskAppRepository(createLoader(db));
@@ -200,7 +202,7 @@ describe("sqlite task app repository", () => {
 
     expect(db.taskAppsTableExists).toBe(true);
     expect(db.foreignKeysEnabled).toBe(true);
-    expect(db.meta.get("schema_version")).toBe("3");
+    expect(db.meta.get("schema_version")).toBe("4");
     expect(db.tasks.map((row) => row.title)).toEqual(["Task with apps"]);
     expect(db.taskAttachments).toHaveLength(1);
   });
@@ -287,6 +289,7 @@ const taskToRow = (value: Task, sortOrder: number): TaskRow => ({
   created_at: value.createdAt,
   updated_at: value.updatedAt,
   completed_at: value.completedAt,
+  planned_date: value.plannedDate,
   sort_order: sortOrder,
 });
 
@@ -301,7 +304,8 @@ const taskToRowFromParams = (params: Array<string | number | null>): TaskRow => 
   created_at: String(params[7]),
   updated_at: String(params[8]),
   completed_at: params[9] === null ? null : String(params[9]),
-  sort_order: Number(params[10]),
+  planned_date: params[10] === null ? null : String(params[10]),
+  sort_order: Number(params[11]),
 });
 
 const taskAppToRow = (value: TaskApp): TaskAppRow => ({

@@ -28,7 +28,7 @@ import {
   setTaskAppDependenciesForTest,
 } from "@/stores/taskAppStore";
 import { PREFERENCES_STORAGE_KEY, resetPreferencesStore } from "@/stores/preferencesStore";
-import { resetTaskStore } from "@/stores/taskStore";
+import { getLocalDateKey, resetTaskStore } from "@/stores/taskStore";
 import { createMemoryTaskRepository } from "@/test/taskRepositoryTestUtils";
 import type { TaskAttachment } from "@/types/attachment";
 import type { TaskApp } from "@/types/taskApp";
@@ -292,19 +292,18 @@ describe("App", () => {
   it("applies theme and language preferences inside Desktop Pin Mode", async () => {
     localStorage.setItem(
       PREFERENCES_STORAGE_KEY,
-      JSON.stringify({ version: 2, theme: "dark", language: "zh-CN", completionCelebrationsEnabled: true }),
+      JSON.stringify({ version: 2, theme: "dark", language: "en-US", completionCelebrationsEnabled: true }),
     );
 
     await renderApp();
-    await userEvent.click(screen.getByRole("button", { name: /桌面贴片模式/i }));
+    await userEvent.click(screen.getByRole("button", { name: /desktop pin mode/i }));
 
     expect(document.documentElement.dataset.theme).toBe("dark");
     const pinLayout = within(await screen.findByTestId("desktop-pin-layout"));
 
-    expect(pinLayout.getByText("桌面贴片模式")).toBeInTheDocument();
-    expect(pinLayout.getByRole("button", { name: "打开普通窗口模式" })).toBeInTheDocument();
+    expect(pinLayout.getByText("Desktop Pin Mode")).toBeInTheDocument();
+    expect(pinLayout.getByRole("button", { name: "Open Normal Window Mode" })).toBeInTheDocument();
   });
-
   it("adds a task through quick input with click and Enter, then clears the input", async () => {
     await renderApp();
     const input = screen.getByPlaceholderText(/add a task/i);
@@ -322,6 +321,120 @@ describe("App", () => {
 
     expect(screen.getAllByText("Enter-created task").length).toBeGreaterThan(0);
     expect(screen.getByText("6 open")).toBeInTheDocument();
+  });
+
+  it("separates Today execution tasks from All Tasks backlog and future tasks", async () => {
+    const today = getLocalDateKey();
+    const tasks = createSeedTasks().map((task, index) => {
+      if (index === 0) {
+        return { ...task, title: "Planned today", plannedDate: today, completed: false, completedAt: null };
+      }
+      if (index === 1) {
+        return { ...task, title: "Backlog task", plannedDate: null, completed: false, completedAt: null };
+      }
+      if (index === 2) {
+        return { ...task, title: "Future task", plannedDate: "2099-01-01", completed: false, completedAt: null };
+      }
+
+      return { ...task, title: "Completed today", plannedDate: today, completed: true, completedAt: `${today}T09:00:00.000Z` };
+    });
+    const repository = createMemoryTaskRepository({ tasks });
+    setTaskRepositoryForTest(repository);
+    resetTaskStore();
+
+    await renderApp();
+
+    expect(within(screen.getByTestId("task-list")).getByText("Planned today")).toBeInTheDocument();
+    expect(screen.queryByText("Backlog task")).not.toBeInTheDocument();
+    expect(screen.queryByText("Future task")).not.toBeInTheDocument();
+    const completedTodaySection = screen.getByRole("region", { name: /completed today/i });
+    expect(completedTodaySection).toBeInTheDocument();
+    expect(within(screen.getByTestId("today-completed-task-list")).getByText("Completed today")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /all tasks 4/i }));
+
+    expect(within(screen.getByTestId("task-list")).getByText("Planned today")).toBeInTheDocument();
+    expect(within(screen.getByTestId("task-list")).getByText("Backlog task")).toBeInTheDocument();
+    expect(within(screen.getByTestId("task-list")).getByText("Future task")).toBeInTheDocument();
+    expect(within(screen.getByTestId("task-list")).getByText("Completed today")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: /completed today/i })).not.toBeInTheDocument();
+  });
+
+  it("keeps completed non-today tasks in All while Today only shows them while completed today", async () => {
+    const today = getLocalDateKey();
+    const tasks = createSeedTasks().map((task, index) => {
+      if (index === 0) {
+        return { ...task, title: "Today execution task", plannedDate: today, completed: false, completedAt: null };
+      }
+      if (index === 1) {
+        return { ...task, title: "Backlog completion task", plannedDate: null, completed: false, completedAt: null };
+      }
+      return { ...task, plannedDate: "2099-01-01", completed: false, completedAt: null };
+    });
+    setTaskRepositoryForTest(createMemoryTaskRepository({ tasks }));
+    resetTaskStore();
+
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: /all tasks 4/i }));
+    await userEvent.click(screen.getByRole("checkbox", { name: /mark backlog completion task complete/i }));
+
+    expect(within(screen.getByTestId("task-list")).getByText("Backlog completion task")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /mark backlog completion task incomplete/i })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /today/i }));
+    expect(within(screen.getByTestId("today-completed-task-list")).getByText("Backlog completion task")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("checkbox", { name: /mark backlog completion task incomplete/i }));
+    await waitFor(() => {
+      expect(screen.queryByTestId("today-completed-task-list")).not.toBeInTheDocument();
+    });
+    expect(within(screen.getByTestId("task-list")).queryByText("Backlog completion task")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /all tasks 4/i }));
+    expect(within(screen.getByTestId("task-list")).getByText("Backlog completion task")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /mark backlog completion task complete/i })).toBeInTheDocument();
+  });
+  it("keeps completed tasks visible in Important and Pinned attribute views", async () => {
+    const today = getLocalDateKey();
+    const tasks = createSeedTasks().map((task, index) => {
+      if (index === 0) {
+        return { ...task, title: "Completed important task", priority: "important" as const, pinned: false, plannedDate: today, completed: true, completedAt: `${today}T09:00:00.000Z` };
+      }
+      if (index === 1) {
+        return { ...task, title: "Completed pinned task", priority: "normal" as const, pinned: true, plannedDate: null, completed: true, completedAt: `${today}T10:00:00.000Z` };
+      }
+      return { ...task, priority: "normal" as const, pinned: false, completed: false, completedAt: null };
+    });
+    setTaskRepositoryForTest(createMemoryTaskRepository({ tasks }));
+    resetTaskStore();
+
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: /important 1/i }));
+    expect(within(screen.getByTestId("task-list")).getByText("Completed important task")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /mark completed important task incomplete/i })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /pinned 1/i }));
+    expect(within(screen.getByTestId("task-list")).getByText("Completed pinned task")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /mark completed pinned task incomplete/i })).toBeInTheDocument();
+  });
+  it("uses view-specific plannedDate defaults when quick-adding tasks", async () => {
+    const today = getLocalDateKey();
+    const repository = createMemoryTaskRepository({ tasks: createSeedTasks() });
+    setTaskRepositoryForTest(repository);
+    resetTaskStore();
+    await renderApp();
+
+    await userEvent.type(screen.getByPlaceholderText(/add a task/i), "Today planned task{Enter}");
+    await waitFor(() => expect(repository.savedSnapshots.length).toBeGreaterThan(0));
+    expect(repository.savedSnapshots[repository.savedSnapshots.length - 1].tasks[0]).toMatchObject({
+      title: "Today planned task",
+      plannedDate: today,
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: /all tasks/i }));
+    await userEvent.type(screen.getByPlaceholderText(/add a task/i), "Backlog default task{Enter}");
+    await waitFor(() => expect(repository.savedSnapshots[repository.savedSnapshots.length - 1].tasks[0].title).toBe("Backlog default task"));
+    expect(repository.savedSnapshots[repository.savedSnapshots.length - 1].tasks[0].plannedDate).toBeNull();
   });
 
   it("edits the selected task title, note, priority, tags, and pinned state", async () => {
@@ -892,3 +1005,6 @@ describe("App", () => {
     expect(screen.queryByRole("button", { name: /start task/i })).not.toBeInTheDocument();
   });
 });
+
+
+

@@ -33,11 +33,20 @@ type TaskActions = {
   setActiveFilter: (filter: TaskFilter) => void;
   setSearchQuery: (query: string) => void;
   getFilteredTasks: (filter?: TaskFilter, query?: string) => Task[];
+  getTodayCompletedTasks: (query?: string) => Task[];
 };
 
 export type TaskStore = TaskState & TaskActions;
 
 const nowIso = () => new Date().toISOString();
+
+export const getLocalDateKey = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+};
 
 const normalizeTags = (tags: string[]) => {
   const seen = new Set<string>();
@@ -61,6 +70,7 @@ const createTask = (
   priority: TaskPriority,
   tags: string[],
   createdAt: string,
+  plannedDate: string | null,
 ): Task => ({
   id,
   title,
@@ -71,6 +81,7 @@ const createTask = (
   tags,
   createdAt,
   updatedAt: createdAt,
+  plannedDate,
   completedAt: null,
 });
 
@@ -105,6 +116,15 @@ const applySearch = (tasks: Task[], query: string) => {
 const filterTasks = (tasks: Task[], filter: TaskFilter, query = "") => {
   let filteredTasks = tasks;
 
+  if (filter === "today") {
+    const today = getLocalDateKey();
+    filteredTasks = tasks.filter((task) => !task.completed && task.plannedDate === today);
+  }
+
+  if (filter === "all") {
+    filteredTasks = tasks;
+  }
+
   if (filter === "important") {
     filteredTasks = tasks.filter((task) => task.priority === "important" || task.priority === "urgent");
   }
@@ -114,6 +134,13 @@ const filterTasks = (tasks: Task[], filter: TaskFilter, query = "") => {
   }
 
   return applySearch(filteredTasks, query);
+};
+
+const filterTodayCompletedTasks = (tasks: Task[], query = "") => {
+  const today = getLocalDateKey();
+  const completedToday = tasks.filter((task) => task.completed && task.completedAt?.slice(0, 10) === today);
+
+  return applySearch(completedToday, query);
 };
 
 const selectVisibleTask = (
@@ -241,6 +268,7 @@ const createTaskStoreState: StateCreator<TaskStore> = (set, get) => {
     }
 
     const timestamp = nowIso();
+    const plannedDate = get().activeFilter === "today" ? getLocalDateKey() : null;
     const task = createTask(
       `task-${crypto.randomUUID()}`,
       trimmedTitle,
@@ -248,6 +276,7 @@ const createTaskStoreState: StateCreator<TaskStore> = (set, get) => {
       "normal",
       [],
       timestamp,
+      plannedDate,
     );
     const tasks = [task, ...get().tasks];
 
@@ -358,6 +387,11 @@ const createTaskStoreState: StateCreator<TaskStore> = (set, get) => {
 
     return filterTasks(state.tasks, filter ?? state.activeFilter, query ?? state.searchQuery);
   },
+  getTodayCompletedTasks: (query) => {
+    const state = get();
+
+    return filterTodayCompletedTasks(state.tasks, query ?? state.searchQuery);
+  },
   };
 };
 
@@ -375,3 +409,4 @@ export const resetTaskStore = () => {
     searchQuery: "",
   });
 };
+

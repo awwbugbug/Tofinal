@@ -223,6 +223,17 @@
 - Decide whether to keep full-snapshot writes or introduce row-level repository methods.
 - Add schema migration tests before any future Task or attachment schema change.
 - Define database recovery UX for corrupted SQLite rows or failed migrations.
+- After Phase 9B, manually verify schema version `4` migration on a real v0.8 database with existing task, attachment, screenshot, and app binding data.
+- Decide whether future temporal work needs `dueDate`; Phase 9B intentionally added only `plannedDate`.
+- Add explicit scheduling UI before relying on users to manage future planned tasks at scale.
+
+## Must Fix Before Task Stack Work
+
+- Implement Phase 9C only after Phase 9B Today/All semantics are manually accepted.
+- Do not introduce `task_stacks`, `stack_id`, or `stack_order` in the temporal-field phase.
+- Define stack-level transaction APIs before implementing merge, split, or reorder.
+- Decide whether drag-and-drop will use native Pointer Events or `dnd-kit`; do not add a DnD dependency without a separate implementation plan.
+- Ensure non-main task detail editing rules are tested before exposing stack expand/collapse UI.
 
 ## Must Fix Before Screenshot Or Advanced Image Work
 

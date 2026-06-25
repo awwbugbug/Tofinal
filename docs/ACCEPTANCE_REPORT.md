@@ -1297,3 +1297,49 @@ Date: 2026-06-16
 - `npm run build`: passed, TypeScript and Vite production build completed.
 - `cargo check`: passed for `src-tauri`.
 - `npm run tauri dev`: verified Vite on port 1420 and `target\debug\tofinal.exe` startup; validation processes were stopped intentionally after startup verification.
+
+---
+
+# Phase 9B Temporal Task Fields And View Semantics
+
+Date: 2026-06-20
+
+## Implemented
+
+- Added `plannedDate: string | null` to the TypeScript `Task` model.
+- Kept `completedAt: string | null` as the completion timestamp field and made it part of Today completed semantics.
+- Upgraded SQLite task persistence to schema version `4`.
+- Added `planned_date TEXT NULL` to the `tasks` table.
+- Preserved existing task, attachment, screenshot, app binding, and preferences behavior.
+- Existing localStorage task snapshots without `plannedDate` migrate as `plannedDate = null`.
+- Existing SQLite tasks receive `planned_date = NULL` through the schema migration.
+
+## View Semantics
+
+- `Today` is now the execution view.
+- `Today` active tasks are incomplete tasks with `plannedDate` equal to the local date key for today.
+- `Today` completed section shows completed tasks whose `completedAt` date is today.
+- `All Tasks` is now the management/backlog view.
+- `All Tasks` shows all incomplete tasks, including backlog tasks with `plannedDate = null`, today tasks, and future planned tasks.
+- New tasks created in `Today` default to `plannedDate = today`.
+- New tasks created in `All Tasks`, `Important`, or `Pinned` default to `plannedDate = null`.
+
+## Not Implemented
+
+- No Task Stack schema.
+- No stack rendering.
+- No drag reorder.
+- No drag merge.
+- No subtasks.
+- No stack expand/collapse.
+- No date picker or calendar UI.
+- No due date field in this MVP.
+- No AI, MCP, Edge Dock, tray, or global shortcuts.
+
+## Verification Results
+
+- Added repository/store/UI tests for `plannedDate`, Today/All filtering, completion timestamps, and view-specific quick-add defaults.
+- `npm test`: passed, 17 test files, 131 tests.
+- `npm run build`: passed, TypeScript and Vite production build completed.
+- `cargo check`: passed for `src-tauri`.
+- `npm run tauri dev`: verified Vite on port 1420 and `target\debug\tofinal.exe` startup; validation process was stopped intentionally after startup verification.

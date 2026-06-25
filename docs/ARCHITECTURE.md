@@ -369,3 +369,46 @@ The UI data flow is:
 Task apps are not stored in `taskStore`, and Desktop Pin Mode does not load or render the app binding list.
 
 No shell plugin permission, clipboard permission, notification permission, tray permission, global shortcut permission, or software-scanning permission is used for Phase 5B.
+
+## Temporal Task View Boundary
+
+Phase 9B upgrades task persistence to SQLite schema version `4`.
+
+The `tasks` table now includes:
+
+```sql
+planned_date TEXT NULL
+```
+
+The TypeScript `Task` model maps this field as:
+
+```ts
+plannedDate: string | null
+```
+
+`completed_at` continues to map to:
+
+```ts
+completedAt: string | null
+```
+
+Date semantics:
+
+- `plannedDate` uses a local date key in `YYYY-MM-DD` format.
+- `getLocalDateKey(date = new Date())` uses local calendar fields, not UTC string slicing.
+- `completedAt` remains an ISO timestamp written when a task is completed.
+- Reopening a completed task clears `completedAt`.
+
+View semantics:
+
+- `Today` is the execution view. It shows incomplete tasks whose `plannedDate` equals today's local date key.
+- `Today` also exposes a completed-today section based on `completedAt`.
+- `All Tasks` is the management/backlog view. It shows all incomplete tasks regardless of whether `plannedDate` is `null`, today, or future.
+- `Important` and `Pinned` keep their existing semantics and are not treated as temporal execution views.
+
+Task creation:
+
+- Quick add in `Today` sets `plannedDate = today`.
+- Quick add in `All Tasks`, `Important`, or `Pinned` sets `plannedDate = null`.
+
+Phase 9B intentionally does not introduce `task_stacks`, `stack_id`, `stack_order`, drag reorder, drag merge, subtasks, or a date picker.

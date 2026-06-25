@@ -15,6 +15,7 @@ import type { Task, TaskFilter } from "@/types/task";
 type NormalModeLayoutProps = {
   tasks: Task[];
   filteredTasks: Task[];
+  todayCompletedTasks: Task[];
   selectedTask: Task | null;
   attachments: AttachmentView[];
   attachmentsLoading: boolean;
@@ -128,6 +129,7 @@ export function NormalModeLayout({
   taskAppsLoading,
   lastTaskAppsStartedAt,
   filteredTasks,
+  todayCompletedTasks,
   onAddTask,
   onAddImageAttachment,
   onAddScreenshotAttachment,
@@ -167,6 +169,7 @@ export function NormalModeLayout({
           ? t("filters.pinned")
           : t("filters.today");
   const hasSearch = Boolean(searchQuery.trim());
+  const showTodayCompletedSection = activeFilter === "today" && todayCompletedTasks.length > 0;
   const gridTemplateColumns = `${sidebarWidth}px minmax(${TASK_LIST_MIN_WIDTH}px, 1fr) ${detailWidth}px`;
 
   useEffect(() => {
@@ -286,16 +289,43 @@ export function NormalModeLayout({
           <span className="text-[var(--text-faint)]">{filteredTasks.length - openTasks.length}{t("task.completedCount")}</span>
         </div>
 
-        {filteredTasks.length > 0 ? (
-          <TaskList
-            onSelect={onSelectTask}
-            onToggle={onToggleTask}
-            selectedTaskId={selectedTaskId}
-            tasks={filteredTasks}
-          />
+        {filteredTasks.length > 0 || showTodayCompletedSection ? (
+          <div className="-mx-5 min-h-0 flex-1 overflow-hidden px-5">
+            <div className="h-full min-h-0 overflow-y-auto px-3 pb-7 pt-3 no-scrollbar">
+              {filteredTasks.length > 0 ? (
+                <TaskList
+                  embedded
+                  onSelect={onSelectTask}
+                  onToggle={onToggleTask}
+                  selectedTaskId={selectedTaskId}
+                  tasks={filteredTasks}
+                />
+              ) : (
+                <div className="flex min-h-40 items-center justify-center rounded-3xl border border-dashed border-[var(--border-soft)] bg-[var(--surface-card-hover)] p-6 text-center text-sm text-[var(--text-faint)]">
+                  {hasSearch ? t("task.noSearchResults") : t("task.noTasksToday")}
+                </div>
+              )}
+              {showTodayCompletedSection && (
+                <section className="mt-5 space-y-3" aria-label={t("task.completedToday")}>
+                  <div className="flex items-center justify-between text-xs font-medium uppercase text-[var(--text-faint)]">
+                    <span>{t("task.completedToday")}</span>
+                    <span>{todayCompletedTasks.length}</span>
+                  </div>
+                  <TaskList
+                    embedded
+                    onSelect={onSelectTask}
+                    onToggle={onToggleTask}
+                    selectedTaskId={selectedTaskId}
+                    testId="today-completed-task-list"
+                    tasks={todayCompletedTasks}
+                  />
+                </section>
+              )}
+            </div>
+          </div>
         ) : (
           <div className="flex flex-1 items-center justify-center rounded-3xl border border-dashed border-[var(--border-soft)] bg-[var(--surface-card-hover)] p-6 text-center text-sm text-[var(--text-faint)]">
-            {hasSearch ? t("task.noSearchResults") : t("task.noTasksInView")}
+            {hasSearch ? t("task.noSearchResults") : activeFilter === "today" ? t("task.noTasksToday") : t("task.noTasksInView")}
           </div>
         )}
       </section>

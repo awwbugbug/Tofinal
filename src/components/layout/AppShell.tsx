@@ -40,6 +40,7 @@ export function AppShell() {
   const setActiveFilter = useTaskStore((state) => state.setActiveFilter);
   const setSearchQuery = useTaskStore((state) => state.setSearchQuery);
   const getFilteredTasks = useTaskStore((state) => state.getFilteredTasks);
+  const getTodayCompletedTasks = useTaskStore((state) => state.getTodayCompletedTasks);
   const attachmentsByTaskId = useAttachmentStore((state) => state.itemsByTaskId);
   const attachmentLoadingTaskIds = useAttachmentStore((state) => state.loadingTaskIds);
   const attachmentsAdding = useAttachmentStore((state) => state.adding);
@@ -68,6 +69,7 @@ export function AppShell() {
   const startTaskApps = useTaskAppStore((state) => state.startTask);
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null;
   const filteredTasks = getFilteredTasks(activeFilter);
+  const todayCompletedTasks = activeFilter === "today" ? getTodayCompletedTasks() : [];
   const selectedTaskAttachments = selectedTaskId ? (attachmentsByTaskId[selectedTaskId] ?? []) : [];
   const selectedTaskAttachmentsLoading = selectedTaskId ? Boolean(attachmentLoadingTaskIds[selectedTaskId]) : false;
   const selectedTaskApps = selectedTaskId ? (appsByTaskId[selectedTaskId] ?? []) : [];
@@ -176,6 +178,7 @@ export function AppShell() {
         <NormalModeLayout
           activeFilter={activeFilter}
           filteredTasks={filteredTasks}
+          todayCompletedTasks={todayCompletedTasks}
           onAddTask={addTask}
           onDeleteTask={handleDeleteTask}
           attachments={selectedTaskAttachments}

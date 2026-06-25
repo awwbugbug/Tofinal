@@ -24,6 +24,7 @@ type TaskRow = {
   created_at: string;
   updated_at: string;
   completed_at: string | null;
+  planned_date: string | null;
   sort_order: number;
 };
 
@@ -53,6 +54,7 @@ const task = (overrides: Partial<Task> = {}): Task => ({
   tags: [],
   createdAt: "2026-06-11T08:00:00.000Z",
   updatedAt: "2026-06-11T08:00:00.000Z",
+  plannedDate: null,
   completedAt: null,
   ...overrides,
 });
@@ -203,7 +205,7 @@ describe("sqlite attachment repository", () => {
 
     expect(db.attachmentTableExists).toBe(true);
     expect(db.foreignKeysEnabled).toBe(true);
-    expect(db.meta.get("schema_version")).toBe("3");
+    expect(db.meta.get("schema_version")).toBe("4");
     expect(db.tasks.map((row) => row.title)).toEqual(["Task with attachments"]);
   });
 
@@ -223,7 +225,7 @@ describe("sqlite attachment repository", () => {
 
     await repository.listByTaskId("task-1");
 
-    expect(db.meta.get("schema_version")).toBe("3");
+    expect(db.meta.get("schema_version")).toBe("4");
     expect(db.executed.some((sql) => sql.includes("INSERT INTO schema_meta (key, value)\n"))).toBe(true);
   });
 
@@ -310,6 +312,7 @@ const taskToRow = (value: Task, sortOrder: number): TaskRow => ({
   created_at: value.createdAt,
   updated_at: value.updatedAt,
   completed_at: value.completedAt,
+  planned_date: value.plannedDate,
   sort_order: sortOrder,
 });
 
@@ -324,7 +327,8 @@ const taskToRowFromParams = (params: Array<string | number | null>): TaskRow => 
   created_at: String(params[7]),
   updated_at: String(params[8]),
   completed_at: params[9] === null ? null : String(params[9]),
-  sort_order: Number(params[10]),
+  planned_date: params[10] === null ? null : String(params[10]),
+  sort_order: Number(params[11]),
 });
 
 const attachmentToRow = (value: TaskAttachment): AttachmentRow => ({

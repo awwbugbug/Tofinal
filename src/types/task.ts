@@ -10,6 +10,7 @@ export type Task = {
   tags: string[];
   createdAt: string;
   updatedAt: string;
+  plannedDate: string | null;
   completedAt: string | null;
 };
 

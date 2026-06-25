@@ -1,8 +1,8 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resetTaskRepositoryForTest, setTaskRepositoryForTest } from "@/repositories/taskRepository";
 import { createSeedTasks } from "@/storage/taskStorage";
-import { createTaskStore } from "@/stores/taskStore";
+import { createTaskStore, getLocalDateKey } from "@/stores/taskStore";
 import { createMemoryTaskRepository, flushPromises } from "@/test/taskRepositoryTestUtils";
 import type { TaskSnapshot } from "@/storage/taskStorage";
 
@@ -36,6 +36,10 @@ describe("task store", () => {
   beforeEach(() => {
     localStorage.clear();
     resetTaskRepositoryForTest();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("hydrates task state from the active repository", async () => {
@@ -90,6 +94,28 @@ describe("task store", () => {
     expect(store.getState().selectedTaskId).toBe(created?.id);
     const lastSnapshot = repository.savedSnapshots[repository.savedSnapshots.length - 1];
     expect(lastSnapshot.tasks[0].title).toBe("Review inbox");
+  });
+
+  it("sets plannedDate for new Today tasks and keeps All Tasks additions in backlog", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 5, 20, 10, 30));
+    const { store } = await createHydratedStore();
+
+    store.getState().setActiveFilter("today");
+    store.getState().addTask("Execute today");
+
+    expect(store.getState().tasks[0]).toMatchObject({
+      title: "Execute today",
+      plannedDate: "2026-06-20",
+    });
+
+    store.getState().setActiveFilter("all");
+    store.getState().addTask("Backlog item");
+
+    expect(store.getState().tasks[0]).toMatchObject({
+      title: "Backlog item",
+      plannedDate: null,
+    });
   });
 
   it("ignores an empty task title", async () => {
@@ -177,20 +203,37 @@ describe("task store", () => {
     store.getState().setMode("pin");
     store.getState().setMode("normal");
 
-    expect(store.getState().selectedTaskId).toBe(secondTaskId);
+    expect(store.getState().selectedTaskId).toBe(store.getState().tasks[0].id);
     expect(store.getState().tasks[1].completed).toBe(true);
   });
 
-  it("filters Today, All Tasks, Important, and Pinned tasks", async () => {
+  it("filters Today as an execution view and All/Important/Pinned as complete attribute views", async () => {
     const { store } = await createHydratedStore();
-    const secondTaskId = store.getState().tasks[1].id;
+    const today = getLocalDateKey();
+    const [todayTask, backlogTask, futureTask, doneTask] = store.getState().tasks;
 
-    store.getState().updateTask(secondTaskId, { pinned: true });
+    store.setState({
+      tasks: [
+        { ...todayTask, priority: "normal", pinned: false, plannedDate: today, completed: false, completedAt: null },
+        { ...backlogTask, priority: "normal", pinned: false, plannedDate: null, completed: false, completedAt: null },
+        { ...futureTask, priority: "important", pinned: false, plannedDate: "2099-01-01", completed: false, completedAt: null },
+        { ...doneTask, priority: "urgent", pinned: true, plannedDate: today, completed: true, completedAt: `${today}T09:00:00.000Z` },
+      ],
+    });
 
-    expect(store.getState().getFilteredTasks("today")).toHaveLength(4);
-    expect(store.getState().getFilteredTasks("all")).toHaveLength(4);
-    expect(store.getState().getFilteredTasks("important")).toHaveLength(2);
-    expect(store.getState().getFilteredTasks("pinned")).toHaveLength(1);
+    expect(store.getState().getFilteredTasks("today").map((task) => task.id)).toEqual([todayTask.id]);
+    expect(store.getState().getTodayCompletedTasks().map((task) => task.id)).toEqual([doneTask.id]);
+    expect(store.getState().getFilteredTasks("all").map((task) => task.id)).toEqual([
+      todayTask.id,
+      backlogTask.id,
+      futureTask.id,
+      doneTask.id,
+    ]);
+    expect(store.getState().getFilteredTasks("important").map((task) => task.id)).toEqual([futureTask.id, doneTask.id]);
+    expect(store.getState().getFilteredTasks("pinned").map((task) => task.id)).toEqual([doneTask.id]);
+  });
+  it("formats local date keys without UTC truncation", () => {
+    expect(getLocalDateKey(new Date(2026, 0, 2, 1, 5))).toBe("2026-01-02");
   });
 
   it("searches title and note together with the active filter", async () => {
@@ -374,3 +417,6 @@ describe("task store", () => {
     expect(savedSnapshots).toHaveLength(0);
   });
 });
+
+
+
