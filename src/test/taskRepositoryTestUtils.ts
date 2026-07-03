@@ -1,9 +1,13 @@
 import type { TaskRepository } from "@/repositories/taskRepository";
-import type { TaskSnapshot } from "@/storage/taskStorage";
+import { normalizeTaskSnapshot, type TaskSnapshot } from "@/storage/taskStorage";
 
-const cloneSnapshot = (snapshot: TaskSnapshot): TaskSnapshot => ({
-  tasks: snapshot.tasks.map((task) => ({ ...task, tags: [...task.tags] })),
-});
+const cloneSnapshot = (snapshot: TaskSnapshot): TaskSnapshot => {
+  const normalizedSnapshot = normalizeTaskSnapshot(snapshot);
+  return {
+    tasks: normalizedSnapshot.tasks.map((task) => ({ ...task, tags: [...task.tags] })),
+    stacks: normalizedSnapshot.stacks.map((stack) => ({ ...stack })),
+  };
+};
 
 export const createMemoryTaskRepository = (initialSnapshot: TaskSnapshot) => {
   let snapshot = cloneSnapshot(initialSnapshot);

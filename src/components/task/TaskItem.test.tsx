@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+﻿import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TaskItem } from "@/components/task/TaskItem";
@@ -22,6 +22,8 @@ const baseTask: Task = {
   createdAt: "2026-06-16T10:00:00.000Z",
   updatedAt: "2026-06-16T10:00:00.000Z",
   plannedDate: "2026-06-16",
+  stackId: "stack-task-1",
+  stackOrder: 0,
   completedAt: null,
 };
 
@@ -135,6 +137,7 @@ describe("TaskItem completion celebrations", () => {
     expect(screen.getByText("Urgent")).toHaveClass("shrink-0");
   });
 });
+
 
 
 

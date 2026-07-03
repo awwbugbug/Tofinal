@@ -412,3 +412,55 @@ Task creation:
 - Quick add in `All Tasks`, `Important`, or `Pinned` sets `plannedDate = null`.
 
 Phase 9B intentionally does not introduce `task_stacks`, `stack_id`, `stack_order`, drag reorder, drag merge, subtasks, or a date picker.
+
+## Task Stack Boundary
+
+Phase 9C upgrades task persistence to SQLite schema version `5`.
+
+New table:
+
+```sql
+CREATE TABLE IF NOT EXISTS task_stacks (
+  id TEXT PRIMARY KEY,
+  sort_order INTEGER NOT NULL,
+  collapsed INTEGER NOT NULL CHECK (collapsed IN (0, 1)),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+```
+
+New task columns:
+
+```sql
+stack_id TEXT NULL;
+stack_order INTEGER NULL;
+```
+
+Migration behavior:
+
+- Existing v4 tasks are migrated to singleton stacks.
+- Each existing task receives `stack_id = 'stack-' || task.id` and `stack_order = 0`.
+- Each generated stack inherits the task's previous `sort_order`.
+- `task_attachments` and `task_apps` are not migrated because they remain attached to concrete task ids.
+
+Data flow:
+
+1. `sqliteTaskRepository.loadSnapshot()` loads tasks and stacks through the shared SQLite context.
+2. The repository normalizes missing stack data into singleton stacks for backward compatibility.
+3. `taskStore` stores `tasks` and `stacks` together.
+4. Stack selectors build `TaskStackView` objects for rendering.
+5. Mutations persist `{ tasks, stacks }` through the existing serialized save queue.
+
+Rendering rules:
+
+- `mainTask` is always the task with the smallest `stackOrder` inside a stack.
+- Collapsed stack rendering shows the main task and stack progress metadata.
+- Expanded stack rendering shows all tasks ordered by `stackOrder`.
+- Selecting a main task opens DetailPanel as before.
+- Selecting a non-main task only updates `highlightedTaskId`; full editing remains a later phase.
+
+Current limits:
+
+- No drag reorder, merge, split, or nested stack support.
+- No new DnD dependency.
+- Desktop Pin Mode remains lightweight and does not expose stack editing controls.

@@ -982,6 +982,19 @@ body {
     padding: 0.375rem 0.25rem 0.875rem;
   }
 
+
+  .task-stack-shell {
+    overflow: visible;
+  }
+
+  .task-stack-expanded {
+    border: 1px solid var(--border-soft);
+    border-radius: 1.75rem;
+    background: color-mix(in srgb, var(--surface-card) 58%, transparent);
+    box-shadow: var(--shadow-card-hover);
+    overflow: visible;
+    padding: 0.75rem;
+  }
   .detail-action-row {
     align-items: stretch;
     display: flex;
@@ -1138,3 +1151,4 @@ body {
     animation-duration: 1ms;
   }
 }
+

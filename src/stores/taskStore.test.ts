@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+﻿import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resetTaskRepositoryForTest, setTaskRepositoryForTest } from "@/repositories/taskRepository";
 import { createSeedTasks } from "@/storage/taskStorage";
@@ -416,7 +416,73 @@ describe("task store", () => {
     expect(store.getState().tasks[0].title).toBe("Finalize the first-stage desktop shell");
     expect(savedSnapshots).toHaveLength(0);
   });
+
+  it("creates a singleton stack for each added task and persists stacks with tasks", async () => {
+    const { store, repository } = await createHydratedStore();
+
+    store.getState().addTask("Stacked singleton");
+    await flushPromises();
+
+    const createdTask = store.getState().tasks[0];
+    const createdStack = store.getState().stacks.find((stack) => stack.id === createdTask.stackId);
+    expect(createdTask.stackOrder).toBe(0);
+    expect(createdStack).toMatchObject({
+      id: createdTask.stackId,
+      collapsed: true,
+    });
+
+    const lastSnapshot = repository.savedSnapshots[repository.savedSnapshots.length - 1];
+    expect(lastSnapshot.stacks?.some((stack) => stack.id === createdTask.stackId)).toBe(true);
+  });
+
+  it("toggles stack collapsed state and persists it", async () => {
+    const { store, repository } = await createHydratedStore();
+    const stackId = store.getState().stacks[0].id;
+
+    store.getState().toggleStackCollapsed(stackId);
+    await flushPromises();
+
+    expect(store.getState().stacks[0]).toMatchObject({ id: stackId, collapsed: false });
+    const lastSnapshot = repository.savedSnapshots[repository.savedSnapshots.length - 1];
+    expect(lastSnapshot.stacks?.find((stack) => stack.id === stackId)?.collapsed).toBe(false);
+  });
+
+  it("uses the lowest stackOrder task as main and keeps non-main selection out of DetailPanel", async () => {
+    const { store } = await createHydratedStore();
+    const [firstTask, secondTask, ...remainingTasks] = store.getState().tasks;
+    const stack = {
+      id: "stack-combined",
+      sortOrder: -10,
+      collapsed: false,
+      createdAt: firstTask.createdAt,
+      updatedAt: firstTask.updatedAt,
+    };
+    const mainTask = { ...firstTask, id: "task-main", stackId: stack.id, stackOrder: 0, title: "Main stack task" };
+    const childTask = { ...secondTask, id: "task-child", stackId: stack.id, stackOrder: 1, title: "Child stack task" };
+
+    store.setState({
+      tasks: [mainTask, childTask, ...remainingTasks],
+      stacks: [stack, ...store.getState().stacks.slice(2)],
+      selectedTaskId: mainTask.id,
+      highlightedTaskId: null,
+    });
+
+    const view = store.getState().getStackViews("all")[0];
+    expect(view.mainTask.id).toBe(mainTask.id);
+    expect(view.tasks.map((task) => task.id)).toEqual([mainTask.id, childTask.id]);
+
+    store.getState().selectTask(childTask.id);
+    expect(store.getState().selectedTaskId).toBe(mainTask.id);
+    expect(store.getState().highlightedTaskId).toBe(childTask.id);
+
+    store.getState().deleteTask(mainTask.id);
+    await flushPromises();
+
+    expect(store.getState().getStackViews("all")[0].mainTask.id).toBe(childTask.id);
+    expect(store.getState().tasks.find((task) => task.id === childTask.id)?.stackOrder).toBe(0);
+  });
 });
+
 
 
 

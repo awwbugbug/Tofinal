@@ -1,4 +1,4 @@
-import type { LanguagePreference } from "@/stores/preferencesStore";
+﻿import type { LanguagePreference } from "@/stores/preferencesStore";
 
 export const messages = {
   "zh-CN": {
@@ -68,6 +68,12 @@ export const messages = {
     "priority.normal": "普通",
     "priority.important": "重要",
     "priority.urgent": "紧急",
+    "stack.expand": "展开堆叠",
+    "stack.collapse": "收起堆叠",
+    "stack.tasks": "个任务",
+    "stack.subtasks": "个子任务",
+    "stack.mainTask": "主任务",
+    "stack.childTask": "子任务",
     "attachments.title": "附件",
     "attachments.addImage": "添加图片",
     "attachments.addImageAction": "添加图片附件",
@@ -196,6 +202,12 @@ export const messages = {
     "priority.normal": "Normal",
     "priority.important": "Important",
     "priority.urgent": "Urgent",
+    "stack.expand": "Expand stack",
+    "stack.collapse": "Collapse stack",
+    "stack.tasks": "tasks",
+    "stack.subtasks": "subtasks",
+    "stack.mainTask": "Main task",
+    "stack.childTask": "Child task",
     "attachments.title": "Attachments",
     "attachments.addImage": "Add Image",
     "attachments.addImageAction": "Add image attachment",
@@ -266,3 +278,4 @@ export const createTranslator = (language: LanguagePreference) => {
 
   return (key: string) => dictionary[key as MessageKey] ?? key;
 };
+

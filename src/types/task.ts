@@ -11,7 +11,26 @@ export type Task = {
   createdAt: string;
   updatedAt: string;
   plannedDate: string | null;
+  stackId: string;
+  stackOrder: number;
   completedAt: string | null;
+};
+
+export type TaskStack = {
+  id: string;
+  sortOrder: number;
+  collapsed: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TaskStackView = {
+  stack: TaskStack;
+  tasks: Task[];
+  mainTask: Task;
+  completedCount: number;
+  totalCount: number;
+  todayRelevantCount: number;
 };
 
 export type AppMode = "normal" | "pin";

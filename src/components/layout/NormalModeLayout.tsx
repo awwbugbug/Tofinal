@@ -1,4 +1,4 @@
-import { type PointerEvent as ReactPointerEvent, useEffect, useState } from "react";
+﻿import { type PointerEvent as ReactPointerEvent, useEffect, useState } from "react";
 import { PanelTopOpen, Search } from "lucide-react";
 
 import { Sidebar } from "@/components/layout/Sidebar";
@@ -10,12 +10,13 @@ import { Input } from "@/components/ui/input";
 import { useI18n } from "@/i18n/useI18n";
 import type { AttachmentView, FinalScreenshot, PendingScreenshot } from "@/stores/attachmentStore";
 import type { TaskAppView } from "@/stores/taskAppStore";
-import type { Task, TaskFilter } from "@/types/task";
+import type { Task, TaskFilter, TaskStackView } from "@/types/task";
 
 type NormalModeLayoutProps = {
   tasks: Task[];
-  filteredTasks: Task[];
-  todayCompletedTasks: Task[];
+  stackViews: TaskStackView[];
+  todayCompletedStackViews: TaskStackView[];
+  highlightedTaskId: string | null;
   selectedTask: Task | null;
   attachments: AttachmentView[];
   attachmentsLoading: boolean;
@@ -53,6 +54,7 @@ type NormalModeLayoutProps = {
   onSearchChange: (query: string) => void;
   onSelectTask: (id: string) => void;
   onToggleTask: (id: string) => void;
+  onToggleStackCollapsed: (stackId: string) => void;
   onUpdateTask: (
     id: string,
     update: Partial<Pick<Task, "title" | "note" | "priority" | "tags" | "pinned">>,
@@ -110,6 +112,8 @@ const normalizePanelWidths = (sidebarWidth: number, detailWidth: number) => {
   };
 };
 
+const countStackTasks = (stackViews: TaskStackView[]) => stackViews.reduce((count, view) => count + view.tasks.length, 0);
+
 export function NormalModeLayout({
   activeFilter,
   attachmentDeletingIds,
@@ -118,6 +122,7 @@ export function NormalModeLayout({
   attachmentsAdding,
   attachmentsCapturing,
   attachmentsLoading,
+  highlightedTaskId,
   onCancelScreenshotAttachment,
   onConfirmScreenshotAttachment,
   pendingScreenshot,
@@ -128,8 +133,8 @@ export function NormalModeLayout({
   taskAppsLaunching,
   taskAppsLoading,
   lastTaskAppsStartedAt,
-  filteredTasks,
-  todayCompletedTasks,
+  stackViews,
+  todayCompletedStackViews,
   onAddTask,
   onAddImageAttachment,
   onAddScreenshotAttachment,
@@ -141,6 +146,7 @@ export function NormalModeLayout({
   onSearchChange,
   onSelectTask,
   onSwitchToPin,
+  onToggleStackCollapsed,
   onToggleTask,
   onStartTaskApps,
   onUpdateTask,
@@ -159,7 +165,9 @@ export function NormalModeLayout({
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [detailWidth, setDetailWidth] = useState(DEFAULT_DETAIL_WIDTH);
   const [activeResizeHandle, setActiveResizeHandle] = useState<"sidebar" | "detail" | null>(null);
-  const openTasks = filteredTasks.filter((task) => !task.completed);
+  const visibleTasks = stackViews.flatMap((view) => view.tasks);
+  const openTasks = visibleTasks.filter((task) => !task.completed);
+  const completedTasks = visibleTasks.filter((task) => task.completed);
   const title =
     activeFilter === "important"
       ? t("filters.important")
@@ -169,7 +177,7 @@ export function NormalModeLayout({
           ? t("filters.pinned")
           : t("filters.today");
   const hasSearch = Boolean(searchQuery.trim());
-  const showTodayCompletedSection = activeFilter === "today" && todayCompletedTasks.length > 0;
+  const showTodayCompletedSection = activeFilter === "today" && todayCompletedStackViews.length > 0;
   const gridTemplateColumns = `${sidebarWidth}px minmax(${TASK_LIST_MIN_WIDTH}px, 1fr) ${detailWidth}px`;
 
   useEffect(() => {
@@ -254,9 +262,7 @@ export function NormalModeLayout({
 
       <section className="surface-panel flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-[var(--radius-panel)] border px-5 pb-5 pt-8">
         <header className="mb-5 flex shrink-0 items-center justify-between gap-4">
-          <div>
-            <h2 className="text-3xl font-semibold tracking-normal text-[var(--text-primary)]">{title}</h2>
-          </div>
+          <h2 className="text-3xl font-semibold tracking-normal text-[var(--text-primary)]">{title}</h2>
           <Button
             aria-label={t("window.switchToPin")}
             className="mode-switch-button"
@@ -286,19 +292,22 @@ export function NormalModeLayout({
 
         <div className="my-5 flex shrink-0 items-center justify-between text-sm">
           <span className="text-[var(--text-muted)]">{openTasks.length}{t("task.openCount")}</span>
-          <span className="text-[var(--text-faint)]">{filteredTasks.length - openTasks.length}{t("task.completedCount")}</span>
+          <span className="text-[var(--text-faint)]">{completedTasks.length}{t("task.completedCount")}</span>
         </div>
 
-        {filteredTasks.length > 0 || showTodayCompletedSection ? (
+        {stackViews.length > 0 || showTodayCompletedSection ? (
           <div className="-mx-5 min-h-0 flex-1 overflow-hidden px-5">
             <div className="h-full min-h-0 overflow-y-auto px-3 pb-7 pt-3 no-scrollbar">
-              {filteredTasks.length > 0 ? (
+              {stackViews.length > 0 ? (
                 <TaskList
                   embedded
+                  highlightedTaskId={highlightedTaskId}
+                  onHighlightTask={onSelectTask}
                   onSelect={onSelectTask}
                   onToggle={onToggleTask}
+                  onToggleStackCollapsed={onToggleStackCollapsed}
                   selectedTaskId={selectedTaskId}
-                  tasks={filteredTasks}
+                  stackViews={stackViews}
                 />
               ) : (
                 <div className="flex min-h-40 items-center justify-center rounded-3xl border border-dashed border-[var(--border-soft)] bg-[var(--surface-card-hover)] p-6 text-center text-sm text-[var(--text-faint)]">
@@ -309,15 +318,18 @@ export function NormalModeLayout({
                 <section className="mt-5 space-y-3" aria-label={t("task.completedToday")}>
                   <div className="flex items-center justify-between text-xs font-medium uppercase text-[var(--text-faint)]">
                     <span>{t("task.completedToday")}</span>
-                    <span>{todayCompletedTasks.length}</span>
+                    <span>{countStackTasks(todayCompletedStackViews)}</span>
                   </div>
                   <TaskList
                     embedded
+                    highlightedTaskId={highlightedTaskId}
+                    onHighlightTask={onSelectTask}
                     onSelect={onSelectTask}
                     onToggle={onToggleTask}
+                    onToggleStackCollapsed={onToggleStackCollapsed}
                     selectedTaskId={selectedTaskId}
+                    stackViews={todayCompletedStackViews}
                     testId="today-completed-task-list"
-                    tasks={todayCompletedTasks}
                   />
                 </section>
               )}

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+﻿import { useEffect, useRef } from "react";
 import confetti from "canvas-confetti";
 import { AlertCircle, CircleDot, Flag } from "lucide-react";
 
@@ -13,6 +13,7 @@ type TaskItemProps = {
   task: Task;
   selected?: boolean;
   compact?: boolean;
+  subtask?: boolean;
   onToggle: (id: string) => void;
   onSelect: (id: string) => void;
 };
@@ -100,7 +101,7 @@ const fireCompletionConfetti = (element: HTMLElement | null) => {
   });
 };
 
-export function TaskItem({ compact = false, onSelect, onToggle, selected = false, task }: TaskItemProps) {
+export function TaskItem({ compact = false, onSelect, onToggle, selected = false, subtask = false, task }: TaskItemProps) {
   const { t } = useI18n();
   const completionCelebrationsEnabled = usePreferencesStore((state) => state.completionCelebrationsEnabled);
   const PriorityIcon = priorityIcon[task.priority];
@@ -132,6 +133,7 @@ export function TaskItem({ compact = false, onSelect, onToggle, selected = false
           : "scale-100 border-[var(--border-soft)] bg-[color-mix(in_srgb,var(--surface-card)_64%,transparent)] hover:scale-[1.004] hover:border-[var(--border-medium)] hover:bg-[var(--surface-card-hover)] hover:shadow-[var(--shadow-card-hover)]",
         task.completed && "opacity-70",
         compact && "rounded-[18px] p-2.5 hover:bg-[var(--surface-card-hover)]",
+        subtask && "rounded-[18px] bg-[color-mix(in_srgb,var(--surface-card)_44%,transparent)] p-3 shadow-none hover:scale-[1.002]",
       )}
       data-testid="task-card"
       onClick={() => onSelect(task.id)}
@@ -176,5 +178,8 @@ export function TaskItem({ compact = false, onSelect, onToggle, selected = false
     </article>
   );
 }
+
+
+
 
 

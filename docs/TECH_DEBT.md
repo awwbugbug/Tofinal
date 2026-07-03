@@ -1,4 +1,4 @@
-# ToFinal Technical Debt
+﻿# ToFinal Technical Debt
 
 ## Phase 8 Widget Experiment Withdrawn
 
@@ -227,13 +227,13 @@
 - Decide whether future temporal work needs `dueDate`; Phase 9B intentionally added only `plannedDate`.
 - Add explicit scheduling UI before relying on users to manage future planned tasks at scale.
 
-## Must Fix Before Task Stack Work
+## Must Fix Before Advanced Task Stack Work
 
-- Implement Phase 9C only after Phase 9B Today/All semantics are manually accepted.
-- Do not introduce `task_stacks`, `stack_id`, or `stack_order` in the temporal-field phase.
-- Define stack-level transaction APIs before implementing merge, split, or reorder.
-- Decide whether drag-and-drop will use native Pointer Events or `dnd-kit`; do not add a DnD dependency without a separate implementation plan.
-- Ensure non-main task detail editing rules are tested before exposing stack expand/collapse UI.
+- Phase 9C now provides the first `task_stacks` schema and stack rendering MVP.
+- Define explicit stack-level mutation APIs before implementing merge, split, reorder, or drag-to-combine.
+- Decide whether drag-and-drop will use native Pointer Events or a constrained DnD dependency; do not add a DnD dependency without a separate implementation plan.
+- Decide how non-main task detail editing should expose notes, attachments, screenshots, and app bindings before enabling full child-task editing.
+- Manually validate schema version `5` migration on a real v0.9B database before freezing the next baseline.
 
 ## Must Fix Before Screenshot Or Advanced Image Work
 
@@ -285,3 +285,21 @@
 6. Add voice input only after task creation/editing paths are stable.
 7. Add tray/global shortcuts after window lifecycle is explicitly designed.
 8. Package and sign the app for regular personal use.
+
+## Phase 9C Stack Follow-Ups
+
+Resolved in Phase 9C:
+
+- Basic `task_stacks` schema exists at SQLite schema version `5`.
+- Existing v4 tasks migrate into singleton stacks.
+- Normal Mode renders stack views and supports expand/collapse persistence.
+- Non-main task selection is intentionally highlight-only.
+
+Still deferred:
+
+- Define explicit stack merge, split, and reorder commands before adding any UI.
+- Decide whether stack reorder uses native Pointer Events or a constrained DnD dependency; do not add a DnD library without a separate plan.
+- Add full non-main task editing only after deciding how attachments, screenshots, and app bindings should be surfaced for child tasks.
+- Manually verify schema version `5` migration on a real v0.9B database with existing attachments, screenshots, task apps, and preferences.
+- Consider stack-level accessibility labels and keyboard expand/collapse shortcuts before polishing stack interaction.
+

@@ -1,8 +1,8 @@
-import { createSeedTasks, loadStoredTaskSnapshot, type TaskSnapshot } from "@/storage/taskStorage";
-import type { Task, TaskPriority } from "@/types/task";
+﻿import { createSeedTaskSnapshot, loadStoredTaskSnapshot, normalizeTaskSnapshot, singletonStackIdForTask, type TaskSnapshot } from "@/storage/taskStorage";
+import type { Task, TaskPriority, TaskStack } from "@/types/task";
 
 export const SQLITE_DATABASE_PATH = "sqlite:tofinal.db";
-export const SQLITE_SCHEMA_VERSION = "4";
+export const SQLITE_SCHEMA_VERSION = "5";
 
 export type SqlValue = string | number | null;
 
@@ -31,7 +31,17 @@ type SqlTaskRow = {
   updated_at: unknown;
   completed_at: unknown;
   planned_date?: unknown;
+  stack_id?: unknown;
+  stack_order?: unknown;
   sort_order?: unknown;
+};
+
+type SqlTaskStackRow = {
+  id: unknown;
+  sort_order: unknown;
+  collapsed: unknown;
+  created_at: unknown;
+  updated_at: unknown;
 };
 
 const SCHEMA_SQL = [
@@ -52,9 +62,19 @@ const SCHEMA_SQL = [
     updated_at TEXT NOT NULL,
     completed_at TEXT NULL,
     planned_date TEXT NULL,
+    stack_id TEXT NULL,
+    stack_order INTEGER NULL,
     sort_order INTEGER NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS task_stacks (
+    id TEXT PRIMARY KEY,
+    sort_order INTEGER NOT NULL,
+    collapsed INTEGER NOT NULL DEFAULT 1 CHECK (collapsed IN (0, 1)),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
   "CREATE INDEX IF NOT EXISTS idx_tasks_sort_order ON tasks(sort_order)",
+  "CREATE INDEX IF NOT EXISTS idx_task_stacks_sort_order ON task_stacks(sort_order)",
   `CREATE TABLE IF NOT EXISTS task_attachments (
     id TEXT PRIMARY KEY,
     task_id TEXT NOT NULL,
@@ -103,11 +123,36 @@ const SELECT_TASKS_SQL = `SELECT
   updated_at,
   completed_at,
   planned_date,
+  stack_id,
+  stack_order,
   sort_order
 FROM tasks
 ORDER BY sort_order ASC, created_at DESC, id ASC`;
 
+const SELECT_STACKS_SQL = `SELECT
+  id,
+  sort_order,
+  collapsed,
+  created_at,
+  updated_at
+FROM task_stacks
+ORDER BY sort_order ASC, created_at ASC, id ASC`;
+
 const SELECT_TASK_IDS_SQL = "SELECT id FROM tasks";
+const SELECT_STACK_IDS_SQL = "SELECT id FROM task_stacks";
+
+const UPSERT_STACK_SQL = `INSERT INTO task_stacks (
+  id,
+  sort_order,
+  collapsed,
+  created_at,
+  updated_at
+) VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(id) DO UPDATE SET
+  sort_order = excluded.sort_order,
+  collapsed = excluded.collapsed,
+  created_at = excluded.created_at,
+  updated_at = excluded.updated_at`;
 
 const UPSERT_TASK_SQL = `INSERT INTO tasks (
   id,
@@ -121,8 +166,10 @@ const UPSERT_TASK_SQL = `INSERT INTO tasks (
   updated_at,
   completed_at,
   planned_date,
+  stack_id,
+  stack_order,
   sort_order
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
   title = excluded.title,
   note = excluded.note,
@@ -134,6 +181,8 @@ ON CONFLICT(id) DO UPDATE SET
   updated_at = excluded.updated_at,
   completed_at = excluded.completed_at,
   planned_date = excluded.planned_date,
+  stack_id = excluded.stack_id,
+  stack_order = excluded.stack_order,
   sort_order = excluded.sort_order`;
 
 const isPriority = (value: unknown): value is TaskPriority =>
@@ -151,6 +200,14 @@ const booleanFromInteger = (value: unknown, field: string) => {
   throw new Error(`Invalid SQLite boolean field: ${field}`);
 };
 
+const numberField = (value: unknown, field: string) => {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(`Invalid SQLite number field: ${field}`);
+  }
+
+  return value;
+};
+
 const stringField = (value: unknown, field: string) => {
   if (typeof value !== "string") {
     throw new Error(`Invalid SQLite text field: ${field}`);
@@ -158,6 +215,14 @@ const stringField = (value: unknown, field: string) => {
 
   return value;
 };
+
+export const stackFromSqlRow = (row: SqlTaskStackRow): TaskStack => ({
+  id: stringField(row.id, "stack.id"),
+  sortOrder: numberField(row.sort_order, "stack.sort_order"),
+  collapsed: booleanFromInteger(row.collapsed, "stack.collapsed"),
+  createdAt: stringField(row.created_at, "stack.created_at"),
+  updatedAt: stringField(row.updated_at, "stack.updated_at"),
+});
 
 export const taskFromSqlRow = (row: SqlTaskRow): Task => {
   const priority = row.priority;
@@ -181,8 +246,12 @@ export const taskFromSqlRow = (row: SqlTaskRow): Task => {
     throw new Error("Invalid SQLite planned_date field.");
   }
 
+  const id = stringField(row.id, "id");
+  const stackId = typeof row.stack_id === "string" ? row.stack_id : singletonStackIdForTask(id);
+  const stackOrder = typeof row.stack_order === "number" && Number.isFinite(row.stack_order) ? row.stack_order : 0;
+
   return {
-    id: stringField(row.id, "id"),
+    id,
     title: stringField(row.title, "title"),
     note: stringField(row.note, "note"),
     completed: booleanFromInteger(row.completed, "completed"),
@@ -192,9 +261,19 @@ export const taskFromSqlRow = (row: SqlTaskRow): Task => {
     createdAt: stringField(row.created_at, "created_at"),
     updatedAt: stringField(row.updated_at, "updated_at"),
     plannedDate,
+    stackId,
+    stackOrder,
     completedAt,
   };
 };
+
+export const stackToSqlParams = (stack: TaskStack): SqlValue[] => [
+  stack.id,
+  stack.sortOrder,
+  stack.collapsed ? 1 : 0,
+  stack.createdAt,
+  stack.updatedAt,
+];
 
 export const taskToSqlParams = (task: Task, sortOrder: number): SqlValue[] => [
   task.id,
@@ -208,6 +287,8 @@ export const taskToSqlParams = (task: Task, sortOrder: number): SqlValue[] => [
   task.updatedAt,
   task.completedAt,
   task.plannedDate,
+  task.stackId,
+  task.stackOrder,
   sortOrder,
 ];
 
@@ -253,26 +334,70 @@ const runTransaction = async (db: SqlDatabaseClient, operation: () => Promise<vo
   }
 };
 
-const replaceTasksInTransaction = async (
+const replaceSnapshotInTransaction = async (
   db: SqlDatabaseClient,
-  tasks: Task[],
+  snapshot: TaskSnapshot,
   extraMeta: Record<string, string> = {},
 ) => {
+  const normalizedSnapshot = normalizeTaskSnapshot(snapshot);
+
   await runTransaction(db, async () => {
-    const existingRows = await db.select<{ id: unknown }>(SELECT_TASK_IDS_SQL);
-    const nextTaskIds = new Set(tasks.map((task) => task.id));
-    for (const row of existingRows) {
+    const existingTaskRows = await db.select<{ id: unknown }>(SELECT_TASK_IDS_SQL);
+    const nextTaskIds = new Set(normalizedSnapshot.tasks.map((task) => task.id));
+    for (const row of existingTaskRows) {
       if (typeof row.id === "string" && !nextTaskIds.has(row.id)) {
         await db.execute("DELETE FROM tasks WHERE id = ?", [row.id]);
       }
     }
 
-    for (const [index, task] of tasks.entries()) {
-      await db.execute(UPSERT_TASK_SQL, taskToSqlParams(task, index));
+    const existingStackRows = await db.select<{ id: unknown }>(SELECT_STACK_IDS_SQL);
+    const nextStackIds = new Set(normalizedSnapshot.stacks.map((stack) => stack.id));
+    for (const row of existingStackRows) {
+      if (typeof row.id === "string" && !nextStackIds.has(row.id)) {
+        await db.execute("DELETE FROM task_stacks WHERE id = ?", [row.id]);
+      }
+    }
+
+    for (const stack of normalizedSnapshot.stacks) {
+      await db.execute(UPSERT_STACK_SQL, stackToSqlParams(stack));
+    }
+    const stackSortOrder = new Map(normalizedSnapshot.stacks.map((stack) => [stack.id, stack.sortOrder]));
+    for (const [index, task] of normalizedSnapshot.tasks.entries()) {
+      await db.execute(UPSERT_TASK_SQL, taskToSqlParams(task, stackSortOrder.get(task.stackId) ?? index));
     }
     await writeSchemaMeta(db, "schema_version", SQLITE_SCHEMA_VERSION);
     for (const [key, value] of Object.entries(extraMeta)) {
       await writeSchemaMeta(db, key, value);
+    }
+  });
+};
+
+const migrateExistingTasksToSingletonStacks = async (db: SqlDatabaseClient) => {
+  const rows = await db.select<{
+    id: unknown;
+    created_at: unknown;
+    updated_at: unknown;
+    sort_order: unknown;
+    stack_id?: unknown;
+    stack_order?: unknown;
+  }>(`SELECT id, created_at, updated_at, sort_order, stack_id, stack_order FROM tasks ORDER BY sort_order ASC, created_at DESC, id ASC`);
+
+  await runTransaction(db, async () => {
+    for (const [index, row] of rows.entries()) {
+      const taskId = stringField(row.id, "migration.task.id");
+      const createdAt = stringField(row.created_at, "migration.task.created_at");
+      const updatedAt = stringField(row.updated_at, "migration.task.updated_at");
+      const sortOrder = typeof row.sort_order === "number" ? row.sort_order : index;
+      const stackId = typeof row.stack_id === "string" && row.stack_id ? row.stack_id : singletonStackIdForTask(taskId);
+      const stackOrder = typeof row.stack_order === "number" && Number.isFinite(row.stack_order) ? row.stack_order : 0;
+
+      await db.execute(
+        `INSERT INTO task_stacks (id, sort_order, collapsed, created_at, updated_at)
+         VALUES (?, ?, 1, ?, ?)
+         ON CONFLICT(id) DO NOTHING`,
+        [stackId, sortOrder, createdAt, updatedAt],
+      );
+      await db.execute("UPDATE tasks SET stack_id = ?, stack_order = ? WHERE id = ?", [stackId, stackOrder, taskId]);
     }
   });
 };
@@ -286,6 +411,14 @@ export const ensureSqliteSchema = async (db: SqlDatabaseClient) => {
   if (!(await tableHasColumn(db, "tasks", "planned_date"))) {
     await db.execute("ALTER TABLE tasks ADD COLUMN planned_date TEXT NULL");
   }
+  if (!(await tableHasColumn(db, "tasks", "stack_id"))) {
+    await db.execute("ALTER TABLE tasks ADD COLUMN stack_id TEXT NULL");
+  }
+  if (!(await tableHasColumn(db, "tasks", "stack_order"))) {
+    await db.execute("ALTER TABLE tasks ADD COLUMN stack_order INTEGER NULL");
+  }
+  await db.execute("CREATE INDEX IF NOT EXISTS idx_tasks_stack_order ON tasks(stack_id, stack_order)");
+  await migrateExistingTasksToSingletonStacks(db);
   await writeSchemaMeta(db, "schema_version", SQLITE_SCHEMA_VERSION);
 };
 
@@ -349,15 +482,19 @@ export const createSqliteTaskRepository = (
     ? source
     : createSqliteDatabaseContext(source, databasePath);
 
-  const selectTasks = async (db: SqlDatabaseClient) => {
-    const rows = await db.select<SqlTaskRow>(SELECT_TASKS_SQL);
-    return rows.map(taskFromSqlRow);
+  const selectSnapshot = async (db: SqlDatabaseClient) => {
+    const taskRows = await db.select<SqlTaskRow>(SELECT_TASKS_SQL);
+    const stackRows = await db.select<SqlTaskStackRow>(SELECT_STACKS_SQL);
+    return normalizeTaskSnapshot({
+      tasks: taskRows.map(taskFromSqlRow),
+      stacks: stackRows.map(stackFromSqlRow),
+    });
   };
 
   const initializeEmptyDatabase = async (db: SqlDatabaseClient) => {
     const storedSnapshot = loadStoredTaskSnapshot();
     const snapshot =
-      storedSnapshot.status === "valid" ? storedSnapshot.snapshot : { tasks: createSeedTasks() };
+      storedSnapshot.status === "valid" ? storedSnapshot.snapshot : createSeedTaskSnapshot();
     const meta: Record<string, string> =
       storedSnapshot.status === "valid"
         ? { localstorage_v1_migrated: "true" }
@@ -366,7 +503,7 @@ export const createSqliteTaskRepository = (
             localstorage_v1_migration_source: storedSnapshot.status,
           };
 
-    await replaceTasksInTransaction(db, snapshot.tasks, meta);
+    await replaceSnapshotInTransaction(db, snapshot, meta);
   };
 
   const ensureTaskDataInitialized = async (db: SqlDatabaseClient) => {
@@ -377,6 +514,8 @@ export const createSqliteTaskRepository = (
     const countRows = await db.select<{ count: number }>("SELECT COUNT(*) as count FROM tasks");
     if ((countRows[0]?.count ?? 0) === 0) {
       await initializeEmptyDatabase(db);
+    } else {
+      await migrateExistingTasksToSingletonStacks(db);
     }
 
     initialized = true;
@@ -386,16 +525,17 @@ export const createSqliteTaskRepository = (
     async loadSnapshot(): Promise<TaskSnapshot> {
       return context.run(async (db) => {
         await ensureTaskDataInitialized(db);
-        return { tasks: await selectTasks(db) };
+        return selectSnapshot(db);
       });
     },
     async saveSnapshot(snapshot: TaskSnapshot): Promise<void> {
       await context.run(async (db) => {
         await ensureTaskDataInitialized(db);
-        await replaceTasksInTransaction(db, snapshot.tasks);
+        await replaceSnapshotInTransaction(db, snapshot);
       });
     },
   };
 };
 
 export const sqliteTaskRepository = createSqliteTaskRepository();
+

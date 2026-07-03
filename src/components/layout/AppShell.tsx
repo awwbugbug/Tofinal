@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useRef, useState } from "react";
 
 import { DesktopPinLayout } from "@/components/layout/DesktopPinLayout";
 import { NormalModeLayout } from "@/components/layout/NormalModeLayout";
@@ -20,6 +20,7 @@ export function AppShell() {
   const { t } = useI18n();
   const tasks = useTaskStore((state) => state.tasks);
   const selectedTaskId = useTaskStore((state) => state.selectedTaskId);
+  const highlightedTaskId = useTaskStore((state) => state.highlightedTaskId);
   const mode = useTaskStore((state) => state.mode);
   const activeFilter = useTaskStore((state) => state.activeFilter);
   const searchQuery = useTaskStore((state) => state.searchQuery);
@@ -39,8 +40,9 @@ export function AppShell() {
   const setMode = useTaskStore((state) => state.setMode);
   const setActiveFilter = useTaskStore((state) => state.setActiveFilter);
   const setSearchQuery = useTaskStore((state) => state.setSearchQuery);
-  const getFilteredTasks = useTaskStore((state) => state.getFilteredTasks);
-  const getTodayCompletedTasks = useTaskStore((state) => state.getTodayCompletedTasks);
+  const getStackViews = useTaskStore((state) => state.getStackViews);
+  const getTodayCompletedStackViews = useTaskStore((state) => state.getTodayCompletedStackViews);
+  const toggleStackCollapsed = useTaskStore((state) => state.toggleStackCollapsed);
   const attachmentsByTaskId = useAttachmentStore((state) => state.itemsByTaskId);
   const attachmentLoadingTaskIds = useAttachmentStore((state) => state.loadingTaskIds);
   const attachmentsAdding = useAttachmentStore((state) => state.adding);
@@ -68,8 +70,9 @@ export function AppShell() {
   const deleteTaskApp = useTaskAppStore((state) => state.deleteApp);
   const startTaskApps = useTaskAppStore((state) => state.startTask);
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null;
-  const filteredTasks = getFilteredTasks(activeFilter);
-  const todayCompletedTasks = activeFilter === "today" ? getTodayCompletedTasks() : [];
+  const stackViews = getStackViews(activeFilter);
+  const todayCompletedStackViews = activeFilter === "today" ? getTodayCompletedStackViews() : [];
+  const pinStackViews = getStackViews("all");
   const selectedTaskAttachments = selectedTaskId ? (attachmentsByTaskId[selectedTaskId] ?? []) : [];
   const selectedTaskAttachmentsLoading = selectedTaskId ? Boolean(attachmentLoadingTaskIds[selectedTaskId]) : false;
   const selectedTaskApps = selectedTaskId ? (appsByTaskId[selectedTaskId] ?? []) : [];
@@ -164,6 +167,7 @@ export function AppShell() {
             onSwitchToNormal={() => switchModeWithTransition("normal")}
             onToggleTask={toggleTask}
             selectedTaskId={selectedTaskId}
+            stackViews={pinStackViews}
             tasks={tasks}
           />
         </div>
@@ -177,8 +181,9 @@ export function AppShell() {
       <div className="min-h-0 flex-1">
         <NormalModeLayout
           activeFilter={activeFilter}
-          filteredTasks={filteredTasks}
-          todayCompletedTasks={todayCompletedTasks}
+          highlightedTaskId={highlightedTaskId}
+          stackViews={stackViews}
+          todayCompletedStackViews={todayCompletedStackViews}
           onAddTask={addTask}
           onDeleteTask={handleDeleteTask}
           attachments={selectedTaskAttachments}
@@ -225,6 +230,7 @@ export function AppShell() {
           onSelectTask={selectTask}
           onSearchChange={setSearchQuery}
           onSwitchToPin={() => switchModeWithTransition("pin")}
+          onToggleStackCollapsed={toggleStackCollapsed}
           onToggleTask={toggleTask}
           onUpdateTask={updateTask}
           modeTransition={modeTransition}

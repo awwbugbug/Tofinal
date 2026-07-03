@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+﻿import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   createSqliteAttachmentRepository,
@@ -55,9 +55,11 @@ const task = (overrides: Partial<Task> = {}): Task => ({
   createdAt: "2026-06-11T08:00:00.000Z",
   updatedAt: "2026-06-11T08:00:00.000Z",
   plannedDate: null,
+  stackId: "stack-task-1",
+  stackOrder: 0,
   completedAt: null,
   ...overrides,
-});
+}) as Task;
 
 const attachment = (overrides: Partial<TaskAttachment> = {}): TaskAttachment => ({
   id: "attachment-1",
@@ -74,7 +76,7 @@ const attachment = (overrides: Partial<TaskAttachment> = {}): TaskAttachment => 
   updatedAt: "2026-06-11T08:10:00.000Z",
   sortOrder: 0,
   ...overrides,
-});
+}) as TaskAttachment;
 
 class FakeSqlDatabase implements SqlDatabaseClient {
   tasks: TaskRow[] = [];
@@ -205,7 +207,7 @@ describe("sqlite attachment repository", () => {
 
     expect(db.attachmentTableExists).toBe(true);
     expect(db.foreignKeysEnabled).toBe(true);
-    expect(db.meta.get("schema_version")).toBe("4");
+    expect(db.meta.get("schema_version")).toBe("5");
     expect(db.tasks.map((row) => row.title)).toEqual(["Task with attachments"]);
   });
 
@@ -225,7 +227,7 @@ describe("sqlite attachment repository", () => {
 
     await repository.listByTaskId("task-1");
 
-    expect(db.meta.get("schema_version")).toBe("4");
+    expect(db.meta.get("schema_version")).toBe("5");
     expect(db.executed.some((sql) => sql.includes("INSERT INTO schema_meta (key, value)\n"))).toBe(true);
   });
 
@@ -362,3 +364,10 @@ const attachmentToRowFromParams = (params: Array<string | number | null>): Attac
   updated_at: String(params[11]),
   sort_order: Number(params[12]),
 });
+
+
+
+
+
+
+

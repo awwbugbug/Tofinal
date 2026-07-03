@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+﻿import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   createSqliteTaskAppRepository,
@@ -51,9 +51,11 @@ const task = (overrides: Partial<Task> = {}): Task => ({
   createdAt: "2026-06-11T08:00:00.000Z",
   updatedAt: "2026-06-11T08:00:00.000Z",
   plannedDate: null,
+  stackId: "stack-task-1",
+  stackOrder: 0,
   completedAt: null,
   ...overrides,
-});
+}) as Task;
 
 const taskApp = (overrides: Partial<TaskApp> = {}): TaskApp => ({
   id: "task-app-1",
@@ -66,7 +68,7 @@ const taskApp = (overrides: Partial<TaskApp> = {}): TaskApp => ({
   updatedAt: "2026-06-11T08:10:00.000Z",
   sortOrder: 0,
   ...overrides,
-});
+}) as TaskApp;
 
 class FakeSqlDatabase implements SqlDatabaseClient {
   tasks: TaskRow[] = [];
@@ -202,7 +204,7 @@ describe("sqlite task app repository", () => {
 
     expect(db.taskAppsTableExists).toBe(true);
     expect(db.foreignKeysEnabled).toBe(true);
-    expect(db.meta.get("schema_version")).toBe("4");
+    expect(db.meta.get("schema_version")).toBe("5");
     expect(db.tasks.map((row) => row.title)).toEqual(["Task with apps"]);
     expect(db.taskAttachments).toHaveLength(1);
   });
@@ -331,3 +333,10 @@ const taskAppToRowFromParams = (params: Array<string | number | null>): TaskAppR
   updated_at: String(params[7]),
   sort_order: Number(params[8]),
 });
+
+
+
+
+
+
+

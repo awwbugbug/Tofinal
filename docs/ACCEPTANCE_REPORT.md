@@ -1343,3 +1343,46 @@ Date: 2026-06-20
 - `npm run build`: passed, TypeScript and Vite production build completed.
 - `cargo check`: passed for `src-tauri`.
 - `npm run tauri dev`: verified Vite on port 1420 and `target\debug\tofinal.exe` startup; validation process was stopped intentionally after startup verification.
+
+---
+
+# Phase 9C Task Stack Schema And Rendering MVP
+
+Date: 2026-06-25
+
+## Implemented
+
+- Upgraded SQLite task persistence to schema version `5`.
+- Added `task_stacks(id, sort_order, collapsed, created_at, updated_at)`.
+- Added `stack_id TEXT NULL` and `stack_order INTEGER NULL` to `tasks`.
+- Migrated existing v4 tasks into singleton stacks using `stack-<taskId>` and `stack_order = 0`.
+- Extended task snapshots to include `{ tasks, stacks }` while keeping attachment and task app metadata attached to concrete task ids.
+- Added `TaskStack` and `TaskStackView` models.
+- Added stack view selectors in `taskStore` and persisted stack collapsed state through the existing save queue.
+- Updated Normal Mode to render stack views instead of raw task rows.
+- Collapsed stacks show the main task capsule plus subtask/progress metadata.
+- Expanded stacks show the ordered task sequence; non-main task clicks highlight only and do not open full DetailPanel editing.
+- Desktop Pin Mode stays lightweight and shows stack main tasks through the same TaskList path.
+
+## View Semantics Preserved
+
+- `Today` remains an execution view: active Today stacks appear when any task in the stack is incomplete and planned for today.
+- `Today completed` shows stacks with no active Today task but at least one task completed today.
+- `All Tasks`, `Important`, and `Pinned` remain overview/property views and keep completed items visible.
+- Quick add in `Today` still sets `plannedDate = today`; other views still create backlog tasks with `plannedDate = null`.
+
+## Not Implemented
+
+- No drag reorder.
+- No stack merge.
+- No stack split.
+- No DnD dependency.
+- No nested stacks.
+- No stack animation beyond existing task/card transitions.
+- No full detail editing for non-main tasks in expanded stacks.
+
+## Verification Results
+
+- Added store and repository regression tests for singleton stack creation, collapsed persistence, v4 singleton migration, stack save/load, main-task selection, and delete behavior.
+- `npm test`: passed, 17 test files, 139 tests.
+- `npm run build`: passed, TypeScript and Vite production build completed.

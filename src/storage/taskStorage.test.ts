@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+﻿import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   loadStoredTaskSnapshot,
@@ -19,9 +19,11 @@ const task = (overrides: Partial<Task> = {}): Task => ({
   createdAt: "2026-06-09T00:00:00.000Z",
   updatedAt: "2026-06-09T00:00:00.000Z",
   plannedDate: null,
+  stackId: "stack-task-test",
+  stackOrder: 0,
   completedAt: null,
   ...overrides,
-});
+}) as Task;
 
 describe("task storage", () => {
   beforeEach(() => {
@@ -94,3 +96,7 @@ describe("task storage", () => {
     expect(localStorage.getItem(TASK_STORAGE_KEY)).toContain("Migration source");
   });
 });
+
+
+
+

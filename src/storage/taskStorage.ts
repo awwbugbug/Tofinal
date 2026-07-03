@@ -1,4 +1,4 @@
-import type { Task } from "@/types/task";
+﻿import type { Task, TaskStack } from "@/types/task";
 
 export const TASK_STORAGE_KEY = "tofinal.tasks.v1";
 
@@ -6,10 +6,16 @@ const STORAGE_VERSION = 1;
 
 export type TaskSnapshot = {
   tasks: Task[];
+  stacks?: TaskStack[];
+};
+
+export type NormalizedTaskSnapshot = {
+  tasks: Task[];
+  stacks: TaskStack[];
 };
 
 export type StoredTaskSnapshotResult =
-  | { status: "valid"; snapshot: TaskSnapshot }
+  | { status: "valid"; snapshot: NormalizedTaskSnapshot }
   | { status: "missing" }
   | { status: "invalid"; error: string };
 
@@ -21,6 +27,56 @@ const getLocalDateKey = (date = new Date()) => {
   const day = String(date.getDate()).padStart(2, "0");
 
   return `${year}-${month}-${day}`;
+};
+
+export const singletonStackIdForTask = (taskId: string) => `stack-${taskId}`;
+
+export const createSingletonStack = (task: Pick<Task, "id" | "createdAt" | "updatedAt">, sortOrder: number): TaskStack => ({
+  id: singletonStackIdForTask(task.id),
+  sortOrder,
+  collapsed: true,
+  createdAt: task.createdAt,
+  updatedAt: task.updatedAt,
+});
+
+export const normalizeTaskSnapshot = (snapshot: TaskSnapshot): NormalizedTaskSnapshot => {
+  const stacksById = new Map((snapshot.stacks ?? []).map((stack) => [stack.id, stack]));
+  const tasks = snapshot.tasks.map((task) => {
+    const stackId = task.stackId || singletonStackIdForTask(task.id);
+    return {
+      ...task,
+      stackId,
+      stackOrder: Number.isFinite(task.stackOrder) ? task.stackOrder : 0,
+    };
+  });
+
+  const stacks: TaskStack[] = [];
+  const seenStackIds = new Set<string>();
+  tasks.forEach((task, index) => {
+    if (seenStackIds.has(task.stackId)) {
+      return;
+    }
+
+    seenStackIds.add(task.stackId);
+    const existingStack = stacksById.get(task.stackId);
+    stacks.push(existingStack ?? {
+      id: task.stackId,
+      sortOrder: index,
+      collapsed: true,
+      createdAt: task.createdAt,
+      updatedAt: task.updatedAt,
+    });
+  });
+
+  return {
+    tasks,
+    stacks: stacks.sort(
+      (first, second) =>
+        first.sortOrder - second.sortOrder ||
+        first.createdAt.localeCompare(second.createdAt) ||
+        first.id.localeCompare(second.id),
+    ),
+  };
 };
 
 const createSeedTask = (
@@ -42,6 +98,8 @@ const createSeedTask = (
   createdAt,
   updatedAt: createdAt,
   plannedDate,
+  stackId: singletonStackIdForTask(id),
+  stackOrder: 0,
   completedAt: null,
 });
 
@@ -88,6 +146,8 @@ export const createSeedTasks = (): Task[] => {
   ];
 };
 
+export const createSeedTaskSnapshot = (): NormalizedTaskSnapshot => normalizeTaskSnapshot({ tasks: createSeedTasks() });
+
 const isPriority = (value: unknown): value is Task["priority"] =>
   value === "normal" || value === "important" || value === "urgent";
 
@@ -121,7 +181,34 @@ export const normalizeStoredTask = (value: unknown): Task | null => {
     createdAt: candidate.createdAt,
     updatedAt: candidate.updatedAt,
     plannedDate: typeof candidate.plannedDate === "string" ? candidate.plannedDate : null,
+    stackId: typeof candidate.stackId === "string" ? candidate.stackId : singletonStackIdForTask(candidate.id),
+    stackOrder: typeof candidate.stackOrder === "number" && Number.isFinite(candidate.stackOrder) ? candidate.stackOrder : 0,
     completedAt: typeof candidate.completedAt === "string" ? candidate.completedAt : null,
+  };
+};
+
+const normalizeStoredStack = (value: unknown): TaskStack | null => {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const candidate = value as Partial<TaskStack>;
+  if (
+    typeof candidate.id !== "string" ||
+    typeof candidate.sortOrder !== "number" ||
+    typeof candidate.collapsed !== "boolean" ||
+    typeof candidate.createdAt !== "string" ||
+    typeof candidate.updatedAt !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    id: candidate.id,
+    sortOrder: candidate.sortOrder,
+    collapsed: candidate.collapsed,
+    createdAt: candidate.createdAt,
+    updatedAt: candidate.updatedAt,
   };
 };
 
@@ -142,7 +229,7 @@ export const loadStoredTaskSnapshot = (): StoredTaskSnapshotResult => {
       return { status: "missing" };
     }
 
-    const parsed = JSON.parse(raw) as { tasks?: unknown };
+    const parsed = JSON.parse(raw) as { tasks?: unknown; stacks?: unknown };
     if (!Array.isArray(parsed.tasks)) {
       return { status: "invalid", error: "Stored task snapshot does not contain a tasks array." };
     }
@@ -152,7 +239,15 @@ export const loadStoredTaskSnapshot = (): StoredTaskSnapshotResult => {
       return { status: "invalid", error: "Stored task snapshot contains invalid task records." };
     }
 
-    return { status: "valid", snapshot: { tasks: tasks as Task[] } };
+    const stacks = Array.isArray(parsed.stacks) ? parsed.stacks.map(normalizeStoredStack) : undefined;
+    if (stacks?.some((stack) => stack === null)) {
+      return { status: "invalid", error: "Stored task snapshot contains invalid stack records." };
+    }
+
+    return {
+      status: "valid",
+      snapshot: normalizeTaskSnapshot({ tasks: tasks as Task[], stacks: stacks as TaskStack[] | undefined }),
+    };
   } catch (error) {
     return {
       status: "invalid",
@@ -161,27 +256,29 @@ export const loadStoredTaskSnapshot = (): StoredTaskSnapshotResult => {
   }
 };
 
-export const loadTaskSnapshot = (): TaskSnapshot => {
+export const loadTaskSnapshot = (): NormalizedTaskSnapshot => {
   const storedSnapshot = loadStoredTaskSnapshot();
 
   if (storedSnapshot.status === "valid") {
     return storedSnapshot.snapshot;
   }
 
-  return { tasks: createSeedTasks() };
+  return createSeedTaskSnapshot();
 };
 
 export const saveTaskSnapshot = (snapshot: TaskSnapshot) => {
   try {
+    const normalizedSnapshot = normalizeTaskSnapshot(snapshot);
     storage()?.setItem(
       TASK_STORAGE_KEY,
       JSON.stringify({
         version: STORAGE_VERSION,
         savedAt: nowIso(),
-        tasks: snapshot.tasks,
+        tasks: normalizedSnapshot.tasks,
+        stacks: normalizedSnapshot.stacks,
       }),
     );
   } catch {
-    // localStorage is best-effort in phase 2; UI state should keep working if writes fail.
+    // localStorage is best-effort; UI state should keep working if writes fail.
   }
 };

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { Maximize2 } from "lucide-react";
 
 import { QuickInput } from "@/components/task/QuickInput";
@@ -6,10 +6,11 @@ import { TaskList } from "@/components/task/TaskList";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n/useI18n";
 import { usePreferencesStore } from "@/stores/preferencesStore";
-import type { Task } from "@/types/task";
+import type { Task, TaskStackView } from "@/types/task";
 
 type DesktopPinLayoutProps = {
   tasks: Task[];
+  stackViews: TaskStackView[];
   selectedTaskId: string | null;
   onAddTask: (title: string) => void;
   onSelectTask: (id: string) => void;
@@ -18,6 +19,8 @@ type DesktopPinLayoutProps = {
   modeTransition?: string | null;
 };
 
+const stackHasPinnedTask = (view: TaskStackView) => view.tasks.some((task) => task.pinned);
+
 export function DesktopPinLayout({
   modeTransition = null,
   onAddTask,
@@ -25,15 +28,23 @@ export function DesktopPinLayout({
   onSwitchToNormal,
   onToggleTask,
   selectedTaskId,
+  stackViews,
   tasks,
 }: DesktopPinLayoutProps) {
   const { t } = useI18n();
   const completionCelebrationsEnabled = usePreferencesStore((state) => state.completionCelebrationsEnabled);
   const [recentlyCompletedTaskIds, setRecentlyCompletedTaskIds] = useState<string[]>([]);
   const celebrationTimeoutsRef = useRef(new Map<string, number>());
-  const openTasks = tasks
-    .filter((task) => !task.completed || recentlyCompletedTaskIds.includes(task.id))
-    .sort((firstTask, secondTask) => Number(secondTask.pinned) - Number(firstTask.pinned));
+  const pinStackViews = useMemo(
+    () => stackViews
+      .filter((view) => view.tasks.some((task) => !task.completed || recentlyCompletedTaskIds.includes(task.id)))
+      .sort((first, second) => Number(stackHasPinnedTask(second)) - Number(stackHasPinnedTask(first))),
+    [recentlyCompletedTaskIds, stackViews],
+  );
+  const openTaskCount = pinStackViews.reduce(
+    (count, view) => count + view.tasks.filter((task) => !task.completed || recentlyCompletedTaskIds.includes(task.id)).length,
+    0,
+  );
 
   useEffect(() => {
     return () => {
@@ -106,7 +117,7 @@ export function DesktopPinLayout({
 
         <QuickInput compact onAddTask={onAddTask} />
 
-        <div className="my-3 shrink-0 text-xs text-[var(--text-faint)]">{openTasks.length}{t("sidebar.openTasks")}</div>
+        <div className="my-3 shrink-0 text-xs text-[var(--text-faint)]">{openTaskCount}{t("sidebar.openTasks")}</div>
 
         <div className="min-h-0 flex-1 overflow-hidden">
           <TaskList
@@ -115,7 +126,7 @@ export function DesktopPinLayout({
             onSelect={onSelectTask}
             onToggle={handleToggleTask}
             selectedTaskId={selectedTaskId}
-            tasks={openTasks}
+            stackViews={pinStackViews}
           />
         </div>
       </section>
