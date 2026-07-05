@@ -1,6 +1,6 @@
 ﻿import { useEffect, useRef } from "react";
 import confetti from "canvas-confetti";
-import { AlertCircle, CircleDot, Flag } from "lucide-react";
+import { AlertCircle, CircleDot, Flag, Layers3 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -14,6 +14,7 @@ type TaskItemProps = {
   selected?: boolean;
   compact?: boolean;
   subtask?: boolean;
+  stackCount?: number;
   onToggle: (id: string) => void;
   onSelect: (id: string) => void;
 };
@@ -101,7 +102,7 @@ const fireCompletionConfetti = (element: HTMLElement | null) => {
   });
 };
 
-export function TaskItem({ compact = false, onSelect, onToggle, selected = false, subtask = false, task }: TaskItemProps) {
+export function TaskItem({ compact = false, onSelect, onToggle, selected = false, stackCount, subtask = false, task }: TaskItemProps) {
   const { t } = useI18n();
   const completionCelebrationsEnabled = usePreferencesStore((state) => state.completionCelebrationsEnabled);
   const PriorityIcon = priorityIcon[task.priority];
@@ -135,6 +136,7 @@ export function TaskItem({ compact = false, onSelect, onToggle, selected = false
         compact && "rounded-[18px] p-2.5 hover:bg-[var(--surface-card-hover)]",
         subtask && "rounded-[18px] bg-[color-mix(in_srgb,var(--surface-card)_44%,transparent)] p-3 shadow-none hover:scale-[1.002]",
       )}
+      data-selected={selected ? "true" : "false"}
       data-testid="task-card"
       onClick={() => onSelect(task.id)}
       ref={itemRef}
@@ -173,6 +175,16 @@ export function TaskItem({ compact = false, onSelect, onToggle, selected = false
           </Badge>
         )}
         {!compact && <p className="col-start-2 min-w-0 line-clamp-2 text-xs leading-5 text-[var(--text-muted)]">{task.note}</p>}
+        {!compact && typeof stackCount === "number" && stackCount > 1 && (
+          <span
+            aria-hidden="true"
+            className="col-start-3 row-start-2 inline-flex items-center gap-1 self-end justify-self-end text-[11px] leading-none text-[var(--text-faint)]"
+            data-testid="task-stack-count"
+          >
+            <Layers3 className="h-3 w-3" />
+            {stackCount}
+          </span>
+        )}
         {compact && task.tags[0] && <p className="col-start-2 min-w-0 truncate text-[11px] text-[var(--text-faint)]">{task.tags[0]}</p>}
       </div>
     </article>

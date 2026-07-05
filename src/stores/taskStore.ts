@@ -2,14 +2,13 @@ import { create, type StateCreator, type StoreApi, type UseBoundStore } from "zu
 import { createStore } from "zustand/vanilla";
 
 import { getTaskRepository } from "@/repositories/taskRepository";
-import { createSeedTaskSnapshot, createSingletonStack, normalizeTaskSnapshot } from "@/storage/taskStorage";
+import { createSeedTaskSnapshot, createSingletonStack, normalizeTaskSnapshot, type TaskSnapshot } from "@/storage/taskStorage";
 import type { AppMode, Task, TaskFilter, TaskPriority, TaskStack, TaskStackView } from "@/types/task";
 
 type TaskState = {
   tasks: Task[];
   stacks: TaskStack[];
   selectedTaskId: string | null;
-  highlightedTaskId: string | null;
   mode: AppMode;
   activeFilter: TaskFilter;
   searchQuery: string;
@@ -31,6 +30,10 @@ type TaskActions = {
   toggleTask: (id: string) => void;
   togglePinned: (id: string) => void;
   toggleStackCollapsed: (stackId: string) => void;
+  reorderStacks: (sourceStackId: string, targetIndex: number, visibleStackIds?: string[]) => boolean;
+  reorderTaskWithinStack: (stackId: string, taskId: string, targetIndex: number) => boolean;
+  moveTaskToStack: (taskId: string, targetStackId: string, targetIndex?: number) => boolean;
+  splitTaskToNewStack: (taskId: string, targetGlobalIndex: number, visibleStackIds?: string[]) => boolean;
   selectTask: (id: string) => void;
   setMode: (mode: AppMode) => void;
   setActiveFilter: (filter: TaskFilter) => void;
@@ -96,7 +99,6 @@ const initialState = (): TaskState => ({
   tasks: [],
   stacks: [],
   selectedTaskId: null,
-  highlightedTaskId: null,
   mode: "normal",
   activeFilter: "today",
   searchQuery: "",
@@ -191,7 +193,7 @@ const filterTodayCompletedStackViews = (tasks: Task[], stacks: TaskStack[], quer
   });
 };
 
-const mainTaskIdsForViews = (views: TaskStackView[]) => new Set(views.map((view) => view.mainTask.id));
+const visibleTaskIdsForViews = (views: TaskStackView[]) => new Set(views.flatMap((view) => view.tasks.map((task) => task.id)));
 
 const selectVisibleTask = (
   tasks: Task[],
@@ -201,15 +203,13 @@ const selectVisibleTask = (
   searchQuery: string,
 ) => {
   const visibleViews = filterStackViews(tasks, stacks, activeFilter, searchQuery);
-  const visibleMainTaskIds = mainTaskIdsForViews(visibleViews);
-  if (selectedTaskId && visibleMainTaskIds.has(selectedTaskId)) {
+  const visibleTaskIds = visibleTaskIdsForViews(visibleViews);
+  if (selectedTaskId && visibleTaskIds.has(selectedTaskId)) {
     return selectedTaskId;
   }
 
   return visibleViews[0]?.mainTask.id ?? null;
 };
-
-const isMainTask = (tasks: Task[], stacks: TaskStack[], taskId: string) => buildStackViews(tasks, stacks).some((view) => view.mainTask.id === taskId);
 
 const errorMessage = (error: unknown) => {
   if (typeof error === "string") {
@@ -239,6 +239,15 @@ const snapshotFromState = (tasks: Task[], stacks: TaskStack[]) => normalizeTaskS
   stacks: stacks.map((stack) => ({ ...stack })),
 });
 
+const normalizeGlobalStackOrders = (stacks: TaskStack[], timestamp = nowIso()) =>
+  [...stacks]
+    .sort((first, second) => first.sortOrder - second.sortOrder || first.createdAt.localeCompare(second.createdAt) || first.id.localeCompare(second.id))
+    .map((stack, index) => ({
+      ...stack,
+      sortOrder: index,
+      updatedAt: stack.sortOrder === index ? stack.updatedAt : timestamp,
+    }));
+
 const normalizeStackTasksAfterDelete = (tasks: Task[], stackId: string) => {
   const stackTasks = tasks
     .filter((task) => task.stackId === stackId)
@@ -247,13 +256,88 @@ const normalizeStackTasksAfterDelete = (tasks: Task[], stackId: string) => {
   return tasks.map((task) => (task.stackId === stackId ? { ...task, stackOrder: orderByTaskId.get(task.id) ?? task.stackOrder } : task));
 };
 
+const normalizeStackTasks = (tasks: Task[], stackId: string, timestamp = nowIso()) => {
+  const stackTasks = tasks
+    .filter((task) => task.stackId === stackId)
+    .sort((first, second) => first.stackOrder - second.stackOrder || first.createdAt.localeCompare(second.createdAt) || first.id.localeCompare(second.id));
+  const orderByTaskId = new Map(stackTasks.map((task, index) => [task.id, index]));
+
+  return tasks.map((task) => {
+    if (task.stackId !== stackId) {
+      return task;
+    }
+
+    const stackOrder = orderByTaskId.get(task.id) ?? task.stackOrder;
+    return {
+      ...task,
+      stackOrder,
+      updatedAt: task.stackOrder === stackOrder ? task.updatedAt : timestamp,
+    };
+  });
+};
+
+const reorderIds = (ids: string[], sourceId: string, targetIndex: number) => {
+  const sourceIndex = ids.indexOf(sourceId);
+  if (sourceIndex < 0) {
+    return null;
+  }
+
+  const nextIds = [...ids];
+  nextIds.splice(sourceIndex, 1);
+  nextIds.splice(Math.max(0, Math.min(targetIndex, nextIds.length)), 0, sourceId);
+  return nextIds;
+};
+
+const reorderStacksWithinVisibleSet = (
+  stacks: TaskStack[],
+  sourceStackId: string,
+  targetIndex: number,
+  visibleStackIds: string[] | undefined,
+  timestamp = nowIso(),
+) => {
+  const orderedStacks = normalizeGlobalStackOrders(stacks, timestamp);
+  const visibleIdSet = new Set(visibleStackIds?.length ? visibleStackIds : orderedStacks.map((stack) => stack.id));
+  const visibleOrderedIds = orderedStacks.filter((stack) => visibleIdSet.has(stack.id)).map((stack) => stack.id);
+  const nextVisibleIds = reorderIds(visibleOrderedIds, sourceStackId, targetIndex);
+
+  if (!nextVisibleIds) {
+    return null;
+  }
+
+  let visibleCursor = 0;
+  const nextStacks = orderedStacks.map((stack) => {
+    if (!visibleIdSet.has(stack.id)) {
+      return stack;
+    }
+
+    const nextId = nextVisibleIds[visibleCursor];
+    visibleCursor += 1;
+    return orderedStacks.find((candidate) => candidate.id === nextId) ?? stack;
+  });
+
+  return nextStacks.map((stack, index) => ({
+    ...stack,
+    sortOrder: index,
+    updatedAt: stack.sortOrder === index ? stack.updatedAt : timestamp,
+  }));
+};
+
+const createStackIdForTask = (taskId: string, stacks: TaskStack[]) => {
+  const preferred = `stack-${taskId}`;
+  if (!stacks.some((stack) => stack.id === preferred)) {
+    return preferred;
+  }
+
+  return `stack-${crypto.randomUUID()}`;
+};
+
 const createTaskStoreState: StateCreator<TaskStore> = (set, get) => {
   let saveChain = Promise.resolve();
   let latestSaveRequest = 0;
 
   const canMutateTasks = () => get().hydrated && !get().loading;
 
-  const queuePersistTasks = () => {
+  const queuePersistTasks = (options: { rollbackSnapshot?: TaskSnapshot } = {}) => {
     const requestId = latestSaveRequest + 1;
     latestSaveRequest = requestId;
     set({ saving: true, error: null });
@@ -270,9 +354,23 @@ const createTaskStoreState: StateCreator<TaskStore> = (set, get) => {
       })
       .catch((error) => {
         if (requestId === latestSaveRequest) {
-          set({ saving: false, error: errorMessage(error) });
+          set({
+            ...(options.rollbackSnapshot
+              ? {
+                  tasks: options.rollbackSnapshot.tasks,
+                  stacks: options.rollbackSnapshot.stacks ?? [],
+                  selectedTaskId: selectVisibleTask(options.rollbackSnapshot.tasks, options.rollbackSnapshot.stacks ?? [], get().selectedTaskId, get().activeFilter, get().searchQuery),
+                }
+              : {}),
+            saving: false,
+            error: errorMessage(error),
+          });
         }
       });
+  };
+
+  const persistStackMutation = (previousSnapshot: TaskSnapshot) => {
+    queuePersistTasks({ rollbackSnapshot: previousSnapshot });
   };
 
   return {
@@ -292,7 +390,6 @@ const createTaskStoreState: StateCreator<TaskStore> = (set, get) => {
           tasks: snapshot.tasks,
           stacks: snapshot.stacks,
           selectedTaskId,
-          highlightedTaskId: null,
           hydrated: true,
           loading: false,
           saving: false,
@@ -305,7 +402,6 @@ const createTaskStoreState: StateCreator<TaskStore> = (set, get) => {
           tasks: snapshot.tasks,
           stacks: snapshot.stacks,
           selectedTaskId: snapshot.tasks[0]?.id ?? null,
-          highlightedTaskId: null,
           hydrated: true,
           loading: false,
           saving: false,
@@ -331,7 +427,7 @@ const createTaskStoreState: StateCreator<TaskStore> = (set, get) => {
       const tasks = [task, ...get().tasks];
       const stacks = [stack, ...get().stacks];
 
-      set({ tasks, stacks, selectedTaskId: task.id, highlightedTaskId: null });
+      set({ tasks, stacks, selectedTaskId: task.id });
       queuePersistTasks();
     },
     updateTask: (id, update) => {
@@ -390,9 +486,8 @@ const createTaskStoreState: StateCreator<TaskStore> = (set, get) => {
       }
 
       const selectedTaskId = selectVisibleTask(tasks, stacks, get().selectedTaskId === id ? null : get().selectedTaskId, get().activeFilter, get().searchQuery);
-      const highlightedTaskId = get().highlightedTaskId === id ? null : get().highlightedTaskId;
 
-      set({ tasks, stacks, selectedTaskId, highlightedTaskId });
+      set({ tasks, stacks, selectedTaskId });
       queuePersistTasks();
     },
     toggleTask: (id) => {
@@ -437,24 +532,173 @@ const createTaskStoreState: StateCreator<TaskStore> = (set, get) => {
       set({ stacks });
       queuePersistTasks();
     },
-    selectTask: (id) => {
-      if (isMainTask(get().tasks, get().stacks, id)) {
-        set({ selectedTaskId: id, highlightedTaskId: null });
-        return;
+    reorderStacks: (sourceStackId, targetIndex, visibleStackIds) => {
+      if (!canMutateTasks()) {
+        return false;
       }
 
-      set({ highlightedTaskId: id });
+      const previousSnapshot = snapshotFromState(get().tasks, get().stacks);
+      const timestamp = nowIso();
+      const stacks = reorderStacksWithinVisibleSet(get().stacks, sourceStackId, targetIndex, visibleStackIds, timestamp);
+      if (!stacks) {
+        set({ error: "Invalid stack reorder target." });
+        return false;
+      }
+
+      set({ stacks });
+      persistStackMutation(previousSnapshot);
+      return true;
+    },
+    reorderTaskWithinStack: (stackId, taskId, targetIndex) => {
+      if (!canMutateTasks()) {
+        return false;
+      }
+
+      const stackTasks = get().tasks
+        .filter((task) => task.stackId === stackId)
+        .sort((first, second) => first.stackOrder - second.stackOrder || first.createdAt.localeCompare(second.createdAt) || first.id.localeCompare(second.id));
+      const sourceIndex = stackTasks.findIndex((task) => task.id === taskId);
+      if (sourceIndex < 0) {
+        set({ error: "Task is missing from the source stack." });
+        return false;
+      }
+
+      const previousSnapshot = snapshotFromState(get().tasks, get().stacks);
+      const timestamp = nowIso();
+      const nextStackTasks = [...stackTasks];
+      const [movedTask] = nextStackTasks.splice(sourceIndex, 1);
+      nextStackTasks.splice(Math.max(0, Math.min(targetIndex, nextStackTasks.length)), 0, movedTask);
+      const orderByTaskId = new Map(nextStackTasks.map((task, index) => [task.id, index]));
+      const tasks = get().tasks.map((task) => task.stackId === stackId
+        ? {
+            ...task,
+            stackOrder: orderByTaskId.get(task.id) ?? task.stackOrder,
+            updatedAt: task.id === taskId || task.stackOrder !== (orderByTaskId.get(task.id) ?? task.stackOrder) ? timestamp : task.updatedAt,
+          }
+        : task,
+      );
+      const selectedTaskId = selectVisibleTask(tasks, get().stacks, get().selectedTaskId, get().activeFilter, get().searchQuery);
+
+      set({ tasks, selectedTaskId });
+      persistStackMutation(previousSnapshot);
+      return true;
+    },
+    moveTaskToStack: (taskId, targetStackId, targetIndex) => {
+      if (!canMutateTasks()) {
+        return false;
+      }
+
+      const movedTask = get().tasks.find((task) => task.id === taskId);
+      const targetStack = get().stacks.find((stack) => stack.id === targetStackId);
+      if (!movedTask || !targetStack) {
+        set({ error: movedTask ? "Target stack is missing." : "Task is missing." });
+        return false;
+      }
+
+      if (movedTask.stackId === targetStackId) {
+        return get().reorderTaskWithinStack(targetStackId, taskId, targetIndex ?? Number.MAX_SAFE_INTEGER);
+      }
+
+      const previousSnapshot = snapshotFromState(get().tasks, get().stacks);
+      const timestamp = nowIso();
+      const sourceStackId = movedTask.stackId;
+      const targetTasks = get().tasks
+        .filter((task) => task.stackId === targetStackId)
+        .sort((first, second) => first.stackOrder - second.stackOrder || first.createdAt.localeCompare(second.createdAt) || first.id.localeCompare(second.id));
+      const insertIndex = Math.max(0, Math.min(targetIndex ?? targetTasks.length, targetTasks.length));
+      const nextTargetTaskIds = targetTasks.map((task) => task.id);
+      nextTargetTaskIds.splice(insertIndex, 0, taskId);
+      const targetOrderByTaskId = new Map(nextTargetTaskIds.map((id, index) => [id, index]));
+      let tasks = get().tasks.map((task) => {
+        if (task.id === taskId) {
+          return {
+            ...task,
+            stackId: targetStackId,
+            stackOrder: targetOrderByTaskId.get(taskId) ?? insertIndex,
+            updatedAt: timestamp,
+          };
+        }
+
+        if (task.stackId === targetStackId) {
+          return {
+            ...task,
+            stackOrder: targetOrderByTaskId.get(task.id) ?? task.stackOrder,
+            updatedAt: task.stackOrder === (targetOrderByTaskId.get(task.id) ?? task.stackOrder) ? task.updatedAt : timestamp,
+          };
+        }
+
+        return task;
+      });
+      tasks = normalizeStackTasks(tasks, sourceStackId, timestamp);
+      const sourceStillHasTasks = tasks.some((task) => task.stackId === sourceStackId);
+      const stacks = get().stacks
+        .filter((stack) => stack.id !== sourceStackId || sourceStillHasTasks)
+        .map((stack) => stack.id === targetStackId ? { ...stack, updatedAt: timestamp } : stack);
+      const selectedTaskId = selectVisibleTask(tasks, stacks, get().selectedTaskId, get().activeFilter, get().searchQuery);
+
+      set({ tasks, stacks: normalizeGlobalStackOrders(stacks, timestamp), selectedTaskId });
+      persistStackMutation(previousSnapshot);
+      return true;
+    },
+    splitTaskToNewStack: (taskId, targetGlobalIndex, visibleStackIds) => {
+      if (!canMutateTasks()) {
+        return false;
+      }
+
+      const movedTask = get().tasks.find((task) => task.id === taskId);
+      if (!movedTask) {
+        set({ error: "Task is missing." });
+        return false;
+      }
+
+      const sourceTasks = get().tasks.filter((task) => task.stackId === movedTask.stackId);
+      if (sourceTasks.length <= 1) {
+        set({ error: "Cannot split a singleton stack." });
+        return false;
+      }
+
+      const previousSnapshot = snapshotFromState(get().tasks, get().stacks);
+      const timestamp = nowIso();
+      const newStackId = createStackIdForTask(taskId, get().stacks);
+      const sourceStack = get().stacks.find((stack) => stack.id === movedTask.stackId);
+      const newStack: TaskStack = {
+        id: newStackId,
+        sortOrder: 0,
+        collapsed: true,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
+      let tasks = get().tasks.map((task) => task.id === taskId
+        ? { ...task, stackId: newStackId, stackOrder: 0, updatedAt: timestamp }
+        : task,
+      );
+      tasks = normalizeStackTasks(tasks, movedTask.stackId, timestamp);
+      const baseStacks = [...get().stacks.map((stack) => stack.id === sourceStack?.id ? { ...stack, updatedAt: timestamp } : stack), newStack];
+      const visibleIds = [...(visibleStackIds?.length ? visibleStackIds : normalizeGlobalStackOrders(get().stacks).map((stack) => stack.id)), newStackId];
+      const stacks = reorderStacksWithinVisibleSet(baseStacks, newStackId, targetGlobalIndex, visibleIds, timestamp);
+      if (!stacks) {
+        set({ error: "Invalid split target." });
+        return false;
+      }
+
+      const selectedTaskId = selectVisibleTask(tasks, stacks, get().selectedTaskId, get().activeFilter, get().searchQuery);
+      set({ tasks, stacks, selectedTaskId });
+      persistStackMutation(previousSnapshot);
+      return true;
+    },
+    selectTask: (id) => {
+      set({ selectedTaskId: id });
     },
     setMode: (mode) => {
       set({ mode });
     },
     setActiveFilter: (activeFilter) => {
       const selectedTaskId = selectVisibleTask(get().tasks, get().stacks, get().selectedTaskId, activeFilter, get().searchQuery);
-      set({ activeFilter, selectedTaskId, highlightedTaskId: null });
+      set({ activeFilter, selectedTaskId });
     },
     setSearchQuery: (searchQuery) => {
       const selectedTaskId = selectVisibleTask(get().tasks, get().stacks, get().selectedTaskId, get().activeFilter, searchQuery);
-      set({ searchQuery, selectedTaskId, highlightedTaskId: null });
+      set({ searchQuery, selectedTaskId });
     },
     getFilteredTasks: (filter, query) => {
       const state = get();

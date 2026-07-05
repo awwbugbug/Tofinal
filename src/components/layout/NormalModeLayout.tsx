@@ -16,7 +16,6 @@ type NormalModeLayoutProps = {
   tasks: Task[];
   stackViews: TaskStackView[];
   todayCompletedStackViews: TaskStackView[];
-  highlightedTaskId: string | null;
   selectedTask: Task | null;
   attachments: AttachmentView[];
   attachmentsLoading: boolean;
@@ -55,6 +54,10 @@ type NormalModeLayoutProps = {
   onSelectTask: (id: string) => void;
   onToggleTask: (id: string) => void;
   onToggleStackCollapsed: (stackId: string) => void;
+  onReorderStacks: (sourceStackId: string, targetIndex: number, visibleStackIds: string[]) => boolean;
+  onReorderTaskWithinStack: (stackId: string, taskId: string, targetIndex: number) => boolean;
+  onMoveTaskToStack: (taskId: string, targetStackId: string, targetIndex?: number) => boolean;
+  onSplitTaskToNewStack: (taskId: string, targetGlobalIndex: number, visibleStackIds: string[]) => boolean;
   onUpdateTask: (
     id: string,
     update: Partial<Pick<Task, "title" | "note" | "priority" | "tags" | "pinned">>,
@@ -122,7 +125,6 @@ export function NormalModeLayout({
   attachmentsAdding,
   attachmentsCapturing,
   attachmentsLoading,
-  highlightedTaskId,
   onCancelScreenshotAttachment,
   onConfirmScreenshotAttachment,
   pendingScreenshot,
@@ -146,6 +148,10 @@ export function NormalModeLayout({
   onSearchChange,
   onSelectTask,
   onSwitchToPin,
+  onMoveTaskToStack,
+  onReorderStacks,
+  onReorderTaskWithinStack,
+  onSplitTaskToNewStack,
   onToggleStackCollapsed,
   onToggleTask,
   onStartTaskApps,
@@ -301,10 +307,12 @@ export function NormalModeLayout({
               {stackViews.length > 0 ? (
                 <TaskList
                   embedded
-                  highlightedTaskId={highlightedTaskId}
-                  onHighlightTask={onSelectTask}
                   onSelect={onSelectTask}
                   onToggle={onToggleTask}
+                  onMoveTaskToStack={onMoveTaskToStack}
+                  onReorderStacks={onReorderStacks}
+                  onReorderTaskWithinStack={onReorderTaskWithinStack}
+                  onSplitTaskToNewStack={onSplitTaskToNewStack}
                   onToggleStackCollapsed={onToggleStackCollapsed}
                   selectedTaskId={selectedTaskId}
                   stackViews={stackViews}
@@ -322,10 +330,12 @@ export function NormalModeLayout({
                   </div>
                   <TaskList
                     embedded
-                    highlightedTaskId={highlightedTaskId}
-                    onHighlightTask={onSelectTask}
                     onSelect={onSelectTask}
                     onToggle={onToggleTask}
+                    onMoveTaskToStack={onMoveTaskToStack}
+                    onReorderStacks={onReorderStacks}
+                    onReorderTaskWithinStack={onReorderTaskWithinStack}
+                    onSplitTaskToNewStack={onSplitTaskToNewStack}
                     onToggleStackCollapsed={onToggleStackCollapsed}
                     selectedTaskId={selectedTaskId}
                     stackViews={todayCompletedStackViews}

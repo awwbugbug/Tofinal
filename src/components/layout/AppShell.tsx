@@ -20,7 +20,6 @@ export function AppShell() {
   const { t } = useI18n();
   const tasks = useTaskStore((state) => state.tasks);
   const selectedTaskId = useTaskStore((state) => state.selectedTaskId);
-  const highlightedTaskId = useTaskStore((state) => state.highlightedTaskId);
   const mode = useTaskStore((state) => state.mode);
   const activeFilter = useTaskStore((state) => state.activeFilter);
   const searchQuery = useTaskStore((state) => state.searchQuery);
@@ -43,6 +42,10 @@ export function AppShell() {
   const getStackViews = useTaskStore((state) => state.getStackViews);
   const getTodayCompletedStackViews = useTaskStore((state) => state.getTodayCompletedStackViews);
   const toggleStackCollapsed = useTaskStore((state) => state.toggleStackCollapsed);
+  const reorderStacks = useTaskStore((state) => state.reorderStacks);
+  const reorderTaskWithinStack = useTaskStore((state) => state.reorderTaskWithinStack);
+  const moveTaskToStack = useTaskStore((state) => state.moveTaskToStack);
+  const splitTaskToNewStack = useTaskStore((state) => state.splitTaskToNewStack);
   const attachmentsByTaskId = useAttachmentStore((state) => state.itemsByTaskId);
   const attachmentLoadingTaskIds = useAttachmentStore((state) => state.loadingTaskIds);
   const attachmentsAdding = useAttachmentStore((state) => state.adding);
@@ -181,7 +184,6 @@ export function AppShell() {
       <div className="min-h-0 flex-1">
         <NormalModeLayout
           activeFilter={activeFilter}
-          highlightedTaskId={highlightedTaskId}
           stackViews={stackViews}
           todayCompletedStackViews={todayCompletedStackViews}
           onAddTask={addTask}
@@ -230,6 +232,10 @@ export function AppShell() {
           onSelectTask={selectTask}
           onSearchChange={setSearchQuery}
           onSwitchToPin={() => switchModeWithTransition("pin")}
+          onMoveTaskToStack={moveTaskToStack}
+          onReorderStacks={reorderStacks}
+          onReorderTaskWithinStack={reorderTaskWithinStack}
+          onSplitTaskToNewStack={splitTaskToNewStack}
           onToggleStackCollapsed={toggleStackCollapsed}
           onToggleTask={toggleTask}
           onUpdateTask={updateTask}

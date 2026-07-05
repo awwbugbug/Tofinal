@@ -297,9 +297,46 @@ Resolved in Phase 9C:
 
 Still deferred:
 
-- Define explicit stack merge, split, and reorder commands before adding any UI.
-- Decide whether stack reorder uses native Pointer Events or a constrained DnD dependency; do not add a DnD library without a separate plan.
+- Phase 9D added explicit stack merge, split, and reorder commands.
+- Phase 9D uses native Pointer Events for the first DnD MVP; no DnD dependency was added.
 - Add full non-main task editing only after deciding how attachments, screenshots, and app bindings should be surfaced for child tasks.
 - Manually verify schema version `5` migration on a real v0.9B database with existing attachments, screenshots, task apps, and preferences.
 - Consider stack-level accessibility labels and keyboard expand/collapse shortcuts before polishing stack interaction.
+
+## Phase 9D Stack Drag Follow-Ups
+
+Resolved in Phase 9D:
+
+- Current-view stack reorder.
+- Stack-internal task reorder.
+- Singleton task merge into another stack.
+- Split a task out of a multi-task stack into a new singleton stack.
+- Main-task promotion by moving a task to the first stack position.
+- Rollback snapshot for failed stack mutation persistence.
+
+Still deferred:
+
+- Keyboard-accessible drag/reorder controls.
+- Cross-view drag between `Today` and `All Tasks`.
+- Dragging entire multi-task stacks into other stacks as a single grouped operation.
+- More advanced collision detection or drag overlay if manual QA shows Pointer Events MVP is not precise enough.
+- Full child-task editing and attachment/app/screenshot access for non-main tasks.
+- Deeper animation polish beyond subtle scale, highlight, and drop indicators.
+
+## Phase 9E Stack Presentation Follow-Ups
+
+Resolved in Phase 9E:
+
+- Collapsed multi-task stacks now have visible layered-card depth instead of looking like ordinary single capsules.
+- Stack expansion no longer depends on a large visible `Expand stack` button; the stack body is the primary affordance.
+- Expanded stacks now unfold child tasks below the main task instead of rendering as a large wrapper around ordinary task rows.
+- A compact collapse control remains available without dominating the stack surface.
+- Nested completion controls are protected from accidental stack expand/collapse.
+
+Still deferred:
+
+- FLIP-style displacement animation when neighboring stacks move out of the way during drag.
+- Advanced spring physics for drag previews.
+- Keyboard-accessible reorder/merge/split controls.
+- Full child-task detail editing and attachment/app/screenshot access for non-main tasks.
 

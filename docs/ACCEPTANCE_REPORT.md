@@ -1386,3 +1386,80 @@ Date: 2026-06-25
 - Added store and repository regression tests for singleton stack creation, collapsed persistence, v4 singleton migration, stack save/load, main-task selection, and delete behavior.
 - `npm test`: passed, 17 test files, 139 tests.
 - `npm run build`: passed, TypeScript and Vite production build completed.
+
+---
+
+# Phase 9D Task Stack Drag Reorder / Merge / Split MVP
+
+Date: 2026-07-03
+
+## Implemented
+
+- Implemented stack drag/drop with native Pointer Events; no DnD dependency was added.
+- Added store-level stack mutations for visible stack reorder, stack-internal task reorder, task merge into another stack, and split-out into a new singleton stack.
+- Stack mutations update in-memory state immediately and persist through the existing serialized task save queue.
+- Stack mutation persistence failures use a rollback snapshot so failed drag saves do not corrupt stack order or lose tasks.
+- Normal Mode task lists now expose drag affordances, merge target highlight, global drop indicators, and stack-internal drop indicators.
+- Dragging a collapsed singleton task between stacks reorders it as a stack; dragging it onto another stack merges it into that stack.
+- Dragging an expanded stack task within its stack updates `stackOrder`; whichever task becomes first is the `mainTask`.
+- Dragging a task out of a multi-task stack into a global list gap creates a new singleton stack.
+- Desktop Pin Mode remains lightweight and does not expose stack editing.
+
+## Preserved Boundaries
+
+- No nested stacks.
+- No cross-view Today / All drag transfer.
+- No automatic `plannedDate` changes during drag/drop.
+- No AI, MCP, calendar, reminders, tray, global shortcuts, Edge Dock, or Widget Mode work.
+- Attachments, screenshots, Lightbox, task app binding, Start Task, preferences, and task save queue remain on existing paths.
+
+## Verification Results
+
+- Added store regression tests for global stack reorder, stack-internal reorder, main-task promotion, merge, split-out, invalid move rejection, and save persistence.
+- Added UI regression coverage for expanded stack drag affordances and the rule that child tasks do not open full DetailPanel editing.
+- `npm test`: passed, 17 test files, 145 tests.
+- `npm run build`: passed, TypeScript and Vite production build completed.
+- `cargo check`: passed for `src-tauri`.
+- `npm run tauri dev`: verified Vite on port 1420 and `target\debug\tofinal.exe` startup; an old Vite process on port 1420 was stopped before rerun, and the validation process was stopped intentionally after startup verification.
+
+---
+
+# Phase 9E Apple-Style Stack Presentation
+
+Date: 2026-07-03
+
+## Implemented
+
+- Kept SQLite schema version `5`; no task, attachment, screenshot, or task app schema changes were made.
+- Collapsed multi-task stacks now render as layered cards using two subtle backplates behind the main task capsule.
+- Removed the visible full-width `Expand stack` button from collapsed stacks.
+- Collapsed multi-task stacks now expand by clicking or pressing Enter/Space on the stack body.
+- Expanded stacks can collapse by clicking the stack header or the existing compact collapse control.
+- Completion checkbox and other nested controls remain interactive without accidentally expanding the stack.
+- Stack drag/drop still uses the existing native Pointer Events path and preserves the drag threshold.
+- Expanded stack entry uses a restrained opacity/scale/translate animation and respects reduced-motion settings.
+
+## Preserved Boundaries
+
+- No schema migration.
+- No nested stacks.
+- No new DnD dependency.
+- No full non-main task editing.
+- No changes to Today / All / Important / Pinned view semantics.
+- No changes to attachments, screenshots, Lightbox, task app binding, Start Task, preferences, or Desktop Pin Mode.
+
+## Verification Results
+
+- Added UI regression coverage for layered collapsed stack presentation, body-click expand, header-click collapse, and nested completion controls.
+- `npm test`: passed, 17 test files, 147 tests.
+- `npm run build`: passed, TypeScript and Vite production build completed.
+- `cargo check`: passed for `src-tauri`.
+- `npm run tauri dev`: verified Vite on port 1420 and `target\debug\tofinal.exe` startup; the validation `tofinal.exe` process was stopped intentionally after startup verification.
+
+## Visual Repair
+
+- Reworked the first Phase 9E presentation because the initial version still looked like a large wrapper around ordinary task capsules.
+- Collapsed stacks now keep the main task as the visible top card and show the stack depth underneath the card, not as a separate metadata row.
+- Expanded stacks now unfold from the main task card: the main card remains at the top and child tasks appear in a compact track below it.
+- Removed the expanded-state outer capsule/header look so expanded stacks no longer resemble the previous list-with-container layout.
+- Kept the same schema, store, and drag/drop mutation paths.

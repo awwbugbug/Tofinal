@@ -447,7 +447,7 @@ describe("task store", () => {
     expect(lastSnapshot.stacks?.find((stack) => stack.id === stackId)?.collapsed).toBe(false);
   });
 
-  it("uses the lowest stackOrder task as main and keeps non-main selection out of DetailPanel", async () => {
+  it("uses the lowest stackOrder task as main and selects child tasks directly", async () => {
     const { store } = await createHydratedStore();
     const [firstTask, secondTask, ...remainingTasks] = store.getState().tasks;
     const stack = {
@@ -464,7 +464,6 @@ describe("task store", () => {
       tasks: [mainTask, childTask, ...remainingTasks],
       stacks: [stack, ...store.getState().stacks.slice(2)],
       selectedTaskId: mainTask.id,
-      highlightedTaskId: null,
     });
 
     const view = store.getState().getStackViews("all")[0];
@@ -472,14 +471,109 @@ describe("task store", () => {
     expect(view.tasks.map((task) => task.id)).toEqual([mainTask.id, childTask.id]);
 
     store.getState().selectTask(childTask.id);
-    expect(store.getState().selectedTaskId).toBe(mainTask.id);
-    expect(store.getState().highlightedTaskId).toBe(childTask.id);
+    expect(store.getState().selectedTaskId).toBe(childTask.id);
 
     store.getState().deleteTask(mainTask.id);
     await flushPromises();
 
     expect(store.getState().getStackViews("all")[0].mainTask.id).toBe(childTask.id);
     expect(store.getState().tasks.find((task) => task.id === childTask.id)?.stackOrder).toBe(0);
+  });
+
+  it("reorders visible stacks and persists normalized global stack order", async () => {
+    const { store, repository } = await createHydratedStore();
+    const initialStackIds = store.getState().getStackViews("all").map((view) => view.stack.id);
+
+    const moved = store.getState().reorderStacks(initialStackIds[0], initialStackIds.length, initialStackIds);
+    await flushPromises();
+
+    expect(moved).toBe(true);
+    expect(store.getState().getStackViews("all").map((view) => view.stack.id)).toEqual([
+      ...initialStackIds.slice(1),
+      initialStackIds[0],
+    ]);
+    expect(store.getState().stacks.map((stack) => stack.sortOrder)).toEqual([0, 1, 2, 3]);
+    expect(repository.savedSnapshots[repository.savedSnapshots.length - 1].stacks?.map((stack) => stack.sortOrder)).toEqual([0, 1, 2, 3]);
+  });
+
+  it("reorders tasks inside a stack and promotes the first task to main", async () => {
+    const { store, repository } = await createHydratedStore();
+    const [firstTask, secondTask, ...remainingTasks] = store.getState().tasks;
+    const [firstStack, ...remainingStacks] = store.getState().stacks;
+    const combinedStack = { ...firstStack, id: "stack-combined", collapsed: false };
+    const mainTask = { ...firstTask, id: "task-main", stackId: combinedStack.id, stackOrder: 0, title: "Main task" };
+    const childTask = { ...secondTask, id: "task-child", stackId: combinedStack.id, stackOrder: 1, title: "Child task" };
+
+    store.setState({
+      tasks: [mainTask, childTask, ...remainingTasks],
+      stacks: [combinedStack, ...remainingStacks.slice(1)],
+      selectedTaskId: mainTask.id,
+    });
+
+    const moved = store.getState().reorderTaskWithinStack(combinedStack.id, childTask.id, 0);
+    await flushPromises();
+
+    expect(moved).toBe(true);
+    expect(store.getState().getStackViews("all")[0].tasks.map((task) => task.id)).toEqual([childTask.id, mainTask.id]);
+    expect(store.getState().getStackViews("all")[0].mainTask.id).toBe(childTask.id);
+    expect(store.getState().selectedTaskId).toBe(mainTask.id);
+    expect(repository.savedSnapshots[repository.savedSnapshots.length - 1].tasks.find((task) => task.id === childTask.id)?.stackOrder).toBe(0);
+  });
+
+  it("merges a singleton task into a target stack and removes the source stack", async () => {
+    const { store, repository } = await createHydratedStore();
+    const [sourceView, targetView] = store.getState().getStackViews("all");
+    const sourceTaskId = sourceView.mainTask.id;
+
+    const moved = store.getState().moveTaskToStack(sourceTaskId, targetView.stack.id);
+    await flushPromises();
+
+    const targetTasks = store.getState().tasks
+      .filter((task) => task.stackId === targetView.stack.id)
+      .sort((first, second) => first.stackOrder - second.stackOrder);
+    expect(moved).toBe(true);
+    expect(store.getState().stacks.some((stack) => stack.id === sourceView.stack.id)).toBe(false);
+    expect(targetTasks.map((task) => task.id)).toEqual([targetView.mainTask.id, sourceTaskId]);
+    expect(repository.savedSnapshots[repository.savedSnapshots.length - 1].stacks?.some((stack) => stack.id === sourceView.stack.id)).toBe(false);
+  });
+
+  it("splits a child task into a new singleton stack without leaving an empty source stack", async () => {
+    const { store, repository } = await createHydratedStore();
+    const [firstTask, secondTask, ...remainingTasks] = store.getState().tasks;
+    const [firstStack, ...remainingStacks] = store.getState().stacks;
+    const combinedStack = { ...firstStack, id: "stack-combined", collapsed: false };
+    const mainTask = { ...firstTask, id: "task-main", stackId: combinedStack.id, stackOrder: 0, title: "Main task" };
+    const childTask = { ...secondTask, id: "task-child", stackId: combinedStack.id, stackOrder: 1, title: "Child task" };
+
+    store.setState({
+      tasks: [mainTask, childTask, ...remainingTasks],
+      stacks: [combinedStack, ...remainingStacks.slice(1)],
+      selectedTaskId: mainTask.id,
+    });
+    const visibleStackIds = store.getState().getStackViews("all").map((view) => view.stack.id);
+
+    const split = store.getState().splitTaskToNewStack(childTask.id, 1, visibleStackIds);
+    await flushPromises();
+
+    const child = store.getState().tasks.find((task) => task.id === childTask.id);
+    expect(split).toBe(true);
+    expect(child).toMatchObject({ stackOrder: 0 });
+    expect(child?.stackId).not.toBe(combinedStack.id);
+    expect(store.getState().tasks.filter((task) => task.stackId === combinedStack.id)).toHaveLength(1);
+    expect(store.getState().stacks.some((stack) => stack.id === combinedStack.id)).toBe(true);
+    expect(store.getState().stacks.some((stack) => stack.id === child?.stackId)).toBe(true);
+    expect(repository.savedSnapshots[repository.savedSnapshots.length - 1].tasks.find((task) => task.id === childTask.id)?.stackOrder).toBe(0);
+  });
+
+  it("rejects invalid stack mutations without corrupting task state", async () => {
+    const { store, repository } = await createHydratedStore();
+    const before = store.getState().tasks.map((task) => ({ id: task.id, stackId: task.stackId, stackOrder: task.stackOrder }));
+
+    expect(store.getState().moveTaskToStack("missing-task", store.getState().stacks[0].id)).toBe(false);
+    expect(store.getState().splitTaskToNewStack(store.getState().tasks[0].id, 0)).toBe(false);
+
+    expect(store.getState().tasks.map((task) => ({ id: task.id, stackId: task.stackId, stackOrder: task.stackOrder }))).toEqual(before);
+    expect(repository.savedSnapshots).toHaveLength(0);
   });
 });
 

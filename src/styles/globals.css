@@ -987,13 +987,152 @@ body {
     overflow: visible;
   }
 
-  .task-stack-expanded {
+  .task-stack-collapsed-multi {
+    cursor: pointer;
+    isolation: isolate;
+    padding-bottom: 0.55rem;
+    user-select: none;
+  }
+
+  /*
+   * iOS-notification-style stack plates: each layer is a full-size card
+   * silhouette covering the exact card area, narrowed with scaleX and pushed
+   * down a few pixels so only its bottom edge peeks out below the top card.
+   */
+  .task-stack-collapsed-multi::before,
+  .task-stack-collapsed-multi::after {
     border: 1px solid var(--border-soft);
+    border-radius: 22px;
+    box-shadow: 0 6px 14px rgb(15 23 32 / 0.10);
+    content: "";
+    inset: 0 0 0.55rem;
+    pointer-events: none;
+    position: absolute;
+    transform-origin: top center;
+    transition:
+      opacity 220ms ease,
+      transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+    z-index: -1;
+  }
+
+  .task-stack-collapsed-multi::before {
+    background: color-mix(in srgb, var(--surface-card-hover) 86%, var(--bg-base));
+    transform: translateY(0.25rem) scaleX(0.965);
+  }
+
+  .task-stack-collapsed-multi::after {
+    background: color-mix(in srgb, var(--surface-card-hover) 58%, var(--bg-base));
+    opacity: 0.95;
+    transform: translateY(0.5rem) scaleX(0.93);
+    z-index: -2;
+  }
+
+  .task-stack-collapsed-multi:hover::before,
+  .task-stack-collapsed-multi:focus-visible::before {
+    transform: translateY(0.55rem) scaleX(0.972);
+  }
+
+  .task-stack-collapsed-multi:hover::after,
+  .task-stack-collapsed-multi:focus-visible::after {
+    transform: translateY(1rem) scaleX(0.938);
+  }
+
+  .task-stack-collapsed-multi:focus-visible {
+    border-radius: 24px;
+    box-shadow: 0 0 0 3px var(--ring-soft);
+    outline: none;
+  }
+
+  /* Frosted-glass top card: the plates behind it blur into soft depth
+     instead of showing through as raw shapes. The expanded main card shares
+     the same surface so toggling a stack never jumps in tone. */
+  .task-stack-collapsed-multi .task-card-shell[data-selected="false"],
+  .task-stack-main-frame .task-card-shell[data-selected="false"] {
+    background: color-mix(in srgb, var(--surface-card) 82%, var(--surface-elevated));
+    -webkit-backdrop-filter: blur(14px) saturate(150%);
+    backdrop-filter: blur(14px) saturate(150%);
+  }
+
+  .task-stack-collapsed-multi .task-card-shell[data-selected="false"]:hover,
+  .task-stack-main-frame .task-card-shell[data-selected="false"]:hover {
+    background: var(--surface-card-hover);
+  }
+
+  .task-stack-drag-frame,
+  .stack-task-drag-frame {
+    position: relative;
+    transition:
+      opacity 180ms ease,
+      transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      filter 180ms ease;
+  }
+
+  .task-stack-drag-frame[data-dragging="true"],
+  .stack-task-drag-frame[data-dragging="true"] {
+    cursor: grabbing;
+    opacity: 0.92;
+    z-index: 30;
+  }
+
+  .task-stack-drag-frame[data-dragging="true"] .task-card-shell,
+  .stack-task-drag-frame[data-dragging="true"] .task-card-shell {
+    box-shadow: var(--shadow-card-around);
+  }
+
+  .task-stack-drag-frame[data-drop-state="merge"] {
     border-radius: 1.75rem;
-    background: color-mix(in srgb, var(--surface-card) 58%, transparent);
-    box-shadow: var(--shadow-card-hover);
+    box-shadow:
+      0 0 0 2px color-mix(in srgb, var(--accent) 34%, transparent),
+      0 0 26px color-mix(in srgb, var(--accent) 18%, transparent);
+  }
+
+  /* No container-level enter animation: the main card is already on screen
+     when a stack expands, so animating the section from opacity 0 would blink
+     it. Only the unfolding children animate. */
+  .task-stack-unfolded {
     overflow: visible;
-    padding: 0.75rem;
+    padding-bottom: 0.2rem;
+  }
+
+  .task-stack-main-frame {
+    cursor: pointer;
+    outline: none;
+    position: relative;
+    user-select: none;
+    z-index: 3;
+  }
+
+  .task-stack-main-frame:focus-visible {
+    border-radius: 24px;
+    box-shadow: 0 0 0 3px var(--ring-soft);
+  }
+
+  .task-stack-unfold-panel {
+    display: grid;
+    gap: 0.65rem;
+    padding: 0.65rem 0 0.35rem;
+    position: relative;
+  }
+
+  /* Children stay slightly narrower than the main card, echoing the collapsed
+     plate silhouettes they unfold from. */
+  .task-stack-unfold-panel .stack-task-drag-frame {
+    animation: stack-child-unfold 360ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    margin-inline: auto;
+    transform-origin: top center;
+    width: calc(100% - 0.9rem);
+  }
+
+  .task-stack-unfold-panel .stack-task-drag-frame:nth-child(2) {
+    animation-delay: 50ms;
+  }
+
+  .task-stack-unfold-panel .stack-task-drag-frame:nth-child(3) {
+    animation-delay: 100ms;
+  }
+
+  .task-stack-unfold-panel .stack-task-drag-frame:nth-child(4) {
+    animation-delay: 150ms;
   }
   .detail-action-row {
     align-items: stretch;
@@ -1143,12 +1282,39 @@ body {
   }
 }
 
+/* Children grow out of the collapsed plate state (narrow, tucked under the
+   top card) so expansion reads as the plates becoming real cards. */
+@keyframes stack-child-unfold {
+  from {
+    opacity: 0;
+    transform: translateY(-0.8rem) scaleX(0.94) scaleY(0.96);
+  }
+
+  55% {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scaleX(1) scaleY(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   [data-mode-transition="normal-enter"],
   [data-mode-transition="pin-enter"],
   [data-mode-transition="normal-exit"],
   [data-mode-transition="pin-exit"] {
     animation-duration: 1ms;
+  }
+
+  .task-stack-unfold-panel .stack-task-drag-frame {
+    animation-duration: 1ms;
+  }
+
+  .task-stack-drag-frame,
+  .stack-task-drag-frame {
+    transition-duration: 1ms;
   }
 }
 

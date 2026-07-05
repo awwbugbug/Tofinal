@@ -454,13 +454,65 @@ Data flow:
 Rendering rules:
 
 - `mainTask` is always the task with the smallest `stackOrder` inside a stack.
-- Collapsed stack rendering shows the main task and stack progress metadata.
-- Expanded stack rendering shows all tasks ordered by `stackOrder`.
-- Selecting a main task opens DetailPanel as before.
-- Selecting a non-main task only updates `highlightedTaskId`; full editing remains a later phase.
+- Collapsed singleton rendering behaves like a normal task capsule.
+- Collapsed multi-task rendering keeps the main task as the visible top card. Stack depth is shown iOS-notification style: each backplate is a full-size card silhouette (narrowed with `scaleX`, nudged down) so only its bottom edge peeks below the top card. Hover slightly fans the plates out without shifting layout.
+- There is no visible expand/collapse button. Collapsed multi-task stacks expand via double-click on the stack card or Enter/Space; expanded stacks collapse via double-click on the main card or Enter/Space. Nested controls such as checkboxes remain independent.
+- Single-click on a collapsed stack's main card selects the main task like any other card.
+- The collapsed stack main card uses a frosted-glass surface (near-opaque background plus `backdrop-filter` blur) so the backplates read as blurred depth instead of raw shapes showing through, and child cards unfold from the plate state (narrow, tucked under the top card) for expansion continuity.
+- Expanded stack rendering keeps the main task at the top and unfolds child tasks below it, ordered by `stackOrder`. Child cards stay slightly narrower than the main card (centered), echoing the collapsed plate silhouettes they unfold from.
+- Selecting any task in a stack — main or child — sets `selectedTaskId` and opens DetailPanel with full editing. The former `highlightedTaskId` highlight-only state was removed.
+- A selected child task stays selected (and visible in DetailPanel) even if its stack is collapsed afterwards; selection only falls back when the task leaves the visible view entirely.
 
 Current limits:
 
 - No drag reorder, merge, split, or nested stack support.
 - No new DnD dependency.
 - Desktop Pin Mode remains lightweight and does not expose stack editing controls.
+
+## Task Stack Drag Mutation Boundary
+
+Phase 9D keeps SQLite schema version `5` and adds stack mutation behavior in the application layer.
+
+DnD strategy:
+
+- Uses native Pointer Events in `TaskList`; no DnD library is installed.
+- Drag/drop is limited to the current visible view.
+- `Today` drag/drop never changes `plannedDate` and does not support cross-view transfer.
+- `All Tasks` remains the main stack-management view.
+- All drag geometry (insertion index, merge target, push-apart offsets) is computed against a rect snapshot captured once at drag activation, with scroll-delta compensation. Live `getBoundingClientRect`/`elementFromPoint` are not used during the drag, so sibling transforms never feed back into hit testing.
+- The dragged frame follows the pointer through an inline transform; siblings are pushed apart with `translate3d` transforms plus the shared 220ms transition. Layout never changes during a drag, and the old drop-indicator lines were removed in favor of the moving gap.
+- While dragging a task over another stack, the middle band of the target card resolves to merge and the top/bottom edge bands (28% each) resolve to insertion, replacing the old element-under-pointer merge rule.
+
+Store mutation API:
+
+- `reorderStacks(sourceStackId, targetIndex, visibleStackIds)` reorders visible stacks and normalizes `task_stacks.sort_order`.
+- `reorderTaskWithinStack(stackId, taskId, targetIndex)` reorders tasks inside one stack and normalizes `tasks.stack_order`.
+- `moveTaskToStack(taskId, targetStackId, targetIndex?)` moves a task into another stack and removes an empty source singleton stack.
+- `splitTaskToNewStack(taskId, targetGlobalIndex, visibleStackIds)` creates a new singleton stack for a task moved out of a multi-task stack.
+
+Persistence and rollback:
+
+- Stack mutations optimistically update Zustand state.
+- Each stack mutation passes a rollback snapshot into the existing serialized save queue.
+- If the latest stack save fails, tasks and stacks are restored from that rollback snapshot and `error` is set.
+- Attachments, screenshots, and task app bindings are not moved or deleted by stack mutations because they remain attached to concrete task ids.
+
+Main-task rule:
+
+- `mainTask` continues to be the lowest `stackOrder` task.
+- Reordering a child to index `0` promotes it to main.
+- Non-main tasks open full DetailPanel editing like main tasks.
+
+Presentation boundary:
+
+- Phase 9E adds Apple-style layered visual presentation for collapsed multi-task stacks.
+- The Phase 9E repair removes the old wrapper-style expanded container; stack presentation is now main-card-first in both collapsed and expanded states.
+- The second Phase 9E repair removes all visible expand/collapse controls: double-click toggles expand/collapse on the main card, single-click selects the main task, and the backplates hug the card with a slight hover fan-out.
+- The presentation is CSS/interaction only; it does not change `task_stacks`, `tasks.stack_id`, `tasks.stack_order`, or persistence behavior.
+- Double-click, keyboard expand/collapse, and drag gestures share the same `TaskList` interaction boundary. The drag threshold suppresses accidental click toggles after drag.
+
+Current limits:
+
+- No nested stacks.
+- No keyboard DnD.
+- No cross-view drag between Today and All.

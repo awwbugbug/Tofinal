@@ -360,6 +360,119 @@ describe("App", () => {
     expect(screen.queryByRole("region", { name: /completed today/i })).not.toBeInTheDocument();
   });
 
+  it("renders expanded stacks with drag affordances and opens child tasks in detail", async () => {
+    const seedTasks = createSeedTasks();
+    const stack = {
+      id: "stack-visible",
+      sortOrder: 0,
+      collapsed: false,
+      createdAt: seedTasks[0].createdAt,
+      updatedAt: seedTasks[0].updatedAt,
+    };
+    const tasks = [
+      { ...seedTasks[0], id: "task-main", title: "Visible main task", stackId: stack.id, stackOrder: 0 },
+      { ...seedTasks[1], id: "task-child", title: "Visible child task", note: "Child note should not open detail", stackId: stack.id, stackOrder: 1 },
+      { ...seedTasks[2], id: "task-singleton", stackId: "stack-singleton", stackOrder: 0 },
+    ];
+    setTaskRepositoryForTest(createMemoryTaskRepository({
+      tasks,
+      stacks: [
+        stack,
+        {
+          id: "stack-singleton",
+          sortOrder: 1,
+          collapsed: true,
+          createdAt: seedTasks[2].createdAt,
+          updatedAt: seedTasks[2].updatedAt,
+        },
+      ],
+    }));
+    resetTaskStore();
+
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: /all tasks/i }));
+
+    const expandedStack = screen.getByTestId("task-stack-expanded");
+    expect(expandedStack).toHaveAttribute("data-dnd-stack-frame", "true");
+    expect(expandedStack.querySelector(".task-stack-main-frame")).toBeInTheDocument();
+    expect(expandedStack.querySelector(".task-stack-unfold-panel")).toBeInTheDocument();
+    expect(expandedStack.querySelectorAll("[data-dnd-task-frame='true']")).toHaveLength(2);
+
+    await userEvent.click(within(expandedStack).getByText("Visible child task"));
+
+    const detailPanel = within(screen.getByTestId("detail-panel"));
+    expect(detailPanel.getByDisplayValue("Visible child task")).toBeInTheDocument();
+    expect(detailPanel.queryByDisplayValue("Visible main task")).not.toBeInTheDocument();
+  });
+
+  it("presents collapsed multi-task stacks as layered cards that open from the stack body", async () => {
+    const seedTasks = createSeedTasks();
+    const stack = {
+      id: "stack-layered",
+      sortOrder: 0,
+      collapsed: true,
+      createdAt: seedTasks[0].createdAt,
+      updatedAt: seedTasks[0].updatedAt,
+    };
+    const tasks = [
+      { ...seedTasks[0], id: "layered-main", title: "Layered main task", stackId: stack.id, stackOrder: 0 },
+      { ...seedTasks[1], id: "layered-child", title: "Layered child task", stackId: stack.id, stackOrder: 1 },
+    ];
+    setTaskRepositoryForTest(createMemoryTaskRepository({ tasks, stacks: [stack] }));
+    resetTaskStore();
+
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: /all tasks/i }));
+
+    const collapsedStack = screen.getByRole("button", { name: /expand stack/i });
+    expect(collapsedStack).toHaveClass("task-stack-collapsed-multi");
+    expect(within(collapsedStack).getByTestId("task-stack-count")).toHaveTextContent("2");
+    expect(screen.queryByText("Expand stack")).not.toBeInTheDocument();
+
+    await userEvent.click(within(collapsedStack).getByText("Layered main task"));
+
+    expect(screen.queryByTestId("task-stack-expanded")).not.toBeInTheDocument();
+    expect(within(screen.getByTestId("detail-panel")).getByDisplayValue("Layered main task")).toBeInTheDocument();
+
+    await userEvent.dblClick(collapsedStack);
+
+    const expandedStack = await screen.findByTestId("task-stack-expanded");
+    expect(within(expandedStack).getByText("Layered main task")).toBeInTheDocument();
+    expect(within(expandedStack).getByText("Layered child task")).toBeInTheDocument();
+    expect(expandedStack.querySelector(".task-stack-unfold-control-row")).not.toBeInTheDocument();
+
+    await userEvent.dblClick(expandedStack.querySelector(".task-stack-main-frame") as HTMLElement);
+
+    expect(screen.queryByTestId("task-stack-expanded")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /expand stack/i })).toHaveClass("task-stack-collapsed-multi");
+  });
+
+  it("keeps completion controls interactive without accidentally expanding collapsed stacks", async () => {
+    const seedTasks = createSeedTasks();
+    const stack = {
+      id: "stack-checkbox",
+      sortOrder: 0,
+      collapsed: true,
+      createdAt: seedTasks[0].createdAt,
+      updatedAt: seedTasks[0].updatedAt,
+    };
+    const tasks = [
+      { ...seedTasks[0], id: "checkbox-main", title: "Checkbox main task", plannedDate: null, stackId: stack.id, stackOrder: 0 },
+      { ...seedTasks[1], id: "checkbox-child", title: "Checkbox child task", plannedDate: null, stackId: stack.id, stackOrder: 1 },
+    ];
+    setTaskRepositoryForTest(createMemoryTaskRepository({ tasks, stacks: [stack] }));
+    resetTaskStore();
+
+    await renderApp();
+    await userEvent.click(screen.getByRole("button", { name: /all tasks/i }));
+
+    await userEvent.click(screen.getByRole("checkbox", { name: /mark checkbox main task complete/i }));
+
+    expect(screen.queryByTestId("task-stack-expanded")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /expand stack/i })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /mark checkbox main task incomplete/i })).toBeInTheDocument();
+  });
+
   it("keeps completed non-today tasks in All while Today only shows them while completed today", async () => {
     const today = getLocalDateKey();
     const tasks = createSeedTasks().map((task, index) => {
