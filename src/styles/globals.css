@@ -634,6 +634,15 @@ body {
     z-index: 1;
   }
 
+  /* Fixed-height, scrollable body: the panel never outgrows small windows
+     and keeps the same height across tabs. */
+  .preferences-panel-body {
+    height: min(21rem, 55vh);
+    overflow-y: auto;
+    padding-right: 0.3rem;
+    scrollbar-width: thin;
+  }
+
   .preferences-choice {
     background: var(--surface-field);
     border: 1px solid var(--border-soft);

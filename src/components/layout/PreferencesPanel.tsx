@@ -37,9 +37,18 @@ const glassLevelOptions: Array<{ value: GlassLevelPreference; labelKey: string }
   { value: "strong", labelKey: "settings.glassStrong" },
 ];
 
+type PreferencesSection = "appearance" | "shortcuts" | "data";
+
+const preferenceSections: Array<{ value: PreferencesSection; labelKey: string }> = [
+  { value: "appearance", labelKey: "settings.appearance" },
+  { value: "shortcuts", labelKey: "settings.shortcuts" },
+  { value: "data", labelKey: "settings.data" },
+];
+
 export function PreferencesPanel({ onClose, open }: PreferencesPanelProps) {
   const { t } = useI18n();
   const [dataActionState, setDataActionState] = useState<"idle" | "busy" | "done" | "failed">("idle");
+  const [activeSection, setActiveSection] = useState<PreferencesSection>("appearance");
 
   const handleExport = async (kind: ExportKind) => {
     setDataActionState("busy");
@@ -105,7 +114,26 @@ export function PreferencesPanel({ onClose, open }: PreferencesPanelProps) {
           </Button>
         </header>
 
-        <div className="mt-5 space-y-5">
+        <div className="mt-4 grid grid-cols-3 gap-2" role="tablist">
+          {preferenceSections.map((section) => {
+            const selected = activeSection === section.value;
+            return (
+              <button
+                aria-selected={selected}
+                className={cn("preferences-choice", selected && "glass-soft preferences-choice-selected")}
+                key={section.value}
+                onClick={() => setActiveSection(section.value)}
+                role="tab"
+                type="button"
+              >
+                {t(section.labelKey)}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="preferences-panel-body mt-4 space-y-5">
+          {activeSection === "appearance" && (<>
           <section aria-labelledby="preferences-theme-label" className="space-y-2">
             <div className="text-xs font-medium uppercase text-[var(--text-faint)]" id="preferences-theme-label">
               {t("settings.theme")}
@@ -223,7 +251,9 @@ export function PreferencesPanel({ onClose, open }: PreferencesPanelProps) {
               />
             </label>
           </section>
+          </>)}
 
+          {activeSection === "shortcuts" && (
           <section aria-labelledby="preferences-shortcuts-label" className="space-y-2">
             <div className="text-xs font-medium uppercase text-[var(--text-faint)]" id="preferences-shortcuts-label">
               {t("settings.shortcuts")}
@@ -247,7 +277,9 @@ export function PreferencesPanel({ onClose, open }: PreferencesPanelProps) {
               ))}
             </div>
           </section>
+          )}
 
+          {activeSection === "data" && (
           <section aria-labelledby="preferences-data-label" className="space-y-2">
             <div className="text-xs font-medium uppercase text-[var(--text-faint)]" id="preferences-data-label">
               {t("settings.data")}
@@ -293,6 +325,7 @@ export function PreferencesPanel({ onClose, open }: PreferencesPanelProps) {
               </p>
             </div>
           </section>
+          )}
         </div>
 
         <footer className="mt-6 flex justify-start">
