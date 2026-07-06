@@ -1,5 +1,5 @@
 ﻿import { type PointerEvent as ReactPointerEvent, useEffect, useState } from "react";
-import { PanelTopOpen, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, PanelTopOpen, Search } from "lucide-react";
 
 import { Sidebar } from "@/components/layout/Sidebar";
 import { DetailPanel } from "@/components/layout/DetailPanel";
@@ -7,7 +7,12 @@ import { QuickInput } from "@/components/task/QuickInput";
 import { TaskList } from "@/components/task/TaskList";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CalendarPopover } from "@/components/ui/calendar-popover";
+import { ProgressRing } from "@/components/ui/progress-ring";
 import { useI18n } from "@/i18n/useI18n";
+import { cn } from "@/lib/utils";
+import { getLocalDateKey } from "@/stores/taskStore";
+import { usePreferencesStore } from "@/stores/preferencesStore";
 import type { AttachmentView, FinalScreenshot, PendingScreenshot } from "@/stores/attachmentStore";
 import type { TaskAppView } from "@/stores/taskAppStore";
 import type { Task, TaskFilter, TaskStackView } from "@/types/task";
@@ -67,9 +72,11 @@ type NormalModeLayoutProps = {
   leavingTaskIds: string[];
   overdueTasks: Task[];
   onMoveAllOverdueToToday: () => void;
+  viewDateKey: string;
+  onViewDateChange: (dateKey: string) => void;
   onUpdateTask: (
     id: string,
-    update: Partial<Pick<Task, "title" | "note" | "priority" | "tags" | "pinned">>,
+    update: Partial<Pick<Task, "title" | "note" | "priority" | "tags" | "pinned" | "plannedDate">>,
   ) => boolean;
   onSwitchToPin: () => void;
   modeTransition?: string | null;
@@ -79,7 +86,7 @@ const DEFAULT_SIDEBAR_WIDTH = 248;
 const DEFAULT_DETAIL_WIDTH = 340;
 const SIDEBAR_MIN_WIDTH = 220;
 const SIDEBAR_MAX_WIDTH = 360;
-const DETAIL_MIN_WIDTH = 300;
+const DETAIL_MIN_WIDTH = 360;
 const DETAIL_MAX_WIDTH = 480;
 const TASK_LIST_MIN_WIDTH = 360;
 const LAYOUT_HORIZONTAL_PADDING = 40;
@@ -164,7 +171,9 @@ export function NormalModeLayout({
   onMoveAllOverdueToToday,
   onMoveTaskToStack,
   onOpenTrash,
+  onViewDateChange,
   overdueTasks,
+  viewDateKey,
   onReorderStacks,
   onReorderTaskWithinStack,
   onSidebarDrop,
@@ -192,6 +201,33 @@ export function NormalModeLayout({
   const visibleTasks = stackViews.flatMap((view) => view.tasks);
   const openTasks = visibleTasks.filter((task) => !task.completed);
   const completedTasks = visibleTasks.filter((task) => task.completed);
+  const hasSearch = Boolean(searchQuery.trim());
+  const showTodayCompletedSection = activeFilter === "today" && todayCompletedStackViews.length > 0;
+
+  // The date view: the first sidebar item is parameterized by viewDateKey.
+  // Viewing today keeps the original Today behavior (overdue section, ring);
+  // other dates show that day's planned tasks (and, for past dates, what was
+  // completed on that day).
+  const language = usePreferencesStore((state) => state.language);
+  const locale = language === "en-US" ? "en-US" : "zh-CN";
+  const isDateView = activeFilter === "today";
+  const todayKey = getLocalDateKey();
+  const isViewingToday = viewDateKey === todayKey;
+  const showOverdueSection = isDateView && isViewingToday && !hasSearch && overdueTasks.length > 0;
+  const [dateCalendarOpen, setDateCalendarOpen] = useState(false);
+
+  const parseViewDate = (() => {
+    const [year, month, day] = viewDateKey.split("-").map(Number);
+    return new Date(year || 1970, (month || 1) - 1, day || 1);
+  })();
+  const tomorrowKey = getLocalDateKey(new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 1));
+  const shiftViewDate = (delta: number) => {
+    setDateCalendarOpen(false);
+    onViewDateChange(
+      getLocalDateKey(new Date(parseViewDate.getFullYear(), parseViewDate.getMonth(), parseViewDate.getDate() + delta)),
+    );
+  };
+
   const title =
     activeFilter === "important"
       ? t("filters.important")
@@ -199,10 +235,24 @@ export function NormalModeLayout({
         ? t("filters.all")
         : activeFilter === "pinned"
           ? t("filters.pinned")
-          : t("filters.today");
-  const hasSearch = Boolean(searchQuery.trim());
-  const showTodayCompletedSection = activeFilter === "today" && todayCompletedStackViews.length > 0;
-  const showOverdueSection = activeFilter === "today" && !hasSearch && overdueTasks.length > 0;
+          : isViewingToday
+            ? t("filters.today")
+            : viewDateKey === tomorrowKey
+              ? t("date.tomorrow")
+              : new Intl.DateTimeFormat(locale, { month: "long", day: "numeric" }).format(parseViewDate);
+
+  const liveTasks = tasks.filter((task) => !task.deletedAt);
+  const completedTodayCount = liveTasks.filter(
+    (task) => task.completed && task.completedAt?.slice(0, 10) === todayKey,
+  ).length;
+  const openTodayCount = liveTasks.filter((task) => !task.completed && task.plannedDate === todayKey).length;
+  const todayTotal = completedTodayCount + openTodayCount + overdueTasks.length;
+  const allDoneToday = todayTotal > 0 && completedTodayCount === todayTotal;
+  const viewDateLabel = (() => {
+    const datePart = new Intl.DateTimeFormat(locale, { month: "long", day: "numeric" }).format(parseViewDate);
+    const weekdayPart = new Intl.DateTimeFormat(locale, { weekday: "long" }).format(parseViewDate);
+    return `${datePart} · ${weekdayPart}`;
+  })();
   const gridTemplateColumns = `${sidebarWidth}px minmax(${TASK_LIST_MIN_WIDTH}px, 1fr) ${detailWidth}px`;
 
   useEffect(() => {
@@ -275,6 +325,7 @@ export function NormalModeLayout({
         onOpenTrash={onOpenTrash}
         tasks={tasks}
         trashedCount={trashedCount}
+        viewDateKey={viewDateKey}
       />
 
       <div
@@ -293,7 +344,71 @@ export function NormalModeLayout({
 
       <section className="surface-panel flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-[var(--radius-panel)] border px-5 pb-5 pt-8">
         <header className="mb-5 flex shrink-0 items-center justify-between gap-4">
-          <h2 className="text-3xl font-semibold tracking-normal text-[var(--text-primary)]">{title}</h2>
+          <div className="min-w-0">
+            {isDateView && (
+              <div className="relative flex items-center gap-1" data-testid="view-date-controls">
+                <button
+                  aria-label={t("date.previousDay")}
+                  className="calendar-nav-button h-6 w-6"
+                  onClick={() => shiftViewDate(-1)}
+                  type="button"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  aria-label={t("date.pickViewDate")}
+                  className="view-date-trigger"
+                  data-testid="view-date-trigger"
+                  onClick={() => setDateCalendarOpen((current) => !current)}
+                  type="button"
+                >
+                  {viewDateLabel}
+                </button>
+                <button
+                  aria-label={t("date.nextDay")}
+                  className="calendar-nav-button h-6 w-6"
+                  onClick={() => shiftViewDate(1)}
+                  type="button"
+                >
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+                {!isViewingToday && (
+                  <button
+                    aria-label={t("date.backToToday")}
+                    className="date-chip ml-1"
+                    onClick={() => {
+                      setDateCalendarOpen(false);
+                      onViewDateChange(todayKey);
+                    }}
+                    type="button"
+                  >
+                    {t("date.backToToday")}
+                  </button>
+                )}
+                {dateCalendarOpen && (
+                  <CalendarPopover
+                    onClose={() => setDateCalendarOpen(false)}
+                    onSelect={(dateKey) => {
+                      setDateCalendarOpen(false);
+                      onViewDateChange(dateKey);
+                    }}
+                    value={viewDateKey}
+                  />
+                )}
+              </div>
+            )}
+            <h2 className={cn("text-3xl font-semibold tracking-normal text-[var(--text-primary)]", isDateView && "mt-1")}>
+              {title}
+            </h2>
+          </div>
+          {isDateView && isViewingToday && todayTotal > 0 && (
+            <div className="ml-auto flex shrink-0 items-center gap-2.5">
+              {allDoneToday && (
+                <span className="text-xs font-medium text-[var(--accent-hover)]">{t("task.allDoneToday")}</span>
+              )}
+              <ProgressRing label={`${completedTodayCount}/${todayTotal}`} value={completedTodayCount / todayTotal} />
+            </div>
+          )}
           <Button
             aria-label={t("window.switchToPin")}
             className="mode-switch-button"
@@ -353,7 +468,6 @@ export function NormalModeLayout({
                     onSelect={onSelectTask}
                     onSidebarDrop={onSidebarDrop}
                     onToggle={onToggleTask}
-                    overdue
                     selectedTaskId={selectedTaskId}
                     tasks={overdueTasks}
                     testId="overdue-task-list"
@@ -378,13 +492,17 @@ export function NormalModeLayout({
                 />
               ) : (
                 <div className="flex min-h-40 items-center justify-center rounded-3xl border border-dashed border-[var(--border-soft)] bg-[var(--surface-card-hover)] p-6 text-center text-sm text-[var(--text-faint)]">
-                  {hasSearch ? t("task.noSearchResults") : t("task.noTasksToday")}
+                  {hasSearch
+                    ? t("task.noSearchResults")
+                    : isDateView && !isViewingToday
+                      ? t("task.noTasksForDate")
+                      : t("task.noTasksToday")}
                 </div>
               )}
               {showTodayCompletedSection && (
-                <section className="mt-5 space-y-3" aria-label={t("task.completedToday")}>
+                <section className="mt-5 space-y-3" aria-label={t(isViewingToday ? "task.completedToday" : "task.completedOnDate")}>
                   <div className="flex items-center justify-between text-xs font-medium uppercase text-[var(--text-faint)]">
-                    <span>{t("task.completedToday")}</span>
+                    <span>{t(isViewingToday ? "task.completedToday" : "task.completedOnDate")}</span>
                     <span>{countStackTasks(todayCompletedStackViews)}</span>
                   </div>
                   <TaskList

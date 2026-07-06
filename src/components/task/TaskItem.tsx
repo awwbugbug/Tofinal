@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useI18n } from "@/i18n/useI18n";
 import { cn } from "@/lib/utils";
+import { getLocalDateKey } from "@/stores/taskStore";
 import { usePreferencesStore } from "@/stores/preferencesStore";
 import type { Task } from "@/types/task";
 
@@ -15,7 +16,6 @@ type TaskItemProps = {
   compact?: boolean;
   subtask?: boolean;
   stackCount?: number;
-  overdueDays?: number;
   onToggle: (id: string) => void;
   onSelect: (id: string) => void;
 };
@@ -103,10 +103,54 @@ const fireCompletionConfetti = (element: HTMLElement | null) => {
   });
 };
 
-export function TaskItem({ compact = false, onSelect, onToggle, overdueDays, selected = false, stackCount, subtask = false, task }: TaskItemProps) {
+const dateKeyToUtc = (key: string) => {
+  const [year, month, day] = key.split("-").map(Number);
+  return Date.UTC(year || 0, (month || 1) - 1, day || 1);
+};
+
+type PlannedLabel = {
+  text: string;
+  overdue: boolean;
+};
+
+export function TaskItem({ compact = false, onSelect, onToggle, selected = false, stackCount, subtask = false, task }: TaskItemProps) {
   const { t } = useI18n();
   const completionCelebrationsEnabled = usePreferencesStore((state) => state.completionCelebrationsEnabled);
+  const language = usePreferencesStore((state) => state.language);
   const PriorityIcon = priorityIcon[task.priority];
+
+  // Planned-date label, self-computed: red "overdue Nd" for past dates,
+  // "tomorrow" or a short date for the future, nothing for today/unplanned.
+  // The stack count chip wins the shared corner slot.
+  const plannedLabel = ((): PlannedLabel | null => {
+    if (compact || task.completed || !task.plannedDate || (typeof stackCount === "number" && stackCount > 1)) {
+      return null;
+    }
+
+    const todayKey = getLocalDateKey();
+    if (task.plannedDate === todayKey) {
+      return null;
+    }
+
+    if (task.plannedDate < todayKey) {
+      const days = Math.max(1, Math.round((dateKeyToUtc(todayKey) - dateKeyToUtc(task.plannedDate)) / 86400000));
+      return { text: `${t("task.overdueBadgePrefix")}${days}${t("task.overdueBadgeSuffix")}`, overdue: true };
+    }
+
+    const [year, month, day] = todayKey.split("-").map(Number);
+    const tomorrowKey = getLocalDateKey(new Date(year || 1970, (month || 1) - 1, (day || 1) + 1));
+    if (task.plannedDate === tomorrowKey) {
+      return { text: t("date.tomorrow"), overdue: false };
+    }
+
+    const [plannedYear, plannedMonth, plannedDay] = task.plannedDate.split("-").map(Number);
+    const plannedDate = new Date(plannedYear || 1970, (plannedMonth || 1) - 1, plannedDay || 1);
+    const locale = language === "en-US" ? "en-US" : "zh-CN";
+    return {
+      text: new Intl.DateTimeFormat(locale, { month: language === "en-US" ? "short" : "long", day: "numeric" }).format(plannedDate),
+      overdue: false,
+    };
+  })();
   const itemRef = useRef<HTMLElement | null>(null);
   const previousCompletedRef = useRef(task.completed);
   const completionCelebrationHandledRef = useRef(false);
@@ -146,6 +190,7 @@ export function TaskItem({ compact = false, onSelect, onToggle, overdueDays, sel
         subtask && "rounded-[18px] bg-[color-mix(in_srgb,var(--surface-card)_44%,transparent)] p-3 shadow-none hover:scale-[1.002]",
       )}
       data-selected={selected ? "true" : "false"}
+      data-task-card-id={task.id}
       data-testid="task-card"
       onClick={() => onSelect(task.id)}
       ref={itemRef}
@@ -185,12 +230,15 @@ export function TaskItem({ compact = false, onSelect, onToggle, overdueDays, sel
           </Badge>
         )}
         {!compact && <p className="col-start-2 min-w-0 line-clamp-2 text-xs leading-5 text-[var(--text-muted)]">{task.note}</p>}
-        {!compact && typeof overdueDays === "number" && (
+        {plannedLabel && (
           <span
-            className="task-overdue-label col-start-3 row-start-2 self-end justify-self-end text-[11px] font-medium leading-none"
-            data-testid="task-overdue-label"
+            className={cn(
+              "col-start-3 row-start-2 self-end justify-self-end text-[11px] font-medium leading-none",
+              plannedLabel.overdue ? "task-overdue-label" : "text-[var(--text-faint)]",
+            )}
+            data-testid={plannedLabel.overdue ? "task-overdue-label" : "task-planned-label"}
           >
-            {t("task.overdueBadgePrefix")}{overdueDays}{t("task.overdueBadgeSuffix")}
+            {plannedLabel.text}
           </span>
         )}
         {!compact && typeof stackCount === "number" && stackCount > 1 && (

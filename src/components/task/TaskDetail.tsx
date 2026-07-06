@@ -20,10 +20,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { AttachmentLightbox } from "@/components/task/AttachmentLightbox";
+import { CalendarPopover } from "@/components/ui/calendar-popover";
 import { ScreenshotEditorOverlay } from "@/components/task/ScreenshotEditorOverlay";
 import { useI18n } from "@/i18n/useI18n";
 import { useExternalImageDrop } from "@/lib/useExternalImageDrop";
 import { cn } from "@/lib/utils";
+import { getLocalDateKey } from "@/stores/taskStore";
+import { usePreferencesStore } from "@/stores/preferencesStore";
 import type { AttachmentView, FinalScreenshot, PendingScreenshot } from "@/stores/attachmentStore";
 import type { TaskAppView } from "@/stores/taskAppStore";
 import type { Task, TaskPriority } from "@/types/task";
@@ -62,7 +65,7 @@ type TaskDetailProps = {
   onDeleteTask: (id: string) => void;
   onUpdateTask: (
     id: string,
-    update: Partial<Pick<Task, "title" | "note" | "priority" | "tags" | "pinned">>,
+    update: Partial<Pick<Task, "title" | "note" | "priority" | "tags" | "pinned" | "plannedDate">>,
   ) => boolean;
 };
 
@@ -168,6 +171,8 @@ export function TaskDetail({
   const [error, setError] = useState("");
   const [brokenAttachmentIds, setBrokenAttachmentIds] = useState<Record<string, boolean>>({});
   const [lightboxAttachment, setLightboxAttachment] = useState<AttachmentView | null>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const language = usePreferencesStore((state) => state.language);
   const titleRef = useRef<HTMLTextAreaElement>(null);
   const attachmentDropZoneRef = useRef<HTMLElement | null>(null);
   const taskId = task?.id ?? null;
@@ -250,6 +255,7 @@ export function TaskDetail({
     setError("");
     setBrokenAttachmentIds({});
     setLightboxAttachment(null);
+    setCalendarOpen(false);
   }, [task]);
 
   if (!task) {
@@ -305,6 +311,23 @@ export function TaskDetail({
   // Deleting moves the task to the recycle bin (undoable), so no confirm dialog.
   const handleDelete = () => {
     onDeleteTask(task.id);
+  };
+
+  // Planned-date chips apply immediately (same semantics as sidebar drops).
+  const todayKey = getLocalDateKey();
+  const tomorrowKey = (() => {
+    const [year, month, day] = todayKey.split("-").map(Number);
+    return getLocalDateKey(new Date(year || 1970, (month || 1) - 1, (day || 1) + 1));
+  })();
+  const customPlanned = Boolean(task.plannedDate && task.plannedDate !== todayKey && task.plannedDate !== tomorrowKey);
+  const applyPlannedDate = (plannedDate: string | null) => {
+    onUpdateTask(task.id, { plannedDate });
+  };
+  const formatPlannedDate = (dateKey: string) => {
+    const [year, month, day] = dateKey.split("-").map(Number);
+    const date = new Date(year || 1970, (month || 1) - 1, day || 1);
+    const locale = language === "en-US" ? "en-US" : "zh-CN";
+    return new Intl.DateTimeFormat(locale, { month: language === "en-US" ? "short" : "long", day: "numeric" }).format(date);
   };
 
   const handlePriorityChange = (nextPriority: TaskPriority) => {
@@ -375,6 +398,56 @@ export function TaskDetail({
               {t(option.labelKey)}
             </button>
           ))}
+        </div>
+
+        <div className="block text-xs font-medium uppercase text-[var(--text-faint)]" id="task-planned-date-label">
+          {t("date.planned")}
+        </div>
+        <div aria-labelledby="task-planned-date-label" className="relative" role="group">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              aria-pressed={task.plannedDate === todayKey}
+              className={cn("date-chip", task.plannedDate === todayKey && "date-chip-selected")}
+              onClick={() => applyPlannedDate(todayKey)}
+              type="button"
+            >
+              {t("date.today")}
+            </button>
+            <button
+              aria-pressed={task.plannedDate === tomorrowKey}
+              className={cn("date-chip", task.plannedDate === tomorrowKey && "date-chip-selected")}
+              onClick={() => applyPlannedDate(tomorrowKey)}
+              type="button"
+            >
+              {t("date.tomorrow")}
+            </button>
+            <button
+              aria-label={t("date.custom")}
+              aria-pressed={customPlanned}
+              className={cn("date-chip", customPlanned && "date-chip-selected")}
+              onClick={() => setCalendarOpen((current) => !current)}
+              type="button"
+            >
+              <Calendar className="h-3.5 w-3.5" />
+              {customPlanned && task.plannedDate ? formatPlannedDate(task.plannedDate) : t("date.custom")}
+            </button>
+            {task.plannedDate && (
+              <button aria-label={t("date.clear")} className="date-chip date-chip-quiet" onClick={() => applyPlannedDate(null)} type="button">
+                {t("date.clear")}
+              </button>
+            )}
+            {!task.plannedDate && <span className="text-xs text-[var(--text-faint)]">{t("date.none")}</span>}
+          </div>
+          {calendarOpen && (
+            <CalendarPopover
+              onClose={() => setCalendarOpen(false)}
+              onSelect={(dateKey) => {
+                setCalendarOpen(false);
+                applyPlannedDate(dateKey);
+              }}
+              value={task.plannedDate}
+            />
+          )}
         </div>
 
         <label className="block text-xs font-medium uppercase text-[var(--text-faint)]" htmlFor="task-tags">

@@ -518,7 +518,7 @@ describe("App", () => {
     expect(within(screen.getByTestId("task-list")).getByText("Backlog completion task")).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: /mark backlog completion task incomplete/i })).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: /today/i }));
+    await userEvent.click(screen.getByRole("button", { name: /today \d/i }));
     expect(within(screen.getByTestId("today-completed-task-list")).getByText("Backlog completion task")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("checkbox", { name: /mark backlog completion task incomplete/i }));
@@ -692,6 +692,80 @@ describe("App", () => {
     expect(screen.queryByText("Unsaved first draft")).not.toBeInTheDocument();
     expect(detailPanel.getByDisplayValue("Sketch the desktop pin interaction")).toBeInTheDocument();
     expect(detailPanel.getByDisplayValue("Second task saved note")).toBeInTheDocument();
+  });
+
+  it("navigates and completes tasks with keyboard shortcuts", async () => {
+    await renderApp();
+    const detailPanel = within(screen.getByTestId("detail-panel"));
+    expect(detailPanel.getByDisplayValue("Finalize the first-stage desktop shell")).toBeInTheDocument();
+
+    // ArrowDown moves selection to the next card.
+    await userEvent.keyboard("{ArrowDown}");
+    expect(detailPanel.getByDisplayValue("Sketch the desktop pin interaction")).toBeInTheDocument();
+    await userEvent.keyboard("{ArrowUp}");
+    expect(detailPanel.getByDisplayValue("Finalize the first-stage desktop shell")).toBeInTheDocument();
+
+    // Space completes the selected task (exit animation delays the commit).
+    await userEvent.keyboard(" ");
+    await waitFor(() =>
+      expect(within(screen.getByTestId("task-list")).queryByText("Finalize the first-stage desktop shell")).not.toBeInTheDocument(),
+    );
+
+    // Ctrl+2 switches to All Tasks.
+    await userEvent.keyboard("{Control>}2{/Control}");
+    expect(screen.getByRole("button", { name: /all tasks/i })).toHaveAttribute("aria-pressed", "true");
+
+    // Shortcuts stay inert while typing in an input.
+    await userEvent.click(screen.getByLabelText(/search tasks/i));
+    await userEvent.keyboard("abc def");
+    expect(screen.getByLabelText(/search tasks/i)).toHaveValue("abc def");
+
+    // Escape clears the search.
+    await userEvent.keyboard("{Escape}");
+    expect(screen.getByLabelText(/search tasks/i)).toHaveValue("");
+  });
+
+  it("browses another date in the date view and plans quick-added tasks to it", async () => {
+    await renderApp();
+
+    await userEvent.click(screen.getByRole("button", { name: /next day/i }));
+
+    // Title switches to Tomorrow; today's tasks leave the list.
+    expect(screen.getByRole("heading", { name: /tomorrow/i })).toBeInTheDocument();
+    expect(screen.queryByText("Finalize the first-stage desktop shell")).not.toBeInTheDocument();
+
+    // Quick add plans the new task to the selected date.
+    await userEvent.type(screen.getByPlaceholderText(/add a task/i), "Future thing{Enter}");
+    expect(within(screen.getByTestId("task-list")).getByText("Future thing")).toBeInTheDocument();
+
+    // The sidebar date item now labels the selected date instead of Today.
+    expect(screen.queryByRole("button", { name: /^today \d/i })).not.toBeInTheDocument();
+
+    // Back to today restores the original view.
+    await userEvent.click(screen.getByRole("button", { name: /back to today/i }));
+    expect(within(screen.getByTestId("task-list")).getByText("Finalize the first-stage desktop shell")).toBeInTheDocument();
+    expect(screen.queryByText("Future thing")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^today \d/i })).toBeInTheDocument();
+  });
+
+  it("plans the selected task for tomorrow from the detail date chips", async () => {
+    await renderApp();
+
+    const detailPanel = within(screen.getByTestId("detail-panel"));
+    await userEvent.click(detailPanel.getByRole("button", { name: /^tomorrow$/i }));
+
+    // The task immediately leaves Today and shows a planned label in All.
+    expect(within(screen.getByTestId("task-list")).queryByText("Finalize the first-stage desktop shell")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /all tasks/i }));
+    const allList = within(screen.getByTestId("task-list"));
+    expect(allList.getByText("Finalize the first-stage desktop shell")).toBeInTheDocument();
+    expect(allList.getByTestId("task-planned-label")).toHaveTextContent(/tomorrow/i);
+
+    // Clearing sends it back to the unscheduled pool without a planned label.
+    await userEvent.click(allList.getByText("Finalize the first-stage desktop shell"));
+    await userEvent.click(detailPanel.getByRole("button", { name: /^clear$/i }));
+    expect(allList.queryByTestId("task-planned-label")).not.toBeInTheDocument();
   });
 
   it("shows overdue tasks in a Today section and moves them all to today", async () => {
@@ -902,9 +976,10 @@ describe("App", () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1120 });
     fireEvent.resize(window);
 
-    expect(layout).toHaveStyle({ gridTemplateColumns: "360px minmax(360px, 1fr) 328px" });
-    expect(leftHandle).toHaveStyle({ left: "380px" });
-    expect(rightHandle).toHaveStyle({ right: "348px" });
+    // Detail clamps to its 360px minimum first, then the sidebar absorbs the rest.
+    expect(layout).toHaveStyle({ gridTemplateColumns: "328px minmax(360px, 1fr) 360px" });
+    expect(leftHandle).toHaveStyle({ left: "348px" });
+    expect(rightHandle).toHaveStyle({ right: "380px" });
   });
 
   it("does not render normal-mode resize handles in desktop pin mode", async () => {

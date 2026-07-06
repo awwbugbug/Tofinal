@@ -11,6 +11,8 @@ type TaskState = {
   selectedTaskId: string | null;
   mode: AppMode;
   activeFilter: TaskFilter;
+  /** Local date key shown by the date view; defaults to today, session-only. */
+  viewDateKey: string;
   searchQuery: string;
   hydrated: boolean;
   loading: boolean;
@@ -19,7 +21,7 @@ type TaskState = {
   error: string | null;
 };
 
-type TaskUpdate = Partial<Pick<Task, "title" | "note" | "priority" | "tags" | "pinned">>;
+type TaskUpdate = Partial<Pick<Task, "title" | "note" | "priority" | "tags" | "pinned" | "plannedDate">>;
 
 type TaskActions = {
   hydrateTasks: () => Promise<void>;
@@ -42,6 +44,7 @@ type TaskActions = {
   selectTask: (id: string) => void;
   setMode: (mode: AppMode) => void;
   setActiveFilter: (filter: TaskFilter) => void;
+  setViewDate: (dateKey: string) => void;
   setSearchQuery: (query: string) => void;
   getFilteredTasks: (filter?: TaskFilter, query?: string) => Task[];
   getTodayCompletedTasks: (query?: string) => Task[];
@@ -107,6 +110,7 @@ const initialState = (): TaskState => ({
   selectedTaskId: null,
   mode: "normal",
   activeFilter: "today",
+  viewDateKey: getLocalDateKey(),
   searchQuery: "",
   hydrated: false,
   loading: false,
@@ -125,9 +129,9 @@ const applySearch = (tasks: Task[], query: string) => {
   return tasks.filter((task) => task.title.toLowerCase().includes(normalizedQuery) || task.note.toLowerCase().includes(normalizedQuery));
 };
 
-const taskMatchesFilter = (task: Task, filter: TaskFilter) => {
+const taskMatchesFilter = (task: Task, filter: TaskFilter, viewDate: string) => {
   if (filter === "today") {
-    return !task.completed && task.plannedDate === getLocalDateKey();
+    return !task.completed && task.plannedDate === viewDate;
   }
 
   if (filter === "all") {
@@ -141,13 +145,11 @@ const taskMatchesFilter = (task: Task, filter: TaskFilter) => {
   return task.pinned;
 };
 
-const filterTasks = (tasks: Task[], filter: TaskFilter, query = "") =>
-  applySearch(tasks.filter((task) => !task.deletedAt && taskMatchesFilter(task, filter)), query);
+const filterTasks = (tasks: Task[], filter: TaskFilter, query = "", viewDate = getLocalDateKey()) =>
+  applySearch(tasks.filter((task) => !task.deletedAt && taskMatchesFilter(task, filter, viewDate)), query);
 
-const filterTodayCompletedTasks = (tasks: Task[], query = "") => {
-  const today = getLocalDateKey();
-  return applySearch(tasks.filter((task) => !task.deletedAt && task.completed && task.completedAt?.slice(0, 10) === today), query);
-};
+const filterTodayCompletedTasks = (tasks: Task[], query = "", dateKey = getLocalDateKey()) =>
+  applySearch(tasks.filter((task) => !task.deletedAt && task.completed && task.completedAt?.slice(0, 10) === dateKey), query);
 
 export const buildStackViews = (tasks: Task[], stacks: TaskStack[]): TaskStackView[] => {
   const tasksByStackId = new Map<string, Task[]>();
@@ -191,17 +193,15 @@ const stackViewMatchesQuery = (view: TaskStackView, query: string) => {
   return view.tasks.some((task) => task.title.toLowerCase().includes(normalizedQuery) || task.note.toLowerCase().includes(normalizedQuery));
 };
 
-const filterStackViews = (tasks: Task[], stacks: TaskStack[], filter: TaskFilter, query = "") =>
-  buildStackViews(tasks, stacks).filter((view) => view.tasks.some((task) => taskMatchesFilter(task, filter)) && stackViewMatchesQuery(view, query));
+const filterStackViews = (tasks: Task[], stacks: TaskStack[], filter: TaskFilter, query = "", viewDate = getLocalDateKey()) =>
+  buildStackViews(tasks, stacks).filter((view) => view.tasks.some((task) => taskMatchesFilter(task, filter, viewDate)) && stackViewMatchesQuery(view, query));
 
-const filterTodayCompletedStackViews = (tasks: Task[], stacks: TaskStack[], query = "") => {
-  const today = getLocalDateKey();
-  return buildStackViews(tasks, stacks).filter((view) => {
-    const hasActiveToday = view.tasks.some((task) => !task.completed && task.plannedDate === today);
-    const hasCompletedToday = view.tasks.some((task) => task.completed && task.completedAt?.slice(0, 10) === today);
-    return !hasActiveToday && hasCompletedToday && stackViewMatchesQuery(view, query);
+const filterTodayCompletedStackViews = (tasks: Task[], stacks: TaskStack[], query = "", dateKey = getLocalDateKey()) =>
+  buildStackViews(tasks, stacks).filter((view) => {
+    const hasActiveOnDate = view.tasks.some((task) => !task.completed && task.plannedDate === dateKey);
+    const hasCompletedOnDate = view.tasks.some((task) => task.completed && task.completedAt?.slice(0, 10) === dateKey);
+    return !hasActiveOnDate && hasCompletedOnDate && stackViewMatchesQuery(view, query);
   });
-};
 
 const visibleTaskIdsForViews = (views: TaskStackView[]) => new Set(views.flatMap((view) => view.tasks.map((task) => task.id)));
 
@@ -222,10 +222,11 @@ const selectVisibleTask = (
   selectedTaskId: string | null,
   activeFilter: TaskFilter,
   searchQuery: string,
+  viewDate = getLocalDateKey(),
 ) => {
-  const visibleViews = filterStackViews(tasks, stacks, activeFilter, searchQuery);
+  const visibleViews = filterStackViews(tasks, stacks, activeFilter, searchQuery, viewDate);
   const visibleTaskIds = visibleTaskIdsForViews(visibleViews);
-  if (activeFilter === "today") {
+  if (activeFilter === "today" && viewDate === getLocalDateKey()) {
     // The overdue section renders alongside Today, so its tasks stay selectable.
     getOverdueTasks(tasks).forEach((task) => visibleTaskIds.add(task.id));
   }
@@ -385,7 +386,7 @@ const createTaskStoreState: StateCreator<TaskStore> = (set, get) => {
               ? {
                   tasks: options.rollbackSnapshot.tasks,
                   stacks: options.rollbackSnapshot.stacks ?? [],
-                  selectedTaskId: selectVisibleTask(options.rollbackSnapshot.tasks, options.rollbackSnapshot.stacks ?? [], get().selectedTaskId, get().activeFilter, get().searchQuery),
+                  selectedTaskId: selectVisibleTask(options.rollbackSnapshot.tasks, options.rollbackSnapshot.stacks ?? [], get().selectedTaskId, get().activeFilter, get().searchQuery, get().viewDateKey),
                 }
               : {}),
             saving: false,
@@ -410,7 +411,7 @@ const createTaskStoreState: StateCreator<TaskStore> = (set, get) => {
 
       try {
         const snapshot = normalizeTaskSnapshot(await getTaskRepository().loadSnapshot());
-        const selectedTaskId = selectVisibleTask(snapshot.tasks, snapshot.stacks, get().selectedTaskId, get().activeFilter, get().searchQuery);
+        const selectedTaskId = selectVisibleTask(snapshot.tasks, snapshot.stacks, get().selectedTaskId, get().activeFilter, get().searchQuery, get().viewDateKey);
 
         set({
           tasks: snapshot.tasks,
@@ -446,7 +447,8 @@ const createTaskStoreState: StateCreator<TaskStore> = (set, get) => {
       }
 
       const timestamp = nowIso();
-      const plannedDate = get().activeFilter === "today" ? getLocalDateKey() : null;
+      // Quick add in the date view plans the task for the selected date.
+      const plannedDate = get().activeFilter === "today" ? get().viewDateKey : null;
       const task = createTask(`task-${crypto.randomUUID()}`, trimmedTitle, "", "normal", [], timestamp, plannedDate);
       const minSortOrder = Math.min(0, ...get().stacks.map((stack) => stack.sortOrder));
       const stack = createSingletonStack(task, minSortOrder - 1);
@@ -478,7 +480,7 @@ const createTaskStoreState: StateCreator<TaskStore> = (set, get) => {
           }
         : task,
       );
-      const selectedTaskId = selectVisibleTask(tasks, get().stacks, get().selectedTaskId, get().activeFilter, get().searchQuery);
+      const selectedTaskId = selectVisibleTask(tasks, get().stacks, get().selectedTaskId, get().activeFilter, get().searchQuery, get().viewDateKey);
 
       set({ tasks, selectedTaskId });
       queuePersistTasks();
@@ -511,7 +513,7 @@ const createTaskStoreState: StateCreator<TaskStore> = (set, get) => {
         tasks = normalizeStackTasksAfterDelete(tasks, deletedTask.stackId);
       }
 
-      const selectedTaskId = selectVisibleTask(tasks, stacks, get().selectedTaskId === id ? null : get().selectedTaskId, get().activeFilter, get().searchQuery);
+      const selectedTaskId = selectVisibleTask(tasks, stacks, get().selectedTaskId === id ? null : get().selectedTaskId, get().activeFilter, get().searchQuery, get().viewDateKey);
 
       set({ tasks, stacks, selectedTaskId });
       queuePersistTasks();
@@ -553,7 +555,7 @@ const createTaskStoreState: StateCreator<TaskStore> = (set, get) => {
         ];
       }
 
-      const selectedTaskId = selectVisibleTask(tasks, stacks, get().selectedTaskId === id ? null : get().selectedTaskId, get().activeFilter, get().searchQuery);
+      const selectedTaskId = selectVisibleTask(tasks, stacks, get().selectedTaskId === id ? null : get().selectedTaskId, get().activeFilter, get().searchQuery, get().viewDateKey);
 
       set({ tasks, stacks, selectedTaskId });
       queuePersistTasks();
@@ -600,7 +602,7 @@ const createTaskStoreState: StateCreator<TaskStore> = (set, get) => {
       const snapshot = lastMergeSnapshot;
       lastMergeSnapshot = null;
       const stacks = snapshot.stacks ?? [];
-      const selectedTaskId = selectVisibleTask(snapshot.tasks, stacks, get().selectedTaskId, get().activeFilter, get().searchQuery);
+      const selectedTaskId = selectVisibleTask(snapshot.tasks, stacks, get().selectedTaskId, get().activeFilter, get().searchQuery, get().viewDateKey);
 
       set({ tasks: snapshot.tasks, stacks, selectedTaskId });
       queuePersistTasks();
@@ -625,7 +627,7 @@ const createTaskStoreState: StateCreator<TaskStore> = (set, get) => {
           completedAt: completed ? timestamp : null,
         };
       });
-      const selectedTaskId = selectVisibleTask(tasks, get().stacks, get().selectedTaskId, get().activeFilter, get().searchQuery);
+      const selectedTaskId = selectVisibleTask(tasks, get().stacks, get().selectedTaskId, get().activeFilter, get().searchQuery, get().viewDateKey);
 
       set({ tasks, selectedTaskId });
       queuePersistTasks();
@@ -693,7 +695,7 @@ const createTaskStoreState: StateCreator<TaskStore> = (set, get) => {
           }
         : task,
       );
-      const selectedTaskId = selectVisibleTask(tasks, get().stacks, get().selectedTaskId, get().activeFilter, get().searchQuery);
+      const selectedTaskId = selectVisibleTask(tasks, get().stacks, get().selectedTaskId, get().activeFilter, get().searchQuery, get().viewDateKey);
 
       set({ tasks, selectedTaskId });
       persistStackMutation(previousSnapshot);
@@ -750,7 +752,7 @@ const createTaskStoreState: StateCreator<TaskStore> = (set, get) => {
       const stacks = get().stacks
         .filter((stack) => stack.id !== sourceStackId || sourceStillHasTasks)
         .map((stack) => stack.id === targetStackId ? { ...stack, updatedAt: timestamp } : stack);
-      const selectedTaskId = selectVisibleTask(tasks, stacks, get().selectedTaskId, get().activeFilter, get().searchQuery);
+      const selectedTaskId = selectVisibleTask(tasks, stacks, get().selectedTaskId, get().activeFilter, get().searchQuery, get().viewDateKey);
 
       lastMergeSnapshot = previousSnapshot;
       set({ tasks, stacks: normalizeGlobalStackOrders(stacks, timestamp), selectedTaskId });
@@ -798,7 +800,7 @@ const createTaskStoreState: StateCreator<TaskStore> = (set, get) => {
         return false;
       }
 
-      const selectedTaskId = selectVisibleTask(tasks, stacks, get().selectedTaskId, get().activeFilter, get().searchQuery);
+      const selectedTaskId = selectVisibleTask(tasks, stacks, get().selectedTaskId, get().activeFilter, get().searchQuery, get().viewDateKey);
       set({ tasks, stacks, selectedTaskId });
       persistStackMutation(previousSnapshot);
       return true;
@@ -810,7 +812,8 @@ const createTaskStoreState: StateCreator<TaskStore> = (set, get) => {
 
       const idSet = new Set(taskIds);
       const timestamp = nowIso();
-      const today = getLocalDateKey();
+      // The sidebar date target plans to the currently selected view date.
+      const today = get().viewDateKey;
       let changed = false;
       const tasks = get().tasks.map((task) => {
         if (!idSet.has(task.id)) {
@@ -839,7 +842,7 @@ const createTaskStoreState: StateCreator<TaskStore> = (set, get) => {
         return false;
       }
 
-      const selectedTaskId = selectVisibleTask(tasks, get().stacks, get().selectedTaskId, get().activeFilter, get().searchQuery);
+      const selectedTaskId = selectVisibleTask(tasks, get().stacks, get().selectedTaskId, get().activeFilter, get().searchQuery, get().viewDateKey);
       set({ tasks, selectedTaskId });
       queuePersistTasks();
       return true;
@@ -851,33 +854,38 @@ const createTaskStoreState: StateCreator<TaskStore> = (set, get) => {
       set({ mode });
     },
     setActiveFilter: (activeFilter) => {
-      const selectedTaskId = selectVisibleTask(get().tasks, get().stacks, get().selectedTaskId, activeFilter, get().searchQuery);
+      const selectedTaskId = selectVisibleTask(get().tasks, get().stacks, get().selectedTaskId, activeFilter, get().searchQuery, get().viewDateKey);
       set({ activeFilter, selectedTaskId });
     },
     setSearchQuery: (searchQuery) => {
-      const selectedTaskId = selectVisibleTask(get().tasks, get().stacks, get().selectedTaskId, get().activeFilter, searchQuery);
+      const selectedTaskId = selectVisibleTask(get().tasks, get().stacks, get().selectedTaskId, get().activeFilter, searchQuery, get().viewDateKey);
       set({ searchQuery, selectedTaskId });
+    },
+    setViewDate: (viewDateKey) => {
+      const selectedTaskId = selectVisibleTask(get().tasks, get().stacks, get().selectedTaskId, get().activeFilter, get().searchQuery, viewDateKey);
+      set({ viewDateKey, selectedTaskId });
     },
     getFilteredTasks: (filter, query) => {
       const state = get();
-      return filterTasks(state.tasks, filter ?? state.activeFilter, query ?? state.searchQuery);
+      return filterTasks(state.tasks, filter ?? state.activeFilter, query ?? state.searchQuery, state.viewDateKey);
     },
     getTodayCompletedTasks: (query) => {
       const state = get();
-      return filterTodayCompletedTasks(state.tasks, query ?? state.searchQuery);
+      return filterTodayCompletedTasks(state.tasks, query ?? state.searchQuery, state.viewDateKey);
     },
     getStackViews: (filter, query) => {
       const state = get();
-      return filterStackViews(state.tasks, state.stacks, filter ?? state.activeFilter, query ?? state.searchQuery);
+      return filterStackViews(state.tasks, state.stacks, filter ?? state.activeFilter, query ?? state.searchQuery, state.viewDateKey);
     },
     getTodayCompletedStackViews: (query) => {
       const state = get();
-      return filterTodayCompletedStackViews(state.tasks, state.stacks, query ?? state.searchQuery);
+      return filterTodayCompletedStackViews(state.tasks, state.stacks, query ?? state.searchQuery, state.viewDateKey);
     },
   };
 };
 
-export const getTasksForFilter = (tasks: Task[], filter: TaskFilter) => filterTasks(tasks, filter);
+export const getTasksForFilter = (tasks: Task[], filter: TaskFilter, viewDate = getLocalDateKey()) =>
+  filterTasks(tasks, filter, "", viewDate);
 
 export const createTaskStore = () => createStore<TaskStore>()(createTaskStoreState);
 

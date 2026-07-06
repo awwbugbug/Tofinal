@@ -37,7 +37,7 @@ type DetailPanelProps = {
   onDeleteTask: (id: string) => void;
   onUpdateTask: (
     id: string,
-    update: Partial<Pick<Task, "title" | "note" | "priority" | "tags" | "pinned">>,
+    update: Partial<Pick<Task, "title" | "note" | "priority" | "tags" | "pinned" | "plannedDate">>,
   ) => boolean;
 };
 

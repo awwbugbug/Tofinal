@@ -1,5 +1,5 @@
 import { type CSSProperties, useState } from "react";
-import { Inbox, ListTodo, Pin, Settings, Star } from "lucide-react";
+import { CalendarDays, Inbox, ListTodo, Pin, Settings, Star } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,13 +9,15 @@ import { TrashBinIcon } from "@/components/ui/trash-bin-icon";
 import { useI18n } from "@/i18n/useI18n";
 import { cn } from "@/lib/utils";
 import { useDragStore } from "@/stores/dragStore";
-import { getOverdueTasks, getTasksForFilter } from "@/stores/taskStore";
+import { usePreferencesStore } from "@/stores/preferencesStore";
+import { getLocalDateKey, getOverdueTasks, getTasksForFilter } from "@/stores/taskStore";
 import type { Task, TaskFilter } from "@/types/task";
 
 type SidebarProps = {
   activeFilter: TaskFilter;
   tasks: Task[];
   trashedCount: number;
+  viewDateKey: string;
   onFilterChange: (filter: TaskFilter) => void;
   onOpenTrash: () => void;
 };
@@ -38,9 +40,11 @@ const activeFilterOffsets = [
   "calc((var(--filter-item-height) + var(--filter-item-gap)) + (var(--filter-item-height) + var(--filter-item-gap)) + (var(--filter-item-height) + var(--filter-item-gap)))",
 ];
 
-export function Sidebar({ activeFilter, onFilterChange, onOpenTrash, tasks, trashedCount }: SidebarProps) {
+export function Sidebar({ activeFilter, onFilterChange, onOpenTrash, tasks, trashedCount, viewDateKey }: SidebarProps) {
   const { t } = useI18n();
+  const language = usePreferencesStore((state) => state.language);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
+  const isViewingToday = viewDateKey === getLocalDateKey();
   const overDropTarget = useDragStore((state) => state.overDropTarget);
   const pulseDropTarget = useDragStore((state) => state.pulseDropTarget);
   const clearPulse = useDragStore((state) => state.clearPulse);
@@ -61,12 +65,21 @@ export function Sidebar({ activeFilter, onFilterChange, onOpenTrash, tasks, tras
       <nav aria-label="Task filters" className="filter-nav mt-8" style={navStyle}>
         <span aria-hidden="true" className="filter-nav-thumb glass-soft selected-glass-pill" />
         {navItems.map((item) => {
-          const Icon = item.icon;
+          const isDateItem = item.filter === "today";
+          // The date item follows the selected view date: label, icon, and
+          // drop target all point at that date.
+          const Icon = isDateItem && !isViewingToday ? CalendarDays : item.icon;
           const isActive = item.filter === activeFilter;
-          // The Today count includes overdue tasks: both need attention today.
-          const count = getTasksForFilter(tasks, item.filter).length
-            + (item.filter === "today" ? getOverdueTasks(tasks).length : 0);
-          const label = t(item.labelKey);
+          const count = getTasksForFilter(tasks, item.filter, viewDateKey).length
+            + (isDateItem && isViewingToday ? getOverdueTasks(tasks).length : 0);
+          const label = isDateItem && !isViewingToday
+            ? (() => {
+                const [year, month, day] = viewDateKey.split("-").map(Number);
+                const locale = language === "en-US" ? "en-US" : "zh-CN";
+                return new Intl.DateTimeFormat(locale, { month: language === "en-US" ? "short" : "long", day: "numeric" })
+                  .format(new Date(year || 1970, (month || 1) - 1, day || 1));
+              })()
+            : t(item.labelKey);
 
           return (
             <button

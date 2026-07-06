@@ -31,6 +31,7 @@ export function QuickInput({ compact = false, onAddTask }: QuickInputProps) {
       <Input
         aria-label={t("task.addTask")}
         className={compact ? "h-9 px-3 text-xs" : undefined}
+        data-quick-add-input={compact ? undefined : "true"}
         onChange={(event) => setTitle(event.currentTarget.value)}
         placeholder={t("task.addPlaceholder")}
         value={title}

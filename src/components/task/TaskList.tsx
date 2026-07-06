@@ -7,7 +7,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useI18n } from "@/i18n/useI18n";
 import { cn } from "@/lib/utils";
 import { useDragStore, type DropTargetId } from "@/stores/dragStore";
-import { getLocalDateKey } from "@/stores/taskStore";
 import type { Task, TaskFilter, TaskStackView } from "@/types/task";
 
 type TaskListProps = {
@@ -17,7 +16,6 @@ type TaskListProps = {
   compact?: boolean;
   embedded?: boolean;
   limit?: number;
-  overdue?: boolean;
   testId?: string;
   onToggle: (id: string) => void;
   onSelect: (id: string) => void;
@@ -178,10 +176,6 @@ const dragHidesTopLevel = (drag: DragSource | null, stackId: string) =>
 const dragHidesTask = (drag: DragSource | null, taskId: string) =>
   Boolean(drag && drag.kind === "task" && drag.sourceTaskId === taskId && drag.sourceStackSize > 1);
 
-const dateKeyToUtc = (key: string) => {
-  const [year, month, day] = key.split("-").map(Number);
-  return Date.UTC(year || 0, (month || 1) - 1, day || 1);
-};
 
 export function TaskList({
   compact = false,
@@ -197,7 +191,6 @@ export function TaskList({
   onSplitTaskToNewStack,
   onToggle,
   onToggleStackCollapsed,
-  overdue = false,
   selectedTaskId,
   stackViews,
   tasks = [],
@@ -841,9 +834,6 @@ export function TaskList({
     const topLevelHidden = dragHidesTopLevel(hidingDrag, view.stack.id);
     const stackShift = stackShifts.get(view.stack.id) ?? 0;
     const collapsedMultiStack = !isSingleton && isCollapsed && !compact;
-    const overdueDays = overdue && view.mainTask.plannedDate
-      ? Math.max(1, Math.round((dateKeyToUtc(getLocalDateKey()) - dateKeyToUtc(view.mainTask.plannedDate)) / 86400000))
-      : undefined;
 
     if (isSingleton || isCollapsed) {
       return (
@@ -877,7 +867,6 @@ export function TaskList({
             compact={compact}
             onSelect={onSelect}
             onToggle={onToggle}
-            overdueDays={overdueDays}
             selected={!compact && view.mainTask.id === selectedTaskId}
             stackCount={collapsedMultiStack ? view.totalCount : undefined}
             task={view.mainTask}

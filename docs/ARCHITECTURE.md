@@ -551,6 +551,33 @@ Undo:
 - `TaskItem` flips its checkbox (and completed styling) optimistically because the store toggle may be delayed.
 - Newly appearing stacks and attachments animate in; wholesale id changes (filter or search switches, initial loads) are detected and skipped.
 
+## Backup And Export Boundary
+
+- On every launch (after hydration) `runStartupBackup` writes a consistent snapshot via SQLite `VACUUM INTO` to `$APPDATA/backups/tofinal-<timestamp>.db` and prunes beyond the last 7 copies. It runs through the existing SQL plugin connection; the fs scope adds `$APPDATA/backups/**` for rotation only. Best-effort: failures never block startup.
+- Manual export lives in the preferences Data section: JSON (full fidelity including trash, importable later) and Markdown (human-readable, stack hierarchy preserved). The save dialog (`dialog:allow-save`) grants the temporary write scope for the chosen path.
+
+## Planned Date Boundary
+
+- `updateTask` accepts `plannedDate`. The DetailPanel planned-date row applies immediately (Today / Tomorrow / custom calendar / Clear), matching sidebar-drop semantics rather than the draft-save flow.
+- `CalendarPopover` is a self-drawn Monday-first month grid (no native date input), locale-aware via the preferences language.
+- `TaskItem` self-computes its corner date label from `task.plannedDate`: red "overdue Nd" for past dates, "Tomorrow" or a short date for the future, nothing for today/unplanned/completed. The stack count chip wins the shared corner slot.
+
+## Date View Boundary
+
+The former Today view is a date-parameterized view driven by `taskStore.viewDateKey` (session-only, defaults to today, resets on launch).
+
+- The header date line is interactive: previous/next-day arrows, a calendar popover, and a back-to-today chip when browsing another date. The panel title shows 今天/明天 or the formatted date.
+- The `today` filter matches `plannedDate === viewDateKey` throughout `filterTasks`/`filterStackViews`/`selectVisibleTask`; the completed section shows tasks completed on the viewed date (a free retrospective for past dates).
+- Quick add and the sidebar date drop target plan tasks to the selected view date, so "pick a date, go to All, drag cards onto the sidebar date item" batch-plans any day.
+- The first sidebar item mirrors the view date: label becomes the date (calendar icon) when it is not today, and its count follows the viewed date.
+- The overdue section and the completion `ProgressRing` (completed today / (completed today + open today + overdue), stroke transition, all-done message) render only while the view date is today.
+
+## Keyboard Shortcut Boundary
+
+- `useGlobalShortcuts` installs one window keydown listener while Normal Mode is active. It is inert when focus sits in an editable field or any `[role="dialog"]` is open.
+- Bindings: Ctrl+N quick-add focus, Ctrl+F search focus, ArrowUp/Down selection navigation (overdue section → open list with expanded children → completed-today, scrolls the card into view), Space toggle complete (through the animated toggle path), Delete to trash, E stack expand/collapse, Ctrl+1–4 filters, Esc clears search. Ctrl+Z remains owned by the undo toast.
+- The shortcut list is documented in the preferences Shortcuts section.
+
 ## Clipboard Paste Boundary
 
 - A document-level `paste` listener in TaskDetail imports clipboard images as attachments of the selected task. It ignores pastes targeted at text fields, non-image clipboards, and runs only while no other attachment operation is active.

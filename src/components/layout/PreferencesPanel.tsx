@@ -1,9 +1,13 @@
-import { Settings, X } from "lucide-react";
+import { useState } from "react";
+import { DatabaseBackup, FileDown, Settings, X } from "lucide-react";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n/useI18n";
+import { exportTasksToFile, type ExportKind } from "@/storage/dataExport";
+import { runStartupBackup } from "@/storage/databaseBackup";
+import { useTaskStore } from "@/stores/taskStore";
 import {
   usePreferencesStore,
   type GlassLevelPreference,
@@ -35,6 +39,28 @@ const glassLevelOptions: Array<{ value: GlassLevelPreference; labelKey: string }
 
 export function PreferencesPanel({ onClose, open }: PreferencesPanelProps) {
   const { t } = useI18n();
+  const [dataActionState, setDataActionState] = useState<"idle" | "busy" | "done" | "failed">("idle");
+
+  const handleExport = async (kind: ExportKind) => {
+    setDataActionState("busy");
+    try {
+      const state = useTaskStore.getState();
+      const savedPath = await exportTasksToFile(kind, state.tasks, state.stacks);
+      setDataActionState(savedPath ? "done" : "idle");
+    } catch {
+      setDataActionState("failed");
+    }
+  };
+
+  const handleBackupNow = async () => {
+    setDataActionState("busy");
+    try {
+      await runStartupBackup();
+      setDataActionState("done");
+    } catch {
+      setDataActionState("failed");
+    }
+  };
   const theme = usePreferencesStore((state) => state.theme);
   const language = usePreferencesStore((state) => state.language);
   const completionCelebrationsEnabled = usePreferencesStore((state) => state.completionCelebrationsEnabled);
@@ -196,6 +222,76 @@ export function PreferencesPanel({ onClose, open }: PreferencesPanelProps) {
                 onChange={(event) => setCompletionCelebrationsEnabled(event.currentTarget.checked)}
               />
             </label>
+          </section>
+
+          <section aria-labelledby="preferences-shortcuts-label" className="space-y-2">
+            <div className="text-xs font-medium uppercase text-[var(--text-faint)]" id="preferences-shortcuts-label">
+              {t("settings.shortcuts")}
+            </div>
+            <div className="space-y-1.5 rounded-[20px] border border-[var(--border-soft)] bg-[var(--surface-field)] p-3 text-xs text-[var(--text-muted)]">
+              {[
+                { keys: "Ctrl+N", labelKey: "shortcut.quickAdd" },
+                { keys: "Ctrl+F", labelKey: "shortcut.search" },
+                { keys: "↑ / ↓", labelKey: "shortcut.navigate" },
+                { keys: "Space", labelKey: "shortcut.toggleComplete" },
+                { keys: "Delete", labelKey: "shortcut.trash" },
+                { keys: "E", labelKey: "shortcut.stack" },
+                { keys: "Ctrl+1–4", labelKey: "shortcut.filters" },
+                { keys: "Ctrl+Z", labelKey: "shortcut.undo" },
+                { keys: "Esc", labelKey: "shortcut.clearSearch" },
+              ].map((shortcut) => (
+                <div className="flex items-center justify-between gap-3" key={shortcut.keys}>
+                  <span>{t(shortcut.labelKey)}</span>
+                  <kbd className="shortcut-kbd">{shortcut.keys}</kbd>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section aria-labelledby="preferences-data-label" className="space-y-2">
+            <div className="text-xs font-medium uppercase text-[var(--text-faint)]" id="preferences-data-label">
+              {t("settings.data")}
+            </div>
+            <div className="space-y-2 rounded-[20px] border border-[var(--border-soft)] bg-[var(--surface-field)] p-3">
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  disabled={dataActionState === "busy"}
+                  onClick={() => void handleExport("json")}
+                  size="sm"
+                  type="button"
+                  variant="secondary"
+                >
+                  <FileDown className="h-3.5 w-3.5" />
+                  {t("settings.exportJson")}
+                </Button>
+                <Button
+                  disabled={dataActionState === "busy"}
+                  onClick={() => void handleExport("markdown")}
+                  size="sm"
+                  type="button"
+                  variant="secondary"
+                >
+                  <FileDown className="h-3.5 w-3.5" />
+                  {t("settings.exportMarkdown")}
+                </Button>
+              </div>
+              <Button
+                className="w-full"
+                disabled={dataActionState === "busy"}
+                onClick={() => void handleBackupNow()}
+                size="sm"
+                type="button"
+                variant="secondary"
+              >
+                <DatabaseBackup className="h-3.5 w-3.5" />
+                {t("settings.backupNow")}
+              </Button>
+              <p className="text-xs leading-5 text-[var(--text-muted)]">
+                {t("settings.backupDescription")}
+                {dataActionState === "done" && ` ${t("settings.dataActionDone")}`}
+                {dataActionState === "failed" && ` ${t("settings.dataActionFailed")}`}
+              </p>
+            </div>
           </section>
         </div>
 

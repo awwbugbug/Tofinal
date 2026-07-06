@@ -6,12 +6,13 @@ import { TrashPanel } from "@/components/layout/TrashPanel";
 import { WindowTitleBar } from "@/components/layout/WindowTitleBar";
 import { UndoToast } from "@/components/ui/undo-toast";
 import { useI18n } from "@/i18n/useI18n";
+import { useGlobalShortcuts } from "@/lib/useGlobalShortcuts";
 import { applyWindowMode } from "@/lib/windowMode";
 import { useAttachmentStore } from "@/stores/attachmentStore";
 import { usePreferencesStore } from "@/stores/preferencesStore";
 import { useTaskAppStore } from "@/stores/taskAppStore";
-import { getLocalDateKey, getOverdueTasks, useTaskStore } from "@/stores/taskStore";
-import type { AppMode } from "@/types/task";
+import { getOverdueTasks, useTaskStore } from "@/stores/taskStore";
+import type { AppMode, TaskStackView } from "@/types/task";
 
 const MODE_EXIT_MS = 140;
 const MODE_ENTER_MS = 220;
@@ -26,6 +27,11 @@ type UndoToastState = {
   message: string;
   onUndo: () => void;
 };
+
+/** Keyboard-navigation order within a list: collapsed stacks contribute their
+ * main task, expanded stacks every task. */
+const flattenViewsForNav = (views: TaskStackView[]) =>
+  views.flatMap((view) => (view.stack.collapsed ? [view.mainTask.id] : view.tasks.map((task) => task.id)));
 
 export function AppShell() {
   const { t } = useI18n();
@@ -50,6 +56,8 @@ export function AppShell() {
   const setMode = useTaskStore((state) => state.setMode);
   const setActiveFilter = useTaskStore((state) => state.setActiveFilter);
   const setSearchQuery = useTaskStore((state) => state.setSearchQuery);
+  const viewDateKey = useTaskStore((state) => state.viewDateKey);
+  const setViewDate = useTaskStore((state) => state.setViewDate);
   const getStackViews = useTaskStore((state) => state.getStackViews);
   const getTodayCompletedStackViews = useTaskStore((state) => state.getTodayCompletedStackViews);
   const toggleStackCollapsed = useTaskStore((state) => state.toggleStackCollapsed);
@@ -255,18 +263,19 @@ export function AppShell() {
       return;
     }
 
-    const today = getLocalDateKey();
+    const viewKey = state.viewDateKey;
     const viewLeavesList = state.activeFilter === "today" && (
       task.completed
-        ? // Reopening from the completed-today section removes it from that list.
-          task.completedAt?.slice(0, 10) === today
-        : // Completing removes the view when no other open today-task shares the stack.
+        ? // Reopening from the completed section removes it from that list.
+          task.completedAt?.slice(0, 10) === viewKey
+        : // Completing removes the view when no other open task of the viewed
+          // date shares the stack.
           !state.tasks.some((candidate) =>
             candidate.id !== id &&
             candidate.stackId === task.stackId &&
             !candidate.deletedAt &&
             !candidate.completed &&
-            candidate.plannedDate === today,
+            candidate.plannedDate === viewKey,
           )
     );
 
@@ -306,6 +315,70 @@ export function AppShell() {
   const handleEmptyTrash = () => {
     useTaskStore.getState().getTrashedTasks().forEach((task) => handlePurgeTask(task.id));
   };
+
+  // App-wide keyboard shortcuts (Normal Mode only).
+  const navTaskIds = [
+    ...overdueTasks.map((task) => task.id),
+    ...flattenViewsForNav(stackViews),
+    ...(activeFilter === "today" ? flattenViewsForNav(todayCompletedStackViews) : []),
+  ];
+  useGlobalShortcuts(hydrated && mode === "normal", {
+    navigate: (direction) => {
+      if (navTaskIds.length === 0) {
+        return;
+      }
+      const currentIndex = selectedTaskId ? navTaskIds.indexOf(selectedTaskId) : -1;
+      const nextIndex = currentIndex === -1
+        ? (direction === 1 ? 0 : navTaskIds.length - 1)
+        : Math.min(navTaskIds.length - 1, Math.max(0, currentIndex + direction));
+      const nextId = navTaskIds[nextIndex];
+      if (nextId && nextId !== selectedTaskId) {
+        selectTask(nextId);
+        window.requestAnimationFrame(() => {
+          document.querySelector(`[data-task-card-id="${nextId}"]`)?.scrollIntoView?.({ block: "nearest" });
+        });
+      }
+    },
+    toggleSelected: () => {
+      if (selectedTaskId) {
+        handleToggleTask(selectedTaskId);
+      }
+    },
+    deleteSelected: () => {
+      if (selectedTaskId) {
+        handleDeleteTask(selectedTaskId);
+      }
+    },
+    toggleSelectedStack: () => {
+      const task = selectedTaskId ? tasks.find((candidate) => candidate.id === selectedTaskId) : null;
+      if (!task) {
+        return;
+      }
+      const stackSize = tasks.filter((candidate) => candidate.stackId === task.stackId && !candidate.deletedAt).length;
+      if (stackSize > 1) {
+        toggleStackCollapsed(task.stackId);
+      }
+    },
+    setFilter: setActiveFilter,
+    clearSearch: () => {
+      if (!searchQuery) {
+        return false;
+      }
+      setSearchQuery("");
+      return true;
+    },
+  });
+
+  // Startup safety net: consistent SQLite snapshot into $APPDATA/backups.
+  const backupRanRef = useRef(false);
+  useEffect(() => {
+    if (!hydrated || backupRanRef.current) {
+      return;
+    }
+
+    backupRanRef.current = true;
+    void import("@/storage/databaseBackup").then(({ runStartupBackup }) => runStartupBackup());
+  }, [hydrated]);
 
   // Auto-purge trashed tasks older than the retention window once per launch.
   const autoPurgeRanRef = useRef(false);
@@ -428,6 +501,8 @@ export function AppShell() {
           onMoveAllOverdueToToday={() => {
             applySidebarDrop(overdueTasks.map((task) => task.id), "today");
           }}
+          viewDateKey={viewDateKey}
+          onViewDateChange={setViewDate}
           onToggleStackCollapsed={toggleStackCollapsed}
           onToggleTask={handleToggleTask}
           onUpdateTask={updateTask}
