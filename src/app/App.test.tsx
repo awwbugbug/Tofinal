@@ -725,10 +725,18 @@ describe("App", () => {
     expect(screen.getByLabelText(/search tasks/i)).toHaveValue("");
   });
 
-  it("browses another date in the date view and plans quick-added tasks to it", async () => {
+  it("browses another date through the title calendar and plans quick-added tasks to it", async () => {
     await renderApp();
 
-    await userEvent.click(screen.getByRole("button", { name: /next day/i }));
+    // The big title opens the calendar; pick tomorrow.
+    const now = new Date();
+    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const pad = (value: number) => String(value).padStart(2, "0");
+    const tomorrowKey = `${tomorrow.getFullYear()}-${pad(tomorrow.getMonth() + 1)}-${pad(tomorrow.getDate())}`;
+
+    await userEvent.click(screen.getByTestId("view-date-trigger"));
+    const calendar = screen.getByTestId("calendar-popover");
+    await userEvent.click(calendar.querySelector(`[data-date-key="${tomorrowKey}"]`) as HTMLElement);
 
     // Title switches to Tomorrow; today's tasks leave the list.
     expect(screen.getByRole("heading", { name: /tomorrow/i })).toBeInTheDocument();
@@ -741,7 +749,8 @@ describe("App", () => {
     // The sidebar date item now labels the selected date instead of Today.
     expect(screen.queryByRole("button", { name: /^today \d/i })).not.toBeInTheDocument();
 
-    // Back to today restores the original view.
+    // Back to today lives inside the calendar footer.
+    await userEvent.click(screen.getByTestId("view-date-trigger"));
     await userEvent.click(screen.getByRole("button", { name: /back to today/i }));
     expect(within(screen.getByTestId("task-list")).getByText("Finalize the first-stage desktop shell")).toBeInTheDocument();
     expect(screen.queryByText("Future thing")).not.toBeInTheDocument();

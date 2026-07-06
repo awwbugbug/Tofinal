@@ -1,5 +1,5 @@
 ﻿import { type PointerEvent as ReactPointerEvent, useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, PanelTopOpen, Search } from "lucide-react";
+import { ChevronDown, PanelTopOpen, Search } from "lucide-react";
 
 import { Sidebar } from "@/components/layout/Sidebar";
 import { DetailPanel } from "@/components/layout/DetailPanel";
@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input";
 import { CalendarPopover } from "@/components/ui/calendar-popover";
 import { ProgressRing } from "@/components/ui/progress-ring";
 import { useI18n } from "@/i18n/useI18n";
-import { cn } from "@/lib/utils";
 import { getLocalDateKey } from "@/stores/taskStore";
 import { usePreferencesStore } from "@/stores/preferencesStore";
 import type { AttachmentView, FinalScreenshot, PendingScreenshot } from "@/stores/attachmentStore";
@@ -221,12 +220,6 @@ export function NormalModeLayout({
     return new Date(year || 1970, (month || 1) - 1, day || 1);
   })();
   const tomorrowKey = getLocalDateKey(new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 1));
-  const shiftViewDate = (delta: number) => {
-    setDateCalendarOpen(false);
-    onViewDateChange(
-      getLocalDateKey(new Date(parseViewDate.getFullYear(), parseViewDate.getMonth(), parseViewDate.getDate() + delta)),
-    );
-  };
 
   const title =
     activeFilter === "important"
@@ -248,11 +241,11 @@ export function NormalModeLayout({
   const openTodayCount = liveTasks.filter((task) => !task.completed && task.plannedDate === todayKey).length;
   const todayTotal = completedTodayCount + openTodayCount + overdueTasks.length;
   const allDoneToday = todayTotal > 0 && completedTodayCount === todayTotal;
-  const viewDateLabel = (() => {
-    const datePart = new Intl.DateTimeFormat(locale, { month: "long", day: "numeric" }).format(parseViewDate);
-    const weekdayPart = new Intl.DateTimeFormat(locale, { weekday: "long" }).format(parseViewDate);
-    return `${datePart} · ${weekdayPart}`;
-  })();
+  // Sub-line under the clickable title: full date for today, weekday only
+  // when the title already shows the date.
+  const viewDateSubLabel = isViewingToday
+    ? `${new Intl.DateTimeFormat(locale, { month: "long", day: "numeric" }).format(parseViewDate)} · ${new Intl.DateTimeFormat(locale, { weekday: "long" }).format(parseViewDate)}`
+    : new Intl.DateTimeFormat(locale, { weekday: "long" }).format(parseViewDate);
   const gridTemplateColumns = `${sidebarWidth}px minmax(${TASK_LIST_MIN_WIDTH}px, 1fr) ${detailWidth}px`;
 
   useEffect(() => {
@@ -345,46 +338,23 @@ export function NormalModeLayout({
       <section className="surface-panel flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-[var(--radius-panel)] border px-5 pb-5 pt-8">
         <header className="mb-5 flex shrink-0 items-center justify-between gap-4">
           <div className="min-w-0">
-            {isDateView && (
-              <div className="relative flex items-center gap-1" data-testid="view-date-controls">
-                <button
-                  aria-label={t("date.previousDay")}
-                  className="calendar-nav-button h-6 w-6"
-                  onClick={() => shiftViewDate(-1)}
-                  type="button"
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  aria-label={t("date.pickViewDate")}
-                  className="view-date-trigger"
-                  data-testid="view-date-trigger"
-                  onClick={() => setDateCalendarOpen((current) => !current)}
-                  type="button"
-                >
-                  {viewDateLabel}
-                </button>
-                <button
-                  aria-label={t("date.nextDay")}
-                  className="calendar-nav-button h-6 w-6"
-                  onClick={() => shiftViewDate(1)}
-                  type="button"
-                >
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </button>
-                {!isViewingToday && (
+            {isDateView ? (
+              <div className="relative">
+                <h2 className="text-3xl font-semibold tracking-normal text-[var(--text-primary)]">
                   <button
-                    aria-label={t("date.backToToday")}
-                    className="date-chip ml-1"
-                    onClick={() => {
-                      setDateCalendarOpen(false);
-                      onViewDateChange(todayKey);
-                    }}
+                    aria-label={t("date.pickViewDate")}
+                    className="view-title-trigger"
+                    data-testid="view-date-trigger"
+                    onClick={() => setDateCalendarOpen((current) => !current)}
                     type="button"
                   >
-                    {t("date.backToToday")}
+                    {title}
+                    <ChevronDown className="view-title-chevron h-4 w-4" />
                   </button>
-                )}
+                </h2>
+                <p className="mt-1 text-xs font-medium uppercase tracking-wide text-[var(--text-faint)]" data-testid="today-date-header">
+                  {viewDateSubLabel}
+                </p>
                 {dateCalendarOpen && (
                   <CalendarPopover
                     onClose={() => setDateCalendarOpen(false)}
@@ -392,14 +362,14 @@ export function NormalModeLayout({
                       setDateCalendarOpen(false);
                       onViewDateChange(dateKey);
                     }}
+                    todayShortcutLabel={t("date.backToToday")}
                     value={viewDateKey}
                   />
                 )}
               </div>
+            ) : (
+              <h2 className="text-3xl font-semibold tracking-normal text-[var(--text-primary)]">{title}</h2>
             )}
-            <h2 className={cn("text-3xl font-semibold tracking-normal text-[var(--text-primary)]", isDateView && "mt-1")}>
-              {title}
-            </h2>
           </div>
           {isDateView && isViewingToday && todayTotal > 0 && (
             <div className="ml-auto flex shrink-0 items-center gap-2.5">

@@ -9,6 +9,8 @@ type CalendarPopoverProps = {
   value: string | null;
   onSelect: (dateKey: string) => void;
   onClose: () => void;
+  /** When set, renders a footer shortcut that selects today. */
+  todayShortcutLabel?: string;
 };
 
 type CalendarDay = {
@@ -39,7 +41,7 @@ const buildCalendarDays = (year: number, month: number): CalendarDay[] => {
   });
 };
 
-export function CalendarPopover({ onClose, onSelect, value }: CalendarPopoverProps) {
+export function CalendarPopover({ onClose, onSelect, todayShortcutLabel, value }: CalendarPopoverProps) {
   const language = usePreferencesStore((state) => state.language);
   const locale = language === "en-US" ? "en-US" : "zh-CN";
   const initial = value ? parseDateKey(value) : new Date();
@@ -136,6 +138,7 @@ export function CalendarPopover({ onClose, onSelect, value }: CalendarPopoverPro
                 calendarDay.key === todayKey && "calendar-day-today",
                 calendarDay.key === value && "calendar-day-selected",
               )}
+              data-date-key={calendarDay.key}
               key={calendarDay.key}
               onClick={() => onSelect(calendarDay.key)}
               type="button"
@@ -144,6 +147,18 @@ export function CalendarPopover({ onClose, onSelect, value }: CalendarPopoverPro
             </button>
           ))}
         </div>
+        {todayShortcutLabel && (
+          <div className="mt-2 border-t border-[var(--border-soft)] pt-2">
+            <button
+              className="calendar-today-shortcut"
+              disabled={value === todayKey}
+              onClick={() => onSelect(todayKey)}
+              type="button"
+            >
+              {todayShortcutLabel}
+            </button>
+          </div>
+        )}
       </div>
     </>
   );

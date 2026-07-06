@@ -1211,21 +1211,55 @@ body {
     backdrop-filter: blur(14px) saturate(140%);
   }
 
-  .view-date-trigger {
-    border-radius: 999px;
+  /* The big view title doubles as the calendar trigger. */
+  .view-title-trigger {
+    align-items: baseline;
+    border-radius: 12px;
+    color: inherit;
+    cursor: pointer;
+    display: inline-flex;
+    font: inherit;
+    gap: 0.4rem;
+    transition: opacity 140ms ease;
+  }
+
+  .view-title-trigger:hover {
+    opacity: 0.82;
+  }
+
+  .view-title-trigger:hover .view-title-chevron {
+    transform: translateY(1px);
+  }
+
+  .view-title-trigger:focus-visible {
+    box-shadow: 0 0 0 3px var(--ring-soft);
+    outline: none;
+  }
+
+  .view-title-chevron {
+    align-self: center;
     color: var(--text-faint);
+    transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .calendar-today-shortcut {
+    border-radius: 10px;
+    color: var(--accent-hover);
     cursor: pointer;
     font-size: 0.75rem;
     font-weight: 500;
-    letter-spacing: 0.025em;
-    padding: 0.2rem 0.5rem;
-    text-transform: uppercase;
-    transition: background 140ms ease, color 140ms ease;
+    padding: 0.35rem 0.5rem;
+    transition: background 140ms ease;
+    width: 100%;
   }
 
-  .view-date-trigger:hover {
+  .calendar-today-shortcut:hover:not(:disabled) {
     background: var(--surface-field);
-    color: var(--text-secondary);
+  }
+
+  .calendar-today-shortcut:disabled {
+    color: var(--text-faint);
+    cursor: default;
   }
 
   .calendar-nav-button {
