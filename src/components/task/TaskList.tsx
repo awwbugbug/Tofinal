@@ -467,6 +467,14 @@ export function TaskList({
     setDragState(nextDragState);
   };
 
+  // Insertion indexes are computed over the snapshot INCLUDING the dragged
+  // item, but the store splices after removing it. When the source sits
+  // before the target (dragging downward) the raw index lands one slot past
+  // the visual gap, so it is converted to a post-removal index here — the
+  // same adjustment the push-apart offsets use.
+  const toPostRemovalIndex = (targetIndex: number, sourceIndex: number) =>
+    sourceIndex >= 0 && targetIndex > sourceIndex ? targetIndex - 1 : targetIndex;
+
   const handleDrop = (drag: DragState, preview: DropPreview | null) => {
     if (!preview || preview.kind === "sidebar") {
       return;
@@ -474,16 +482,27 @@ export function TaskList({
 
     if (preview.kind === "stack-reorder") {
       if (drag.kind === "task" && drag.sourceStackSize > 1) {
+        // Splitting inserts a brand-new stack; nothing is removed from the
+        // visible list, so the raw index is already correct.
         onSplitTaskToNewStack?.(drag.sourceTaskId ?? "", preview.targetIndex, visibleStackIds);
         return;
       }
 
-      onReorderStacks?.(drag.sourceStackId, preview.targetIndex, visibleStackIds);
+      onReorderStacks?.(
+        drag.sourceStackId,
+        toPostRemovalIndex(preview.targetIndex, visibleStackIds.indexOf(drag.sourceStackId)),
+        visibleStackIds,
+      );
       return;
     }
 
     if (preview.kind === "task-reorder") {
-      onReorderTaskWithinStack?.(preview.targetStackId, drag.sourceTaskId ?? "", preview.targetIndex);
+      const sourceTaskIndex = measurementsRef.current?.tasks.findIndex((rect) => rect.id === drag.sourceTaskId) ?? -1;
+      onReorderTaskWithinStack?.(
+        preview.targetStackId,
+        drag.sourceTaskId ?? "",
+        toPostRemovalIndex(preview.targetIndex, sourceTaskIndex),
+      );
       return;
     }
 
