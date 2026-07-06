@@ -215,12 +215,17 @@ export function NormalModeLayout({
   const showOverdueSection = isDateView && isViewingToday && !hasSearch && overdueTasks.length > 0;
   const [dateCalendarOpen, setDateCalendarOpen] = useState(false);
   // Direction of the last view-date change drives the title roll animation.
-  const previousViewDateRef = useRef(viewDateKey);
-  const titleRollDirection =
-    viewDateKey === previousViewDateRef.current ? 0 : viewDateKey > previousViewDateRef.current ? 1 : -1;
-  useEffect(() => {
-    previousViewDateRef.current = viewDateKey;
-  }, [viewDateKey]);
+  // It is pinned to the current date key (not recomputed per render), so
+  // unrelated re-renders during the 260ms animation never strip the class
+  // and cancel the roll.
+  const rollStateRef = useRef<{ key: string; direction: 0 | 1 | -1 }>({ key: viewDateKey, direction: 0 });
+  if (rollStateRef.current.key !== viewDateKey) {
+    rollStateRef.current = {
+      key: viewDateKey,
+      direction: viewDateKey > rollStateRef.current.key ? 1 : -1,
+    };
+  }
+  const titleRollDirection = rollStateRef.current.direction;
 
   const parseViewDate = (() => {
     const [year, month, day] = viewDateKey.split("-").map(Number);
