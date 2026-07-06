@@ -1451,7 +1451,7 @@ body {
     background: color-mix(in srgb, var(--surface-detail) 92%, transparent);
     border: 1px solid var(--border-medium);
     border-radius: 999px;
-    bottom: 1.5rem;
+    bottom: 2.5rem;
     box-shadow: var(--shadow-soft);
     display: flex;
     gap: 0.5rem;
