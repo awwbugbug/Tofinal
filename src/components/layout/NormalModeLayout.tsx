@@ -1,5 +1,5 @@
 ﻿import { type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, PanelTopOpen, Search } from "lucide-react";
+import { PanelTopOpen, Search } from "lucide-react";
 
 import { Sidebar } from "@/components/layout/Sidebar";
 import { DetailPanel } from "@/components/layout/DetailPanel";
@@ -227,8 +227,6 @@ export function NormalModeLayout({
     return new Date(year || 1970, (month || 1) - 1, day || 1);
   })();
   const tomorrowKey = getLocalDateKey(new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 1));
-  const shiftDateKey = (delta: number) =>
-    getLocalDateKey(new Date(parseViewDate.getFullYear(), parseViewDate.getMonth(), parseViewDate.getDate() + delta));
 
   const title =
     activeFilter === "important"
@@ -344,54 +342,28 @@ export function NormalModeLayout({
           <div className="min-w-0 pl-2">
             {isDateView ? (
               <div className="relative">
-                <div className="view-title-carousel">
+                <h2 className="text-3xl font-semibold tracking-normal text-[var(--text-primary)]">
                   <button
-                    aria-label={t("date.previousDay")}
-                    className="view-title-neighbor view-title-neighbor-prev"
-                    onClick={() => {
-                      setDateCalendarOpen(false);
-                      onViewDateChange(shiftDateKey(-1));
-                    }}
-                    tabIndex={-1}
+                    aria-label={t("date.pickViewDate")}
+                    className="view-title-trigger"
+                    data-testid="view-date-trigger"
+                    onClick={() => setDateCalendarOpen((current) => !current)}
                     type="button"
                   >
-                    <ChevronLeft className="h-4 w-4" />
-                  </button>
-                  <h2 className="text-3xl font-semibold tracking-normal text-[var(--text-primary)]">
-                    <button
-                      aria-label={t("date.pickViewDate")}
-                      className="view-title-trigger"
-                      data-testid="view-date-trigger"
-                      onClick={() => setDateCalendarOpen((current) => !current)}
-                      type="button"
+                    <span
+                      className={
+                        titleRollDirection === 1
+                          ? "view-title-text view-title-text-roll-next"
+                          : titleRollDirection === -1
+                            ? "view-title-text view-title-text-roll-prev"
+                            : "view-title-text"
+                      }
+                      key={viewDateKey}
                     >
-                      <span
-                        className={
-                          titleRollDirection === 1
-                            ? "view-title-text view-title-text-roll-next"
-                            : titleRollDirection === -1
-                              ? "view-title-text view-title-text-roll-prev"
-                              : "view-title-text"
-                        }
-                        key={viewDateKey}
-                      >
-                        {title}
-                      </span>
-                    </button>
-                  </h2>
-                  <button
-                    aria-label={t("date.nextDay")}
-                    className="view-title-neighbor view-title-neighbor-next"
-                    onClick={() => {
-                      setDateCalendarOpen(false);
-                      onViewDateChange(shiftDateKey(1));
-                    }}
-                    tabIndex={-1}
-                    type="button"
-                  >
-                    <ChevronRight className="h-4 w-4" />
+                      {title}
+                    </span>
                   </button>
-                </div>
+                </h2>
                 {dateCalendarOpen && (
                   <CalendarPopover
                     onClose={() => setDateCalendarOpen(false)}
