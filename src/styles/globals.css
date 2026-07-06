@@ -1260,6 +1260,9 @@ body {
     outline: none;
   }
 
+  /* Rest padding must be zero: with border-box an element can never shrink
+     below its padding, so any resting padding would keep the "empty" 0fr
+     track ~13px wide and push the title out of line with the other views. */
   .view-title-neighbor {
     color: var(--text-faint);
     cursor: pointer;
@@ -1268,7 +1271,10 @@ body {
     min-width: 0;
     opacity: 0;
     overflow: hidden;
-    transition: opacity 240ms ease, color 160ms ease;
+    transition:
+      opacity 240ms ease,
+      color 160ms ease,
+      padding 240ms cubic-bezier(0.22, 1, 0.36, 1);
     white-space: nowrap;
   }
 
@@ -1285,15 +1291,25 @@ body {
   .view-title-neighbor-prev {
     -webkit-mask-image: linear-gradient(to left, black 35%, transparent 100%);
     mask-image: linear-gradient(to left, black 35%, transparent 100%);
-    padding-right: 0.8rem;
+    padding-right: 0;
     text-align: right;
   }
 
   .view-title-neighbor-next {
     -webkit-mask-image: linear-gradient(to right, black 35%, transparent 100%);
     mask-image: linear-gradient(to right, black 35%, transparent 100%);
-    padding-left: 0.8rem;
+    padding-left: 0;
     text-align: left;
+  }
+
+  .view-title-carousel:hover .view-title-neighbor-prev,
+  .view-title-carousel:focus-within .view-title-neighbor-prev {
+    padding-right: 0.8rem;
+  }
+
+  .view-title-carousel:hover .view-title-neighbor-next,
+  .view-title-carousel:focus-within .view-title-neighbor-next {
+    padding-left: 0.8rem;
   }
 
   .calendar-today-shortcut {
