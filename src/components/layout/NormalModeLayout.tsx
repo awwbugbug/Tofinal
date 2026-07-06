@@ -1,4 +1,4 @@
-﻿import { type PointerEvent as ReactPointerEvent, useEffect, useState } from "react";
+﻿import { type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
 import { PanelTopOpen, Search } from "lucide-react";
 
 import { Sidebar } from "@/components/layout/Sidebar";
@@ -214,6 +214,13 @@ export function NormalModeLayout({
   const isViewingToday = viewDateKey === todayKey;
   const showOverdueSection = isDateView && isViewingToday && !hasSearch && overdueTasks.length > 0;
   const [dateCalendarOpen, setDateCalendarOpen] = useState(false);
+  // Direction of the last view-date change drives the title roll animation.
+  const previousViewDateRef = useRef(viewDateKey);
+  const titleRollDirection =
+    viewDateKey === previousViewDateRef.current ? 0 : viewDateKey > previousViewDateRef.current ? 1 : -1;
+  useEffect(() => {
+    previousViewDateRef.current = viewDateKey;
+  }, [viewDateKey]);
 
   const parseViewDate = (() => {
     const [year, month, day] = viewDateKey.split("-").map(Number);
@@ -359,7 +366,7 @@ export function NormalModeLayout({
                     tabIndex={-1}
                     type="button"
                   >
-                    {neighborDateLabel(shiftDateKey(-1))}
+                    <span className="view-title-neighbor-label">{neighborDateLabel(shiftDateKey(-1))}</span>
                   </button>
                   <h2 className="text-3xl font-semibold tracking-normal text-[var(--text-primary)]">
                     <button
@@ -369,7 +376,18 @@ export function NormalModeLayout({
                       onClick={() => setDateCalendarOpen((current) => !current)}
                       type="button"
                     >
-                      {title}
+                      <span
+                        className={
+                          titleRollDirection === 1
+                            ? "view-title-text view-title-text-roll-next"
+                            : titleRollDirection === -1
+                              ? "view-title-text view-title-text-roll-prev"
+                              : "view-title-text"
+                        }
+                        key={viewDateKey}
+                      >
+                        {title}
+                      </span>
                     </button>
                   </h2>
                   <button
@@ -382,7 +400,7 @@ export function NormalModeLayout({
                     tabIndex={-1}
                     type="button"
                   >
-                    {neighborDateLabel(shiftDateKey(1))}
+                    <span className="view-title-neighbor-label">{neighborDateLabel(shiftDateKey(1))}</span>
                   </button>
                 </div>
                 {dateCalendarOpen && (
