@@ -344,7 +344,7 @@ export function NormalModeLayout({
       />
 
       <section className="surface-panel flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-[var(--radius-panel)] border px-5 pb-5 pt-8">
-        <header className="mb-5 flex shrink-0 items-center justify-between gap-4">
+        <header className="mb-5 flex min-h-11 shrink-0 items-center justify-between gap-4">
           <div className="min-w-0">
             {isDateView ? (
               <div className="relative">

@@ -1226,11 +1226,14 @@ body {
    * that the title is a date wheel. Neighbors are clickable day steps; the
    * title itself opens the calendar.
    */
+  /* Block-level grid (not inline) so no baseline leading inflates the header
+     height compared to the plain h2 of the other views. */
   .view-title-carousel {
     align-items: baseline;
-    display: inline-grid;
+    display: grid;
     grid-template-columns: 0fr auto 0fr;
     transition: grid-template-columns 240ms cubic-bezier(0.22, 1, 0.36, 1);
+    width: fit-content;
   }
 
   .view-title-carousel:hover,
