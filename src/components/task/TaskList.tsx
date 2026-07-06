@@ -210,6 +210,7 @@ export function TaskList({
   const [dropPreview, setDropPreview] = useState<DropPreview | null>(null);
   const [dragDelta, setDragDelta] = useState<{ x: number; y: number } | null>(null);
   const [ghostExit, setGhostExit] = useState<GhostExitState | null>(null);
+  const [dropSettling, setDropSettling] = useState(false);
   const [collapsingStackIds, setCollapsingStackIds] = useState<string[]>([]);
   const collapseTimeoutsRef = useRef<Set<number>>(new Set());
   const overDropTarget = useDragStore((state) => state.overDropTarget);
@@ -238,6 +239,26 @@ export function TaskList({
   useEffect(() => {
     dropPreviewRef.current = dropPreview;
   }, [dropPreview]);
+
+  // On drop, the list re-renders in its new order while the push-apart
+  // transforms are cleared in the same commit. Without this, the frames'
+  // transform transition would animate that clearance on top of the new
+  // layout and shifted cards would jump a slot before settling. Suppress the
+  // transition for one painted frame, then restore it.
+  useEffect(() => {
+    if (!dropSettling) {
+      return undefined;
+    }
+
+    let secondFrame = 0;
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => setDropSettling(false));
+    });
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      window.cancelAnimationFrame(secondFrame);
+    };
+  }, [dropSettling]);
 
   useEffect(() => () => {
     if (ghostExitTimeoutRef.current !== null) {
@@ -620,7 +641,8 @@ export function TaskList({
           }
           useDragStore.getState().pulseDrop(preview.target);
           beginGhostAbsorb(latestDragState, preview.target);
-        } else {
+        } else if (preview) {
+          setDropSettling(true);
           handleDrop(latestDragState, preview);
         }
       }
@@ -766,8 +788,12 @@ export function TaskList({
     }
   }
 
-  const frameShiftStyle = (shift: number): CSSProperties | undefined =>
-    shift !== 0 ? { transform: `translate3d(0, ${shift}px, 0)` } : undefined;
+  const frameShiftStyle = (shift: number): CSSProperties | undefined => {
+    if (shift !== 0) {
+      return { transform: `translate3d(0, ${shift}px, 0)` };
+    }
+    return dropSettling ? { transition: "none" } : undefined;
+  };
 
   const renderGhostCard = (content: GhostContent) => (
     <TaskItem
