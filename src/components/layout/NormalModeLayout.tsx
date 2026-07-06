@@ -342,7 +342,7 @@ export function NormalModeLayout({
         tabIndex={0}
       />
 
-      <section className="surface-panel flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-[var(--radius-panel)] border px-5 pb-5 pt-8">
+      <section className="surface-panel flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-[var(--radius-panel)] border px-5 pb-5 pt-8" data-undo-anchor="true">
         <header className="mb-5 flex min-h-11 shrink-0 items-center justify-between gap-4">
           <div className="min-w-0 pl-2">
             {isDateView ? (

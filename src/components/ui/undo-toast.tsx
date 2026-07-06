@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 
@@ -18,6 +18,30 @@ type UndoToastProps = {
 export function UndoToast({ actionLabel, message, onAction, onDismiss }: UndoToastProps) {
   const timeoutRef = useRef<number | null>(null);
   const onDismissRef = useRef(onDismiss);
+  // Center over the middle task panel (not the window); tracks panel resizes.
+  const [centerLeft, setCenterLeft] = useState<number | null>(null);
+
+  useLayoutEffect(() => {
+    const anchor = document.querySelector<HTMLElement>("[data-undo-anchor]");
+    if (!anchor) {
+      setCenterLeft(null);
+      return undefined;
+    }
+
+    const measure = () => {
+      const rect = anchor.getBoundingClientRect();
+      setCenterLeft(rect.left + rect.width / 2);
+    };
+
+    measure();
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
+    observer?.observe(anchor);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
 
   useEffect(() => {
     onDismissRef.current = onDismiss;
@@ -52,6 +76,7 @@ export function UndoToast({ actionLabel, message, onAction, onDismiss }: UndoToa
       onMouseEnter={clearTimer}
       onMouseLeave={startTimer}
       role="status"
+      style={centerLeft !== null ? { left: centerLeft } : undefined}
     >
       <span className="min-w-0 truncate text-sm text-[var(--text-secondary)]">{message}</span>
       <Button
