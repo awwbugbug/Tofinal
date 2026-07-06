@@ -220,6 +220,19 @@ export function NormalModeLayout({
     return new Date(year || 1970, (month || 1) - 1, day || 1);
   })();
   const tomorrowKey = getLocalDateKey(new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 1));
+  const shiftDateKey = (delta: number) =>
+    getLocalDateKey(new Date(parseViewDate.getFullYear(), parseViewDate.getMonth(), parseViewDate.getDate() + delta));
+  const neighborDateLabel = (dateKey: string) => {
+    if (dateKey === todayKey) {
+      return t("date.today");
+    }
+    if (dateKey === tomorrowKey) {
+      return t("date.tomorrow");
+    }
+    const [year, month, day] = dateKey.split("-").map(Number);
+    return new Intl.DateTimeFormat(locale, { month: language === "en-US" ? "short" : "long", day: "numeric" })
+      .format(new Date(year || 1970, (month || 1) - 1, day || 1));
+  };
 
   const title =
     activeFilter === "important"
@@ -241,11 +254,6 @@ export function NormalModeLayout({
   const openTodayCount = liveTasks.filter((task) => !task.completed && task.plannedDate === todayKey).length;
   const todayTotal = completedTodayCount + openTodayCount + overdueTasks.length;
   const allDoneToday = todayTotal > 0 && completedTodayCount === todayTotal;
-  // Sub-line under the clickable title: full date for today, weekday only
-  // when the title already shows the date.
-  const viewDateSubLabel = isViewingToday
-    ? `${new Intl.DateTimeFormat(locale, { month: "long", day: "numeric" }).format(parseViewDate)} · ${new Intl.DateTimeFormat(locale, { weekday: "long" }).format(parseViewDate)}`
-    : new Intl.DateTimeFormat(locale, { weekday: "long" }).format(parseViewDate);
   const gridTemplateColumns = `${sidebarWidth}px minmax(${TASK_LIST_MIN_WIDTH}px, 1fr) ${detailWidth}px`;
 
   useEffect(() => {
@@ -340,20 +348,43 @@ export function NormalModeLayout({
           <div className="min-w-0">
             {isDateView ? (
               <div className="relative">
-                <h2 className="text-3xl font-semibold tracking-normal text-[var(--text-primary)]">
+                <div className="view-title-carousel">
                   <button
-                    aria-label={t("date.pickViewDate")}
-                    className="view-title-trigger"
-                    data-testid="view-date-trigger"
-                    onClick={() => setDateCalendarOpen((current) => !current)}
+                    aria-label={t("date.previousDay")}
+                    className="view-title-neighbor view-title-neighbor-prev"
+                    onClick={() => {
+                      setDateCalendarOpen(false);
+                      onViewDateChange(shiftDateKey(-1));
+                    }}
+                    tabIndex={-1}
                     type="button"
                   >
-                    {title}
+                    {neighborDateLabel(shiftDateKey(-1))}
                   </button>
-                </h2>
-                <p className="mt-1 text-xs font-medium uppercase tracking-wide text-[var(--text-faint)]" data-testid="today-date-header">
-                  {viewDateSubLabel}
-                </p>
+                  <h2 className="text-3xl font-semibold tracking-normal text-[var(--text-primary)]">
+                    <button
+                      aria-label={t("date.pickViewDate")}
+                      className="view-title-trigger"
+                      data-testid="view-date-trigger"
+                      onClick={() => setDateCalendarOpen((current) => !current)}
+                      type="button"
+                    >
+                      {title}
+                    </button>
+                  </h2>
+                  <button
+                    aria-label={t("date.nextDay")}
+                    className="view-title-neighbor view-title-neighbor-next"
+                    onClick={() => {
+                      setDateCalendarOpen(false);
+                      onViewDateChange(shiftDateKey(1));
+                    }}
+                    tabIndex={-1}
+                    type="button"
+                  >
+                    {neighborDateLabel(shiftDateKey(1))}
+                  </button>
+                </div>
                 {dateCalendarOpen && (
                   <CalendarPopover
                     onClose={() => setDateCalendarOpen(false)}
