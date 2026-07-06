@@ -1,5 +1,5 @@
 ﻿import { type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
-import { PanelTopOpen, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, PanelTopOpen, Search } from "lucide-react";
 
 import { Sidebar } from "@/components/layout/Sidebar";
 import { DetailPanel } from "@/components/layout/DetailPanel";
@@ -229,9 +229,6 @@ export function NormalModeLayout({
   const tomorrowKey = getLocalDateKey(new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 1));
   const shiftDateKey = (delta: number) =>
     getLocalDateKey(new Date(parseViewDate.getFullYear(), parseViewDate.getMonth(), parseViewDate.getDate() + delta));
-  // Wheel neighbors show just the day number: compact enough to live in the
-  // narrow space beside the title without moving it.
-  const neighborDateLabel = (dateKey: string) => String(Number(dateKey.split("-")[2]) || "");
 
   const title =
     activeFilter === "important"
@@ -358,7 +355,7 @@ export function NormalModeLayout({
                     tabIndex={-1}
                     type="button"
                   >
-                    {neighborDateLabel(shiftDateKey(-1))}
+                    <ChevronLeft className="h-4 w-4" />
                   </button>
                   <h2 className="text-3xl font-semibold tracking-normal text-[var(--text-primary)]">
                     <button
@@ -392,7 +389,7 @@ export function NormalModeLayout({
                     tabIndex={-1}
                     type="button"
                   >
-                    {neighborDateLabel(shiftDateKey(1))}
+                    <ChevronRight className="h-4 w-4" />
                   </button>
                 </div>
                 {dateCalendarOpen && (
