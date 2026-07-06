@@ -49,7 +49,7 @@ export function CalendarPopover({ onClose, onSelect, todayShortcutLabel, value }
   const [viewMonth, setViewMonth] = useState(initial.getMonth());
   const todayKey = getLocalDateKey();
   const popoverRef = useRef<HTMLDivElement | null>(null);
-  const [position, setPosition] = useState<CSSProperties | null>(null);
+  const [placement, setPlacement] = useState<{ top: number; left: number; flipped: boolean } | null>(null);
 
   // Fixed positioning escapes the detail panel's scroll clipping: anchor to
   // the trigger row, flip above when there is no room below, and clamp to
@@ -67,15 +67,17 @@ export function CalendarPopover({ onClose, onSelect, todayShortcutLabel, value }
     const gap = 8;
 
     let top = anchorRect.bottom + gap;
+    let flipped = false;
     if (top + popoverRect.height > window.innerHeight - margin) {
       top = anchorRect.top - popoverRect.height - gap;
+      flipped = true;
     }
     top = Math.max(margin, Math.min(top, window.innerHeight - popoverRect.height - margin));
 
     let left = anchorRect.left;
     left = Math.max(margin, Math.min(left, window.innerWidth - popoverRect.width - margin));
 
-    setPosition({ top, left });
+    setPlacement({ top, left, flipped });
   }, [viewYear, viewMonth]);
 
   useEffect(() => {
@@ -110,10 +112,11 @@ export function CalendarPopover({ onClose, onSelect, todayShortcutLabel, value }
       <div
         aria-label={monthLabel}
         className="calendar-popover"
+        data-flipped={placement?.flipped ? "true" : undefined}
         data-testid="calendar-popover"
         ref={popoverRef}
         role="dialog"
-        style={position ? { ...position, visibility: "visible" } : { visibility: "hidden" }}
+        style={placement ? ({ top: placement.top, left: placement.left, visibility: "visible" } as CSSProperties) : { visibility: "hidden" }}
       >
         <div className="flex items-center justify-between gap-2">
           <button aria-label="previous month" className="calendar-nav-button" onClick={() => shiftMonth(-1)} type="button">

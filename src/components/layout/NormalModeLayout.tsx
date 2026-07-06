@@ -1,5 +1,5 @@
 ﻿import { type PointerEvent as ReactPointerEvent, useEffect, useState } from "react";
-import { ChevronDown, PanelTopOpen, Search } from "lucide-react";
+import { PanelTopOpen, Search } from "lucide-react";
 
 import { Sidebar } from "@/components/layout/Sidebar";
 import { DetailPanel } from "@/components/layout/DetailPanel";
@@ -349,7 +349,6 @@ export function NormalModeLayout({
                     type="button"
                   >
                     {title}
-                    <ChevronDown className="view-title-chevron h-4 w-4" />
                   </button>
                 </h2>
                 <p className="mt-1 text-xs font-medium uppercase tracking-wide text-[var(--text-faint)]" data-testid="today-date-header">
