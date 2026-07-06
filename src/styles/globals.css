@@ -1272,7 +1272,7 @@ body {
     transform: translateY(-50%);
     transition: opacity 220ms ease, color 160ms ease;
     white-space: nowrap;
-    width: 5.2rem;
+    width: 2rem;
   }
 
   .view-title-carousel:hover .view-title-neighbor {
@@ -1286,18 +1286,18 @@ body {
   }
 
   .view-title-neighbor-prev {
-    -webkit-mask-image: linear-gradient(to left, black 40%, transparent 100%);
-    mask-image: linear-gradient(to left, black 40%, transparent 100%);
-    padding-right: 0.8rem;
+    -webkit-mask-image: linear-gradient(to left, black 45%, transparent 100%);
+    mask-image: linear-gradient(to left, black 45%, transparent 100%);
+    padding-right: 0.55rem;
     right: 100%;
     text-align: right;
   }
 
   .view-title-neighbor-next {
-    -webkit-mask-image: linear-gradient(to right, black 40%, transparent 100%);
-    mask-image: linear-gradient(to right, black 40%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, black 45%, transparent 100%);
+    mask-image: linear-gradient(to right, black 45%, transparent 100%);
     left: 100%;
-    padding-left: 0.8rem;
+    padding-left: 0.55rem;
     text-align: left;
   }
 

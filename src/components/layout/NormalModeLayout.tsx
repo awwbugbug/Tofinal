@@ -229,17 +229,9 @@ export function NormalModeLayout({
   const tomorrowKey = getLocalDateKey(new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 1));
   const shiftDateKey = (delta: number) =>
     getLocalDateKey(new Date(parseViewDate.getFullYear(), parseViewDate.getMonth(), parseViewDate.getDate() + delta));
-  const neighborDateLabel = (dateKey: string) => {
-    if (dateKey === todayKey) {
-      return t("date.today");
-    }
-    if (dateKey === tomorrowKey) {
-      return t("date.tomorrow");
-    }
-    const [year, month, day] = dateKey.split("-").map(Number);
-    return new Intl.DateTimeFormat(locale, { month: language === "en-US" ? "short" : "long", day: "numeric" })
-      .format(new Date(year || 1970, (month || 1) - 1, day || 1));
-  };
+  // Wheel neighbors show just the day number: compact enough to live in the
+  // narrow space beside the title without moving it.
+  const neighborDateLabel = (dateKey: string) => String(Number(dateKey.split("-")[2]) || "");
 
   const title =
     activeFilter === "important"
@@ -352,7 +344,7 @@ export function NormalModeLayout({
 
       <section className="surface-panel flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-[var(--radius-panel)] border px-5 pb-5 pt-8">
         <header className="mb-5 flex min-h-11 shrink-0 items-center justify-between gap-4">
-          <div className="min-w-0 pl-12">
+          <div className="min-w-0 pl-2">
             {isDateView ? (
               <div className="relative">
                 <div className="view-title-carousel">
