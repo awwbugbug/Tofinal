@@ -1219,26 +1219,24 @@ body {
     transform-origin: bottom center;
   }
 
-  /* The big view title is the calendar trigger, with the same rounded
-     hover-background feedback as the app's other buttons. Negative margins
-     mirror the padding so the resting text position never shifts. */
+  /* The big view title is the calendar trigger. Hover feedback is the text
+     itself lifting slightly — whole-pixel translate only, so glyphs never
+     shimmer the way fractional scaling does. */
   .view-title-trigger {
-    border-radius: 14px;
     color: inherit;
     cursor: pointer;
     display: inline-block;
     font: inherit;
-    margin: -0.25rem -0.6rem;
-    padding: 0.25rem 0.6rem;
     perspective: 400px;
-    transition: background 140ms ease;
+    transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .view-title-trigger:hover {
-    background: var(--surface-field);
+    transform: translateY(-2px);
   }
 
   .view-title-trigger:focus-visible {
+    border-radius: 12px;
     box-shadow: 0 0 0 3px var(--ring-soft);
     outline: none;
   }
