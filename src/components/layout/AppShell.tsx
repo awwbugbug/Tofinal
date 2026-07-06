@@ -11,7 +11,7 @@ import { applyWindowMode } from "@/lib/windowMode";
 import { useAttachmentStore } from "@/stores/attachmentStore";
 import { usePreferencesStore } from "@/stores/preferencesStore";
 import { useTaskAppStore } from "@/stores/taskAppStore";
-import { getOverdueTasks, useTaskStore } from "@/stores/taskStore";
+import { getOverdueTasks, isoToLocalDateKey, useTaskStore } from "@/stores/taskStore";
 import type { AppMode, TaskStackView } from "@/types/task";
 
 const MODE_EXIT_MS = 140;
@@ -267,7 +267,7 @@ export function AppShell() {
     const viewLeavesList = state.activeFilter === "today" && (
       task.completed
         ? // Reopening from the completed section removes it from that list.
-          task.completedAt?.slice(0, 10) === viewKey
+          Boolean(task.completedAt && isoToLocalDateKey(task.completedAt) === viewKey)
         : // Completing removes the view when no other open task of the viewed
           // date shares the stack.
           !state.tasks.some((candidate) =>

@@ -64,6 +64,13 @@ export const getLocalDateKey = (date = new Date()) => {
   return `${year}-${month}-${day}`;
 };
 
+/**
+ * Local date key of an ISO timestamp. Never compare `iso.slice(0, 10)` with
+ * local date keys: that slices the UTC date and misattributes completions
+ * between local midnight and the UTC rollover.
+ */
+export const isoToLocalDateKey = (iso: string) => getLocalDateKey(new Date(iso));
+
 const normalizeTags = (tags: string[]) => {
   const seen = new Set<string>();
 
@@ -149,7 +156,7 @@ const filterTasks = (tasks: Task[], filter: TaskFilter, query = "", viewDate = g
   applySearch(tasks.filter((task) => !task.deletedAt && taskMatchesFilter(task, filter, viewDate)), query);
 
 const filterTodayCompletedTasks = (tasks: Task[], query = "", dateKey = getLocalDateKey()) =>
-  applySearch(tasks.filter((task) => !task.deletedAt && task.completed && task.completedAt?.slice(0, 10) === dateKey), query);
+  applySearch(tasks.filter((task) => !task.deletedAt && task.completed && task.completedAt && isoToLocalDateKey(task.completedAt) === dateKey), query);
 
 export const buildStackViews = (tasks: Task[], stacks: TaskStack[]): TaskStackView[] => {
   const tasksByStackId = new Map<string, Task[]>();
@@ -199,7 +206,7 @@ const filterStackViews = (tasks: Task[], stacks: TaskStack[], filter: TaskFilter
 const filterTodayCompletedStackViews = (tasks: Task[], stacks: TaskStack[], query = "", dateKey = getLocalDateKey()) =>
   buildStackViews(tasks, stacks).filter((view) => {
     const hasActiveOnDate = view.tasks.some((task) => !task.completed && task.plannedDate === dateKey);
-    const hasCompletedOnDate = view.tasks.some((task) => task.completed && task.completedAt?.slice(0, 10) === dateKey);
+    const hasCompletedOnDate = view.tasks.some((task) => task.completed && task.completedAt && isoToLocalDateKey(task.completedAt) === dateKey);
     return !hasActiveOnDate && hasCompletedOnDate && stackViewMatchesQuery(view, query);
   });
 

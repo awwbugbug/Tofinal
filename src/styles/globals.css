@@ -1220,28 +1220,18 @@ body {
   }
 
   /*
-   * Date carousel title: at rest only the big title is visible, flush left.
-   * Approaching it makes the title swell slightly while the previous and next
-   * day labels materialize on both sides (gradient-faded outward), hinting
-   * that the title is a date wheel. Neighbors are clickable day steps; the
-   * title itself opens the calendar.
+   * Date wheel title: the big title NEVER moves. The previous/next day labels
+   * are absolutely positioned on both sides and simply fade in on hover, so
+   * the pointer never loses its target. Their boxes touch the title (visual
+   * gap comes from inner padding) so hover survives the crossing, and their
+   * fixed width keeps both sides symmetric. The header's universal left
+   * padding reserves the room the previous-day label needs.
    */
-  /* Block-level grid (not inline) so no baseline leading inflates the header
-     height compared to the plain h2 of the other views. */
   .view-title-carousel {
-    align-items: baseline;
-    display: grid;
-    grid-template-columns: 0fr auto 0fr;
-    transition: grid-template-columns 240ms cubic-bezier(0.22, 1, 0.36, 1);
-    width: fit-content;
+    display: inline-block;
+    position: relative;
   }
 
-  .view-title-carousel:hover {
-    grid-template-columns: 1fr auto 1fr;
-  }
-
-  /* No hover scale: fractional text scaling shimmers on Windows, and click
-     focus must not re-trigger the expansion (hover only). */
   .view-title-trigger {
     color: inherit;
     cursor: pointer;
@@ -1270,33 +1260,24 @@ body {
     animation: view-title-roll-prev 260ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
-  /* Rest padding must be zero: with border-box an element can never shrink
-     below its padding, so any resting padding would keep the "empty" 0fr
-     track ~13px wide and push the title out of line with the other views. */
   .view-title-neighbor {
     color: var(--text-faint);
     cursor: pointer;
-    font-size: 0.95rem;
+    font-size: 0.85rem;
     font-weight: 500;
-    min-width: 0;
     opacity: 0;
-    overflow: hidden;
-    transition:
-      opacity 240ms ease,
-      color 160ms ease,
-      padding 240ms cubic-bezier(0.22, 1, 0.36, 1);
+    pointer-events: none;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    transition: opacity 220ms ease, color 160ms ease;
     white-space: nowrap;
+    width: 5.2rem;
   }
 
   .view-title-carousel:hover .view-title-neighbor {
     opacity: 0.55;
-  }
-
-  /* Fixed-width labels keep both sides of the wheel symmetric regardless of
-     how long each date string is. */
-  .view-title-neighbor-label {
-    display: inline-block;
-    width: 5rem;
+    pointer-events: auto;
   }
 
   .view-title-carousel .view-title-neighbor:hover {
@@ -1305,25 +1286,19 @@ body {
   }
 
   .view-title-neighbor-prev {
-    -webkit-mask-image: linear-gradient(to left, black 35%, transparent 100%);
-    mask-image: linear-gradient(to left, black 35%, transparent 100%);
-    padding-right: 0;
+    -webkit-mask-image: linear-gradient(to left, black 40%, transparent 100%);
+    mask-image: linear-gradient(to left, black 40%, transparent 100%);
+    padding-right: 0.8rem;
+    right: 100%;
     text-align: right;
   }
 
   .view-title-neighbor-next {
-    -webkit-mask-image: linear-gradient(to right, black 35%, transparent 100%);
-    mask-image: linear-gradient(to right, black 35%, transparent 100%);
-    padding-left: 0;
-    text-align: left;
-  }
-
-  .view-title-carousel:hover .view-title-neighbor-prev {
-    padding-right: 0.8rem;
-  }
-
-  .view-title-carousel:hover .view-title-neighbor-next {
+    -webkit-mask-image: linear-gradient(to right, black 40%, transparent 100%);
+    mask-image: linear-gradient(to right, black 40%, transparent 100%);
+    left: 100%;
     padding-left: 0.8rem;
+    text-align: left;
   }
 
   .calendar-today-shortcut {

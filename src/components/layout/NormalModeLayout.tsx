@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { CalendarPopover } from "@/components/ui/calendar-popover";
 import { ProgressRing } from "@/components/ui/progress-ring";
 import { useI18n } from "@/i18n/useI18n";
-import { getLocalDateKey } from "@/stores/taskStore";
+import { getLocalDateKey, isoToLocalDateKey } from "@/stores/taskStore";
 import { usePreferencesStore } from "@/stores/preferencesStore";
 import type { AttachmentView, FinalScreenshot, PendingScreenshot } from "@/stores/attachmentStore";
 import type { TaskAppView } from "@/stores/taskAppStore";
@@ -256,7 +256,7 @@ export function NormalModeLayout({
 
   const liveTasks = tasks.filter((task) => !task.deletedAt);
   const completedTodayCount = liveTasks.filter(
-    (task) => task.completed && task.completedAt?.slice(0, 10) === todayKey,
+    (task) => task.completed && task.completedAt && isoToLocalDateKey(task.completedAt) === todayKey,
   ).length;
   const openTodayCount = liveTasks.filter((task) => !task.completed && task.plannedDate === todayKey).length;
   const todayTotal = completedTodayCount + openTodayCount + overdueTasks.length;
@@ -352,7 +352,7 @@ export function NormalModeLayout({
 
       <section className="surface-panel flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-[var(--radius-panel)] border px-5 pb-5 pt-8">
         <header className="mb-5 flex min-h-11 shrink-0 items-center justify-between gap-4">
-          <div className="min-w-0 pl-2">
+          <div className="min-w-0 pl-12">
             {isDateView ? (
               <div className="relative">
                 <div className="view-title-carousel">
@@ -366,7 +366,7 @@ export function NormalModeLayout({
                     tabIndex={-1}
                     type="button"
                   >
-                    <span className="view-title-neighbor-label">{neighborDateLabel(shiftDateKey(-1))}</span>
+                    {neighborDateLabel(shiftDateKey(-1))}
                   </button>
                   <h2 className="text-3xl font-semibold tracking-normal text-[var(--text-primary)]">
                     <button
@@ -400,7 +400,7 @@ export function NormalModeLayout({
                     tabIndex={-1}
                     type="button"
                   >
-                    <span className="view-title-neighbor-label">{neighborDateLabel(shiftDateKey(1))}</span>
+                    {neighborDateLabel(shiftDateKey(1))}
                   </button>
                 </div>
                 {dateCalendarOpen && (
