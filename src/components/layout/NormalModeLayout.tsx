@@ -39,6 +39,8 @@ type NormalModeLayoutProps = {
   persistenceError: string | null;
   onAddTask: (title: string) => void;
   onAddImageAttachment: (taskId: string) => void;
+  onAddDroppedImageAttachments: (taskId: string, paths: string[]) => void;
+  onAddPastedImageAttachment: (taskId: string, bytes: Uint8Array, mimeType: string) => void;
   onAddScreenshotAttachment: (taskId: string) => void;
   onConfirmScreenshotAttachment: (screenshot: FinalScreenshot) => void;
   onCancelScreenshotAttachment: () => void;
@@ -58,6 +60,13 @@ type NormalModeLayoutProps = {
   onReorderTaskWithinStack: (stackId: string, taskId: string, targetIndex: number) => boolean;
   onMoveTaskToStack: (taskId: string, targetStackId: string, targetIndex?: number) => boolean;
   onSplitTaskToNewStack: (taskId: string, targetGlobalIndex: number, visibleStackIds: string[]) => boolean;
+  onSidebarDrop: (taskIds: string[], target: TaskFilter) => boolean;
+  onDropToTrash: (taskIds: string[]) => void;
+  onOpenTrash: () => void;
+  trashedCount: number;
+  leavingTaskIds: string[];
+  overdueTasks: Task[];
+  onMoveAllOverdueToToday: () => void;
   onUpdateTask: (
     id: string,
     update: Partial<Pick<Task, "title" | "note" | "priority" | "tags" | "pinned">>,
@@ -139,6 +148,8 @@ export function NormalModeLayout({
   todayCompletedStackViews,
   onAddTask,
   onAddImageAttachment,
+  onAddDroppedImageAttachments,
+  onAddPastedImageAttachment,
   onAddScreenshotAttachment,
   onAddTaskApp,
   onDeleteAttachment,
@@ -148,10 +159,17 @@ export function NormalModeLayout({
   onSearchChange,
   onSelectTask,
   onSwitchToPin,
+  leavingTaskIds,
+  onDropToTrash,
+  onMoveAllOverdueToToday,
   onMoveTaskToStack,
+  onOpenTrash,
+  overdueTasks,
   onReorderStacks,
   onReorderTaskWithinStack,
+  onSidebarDrop,
   onSplitTaskToNewStack,
+  trashedCount,
   onToggleStackCollapsed,
   onToggleTask,
   onStartTaskApps,
@@ -184,6 +202,7 @@ export function NormalModeLayout({
           : t("filters.today");
   const hasSearch = Boolean(searchQuery.trim());
   const showTodayCompletedSection = activeFilter === "today" && todayCompletedStackViews.length > 0;
+  const showOverdueSection = activeFilter === "today" && !hasSearch && overdueTasks.length > 0;
   const gridTemplateColumns = `${sidebarWidth}px minmax(${TASK_LIST_MIN_WIDTH}px, 1fr) ${detailWidth}px`;
 
   useEffect(() => {
@@ -250,7 +269,13 @@ export function NormalModeLayout({
       data-testid="normal-mode-layout"
       style={{ gridTemplateColumns }}
     >
-      <Sidebar activeFilter={activeFilter} onFilterChange={onFilterChange} tasks={tasks} />
+      <Sidebar
+        activeFilter={activeFilter}
+        onFilterChange={onFilterChange}
+        onOpenTrash={onOpenTrash}
+        tasks={tasks}
+        trashedCount={trashedCount}
+      />
 
       <div
         aria-label="Resize sidebar and task list"
@@ -301,9 +326,40 @@ export function NormalModeLayout({
           <span className="text-[var(--text-faint)]">{completedTasks.length}{t("task.completedCount")}</span>
         </div>
 
-        {stackViews.length > 0 || showTodayCompletedSection ? (
+        {stackViews.length > 0 || showTodayCompletedSection || showOverdueSection ? (
           <div className="-mx-5 min-h-0 flex-1 overflow-hidden px-5">
             <div className="h-full min-h-0 overflow-y-auto px-3 pb-7 pt-3 no-scrollbar">
+              {showOverdueSection && (
+                <section aria-label={t("task.overdue")} className="mb-5 space-y-3" data-testid="overdue-section">
+                  <div className="flex items-center justify-between gap-3 text-xs font-medium uppercase">
+                    <span className="task-overdue-label">
+                      {t("task.overdue")} {overdueTasks.length}
+                    </span>
+                    <Button
+                      aria-label={t("task.moveAllToToday")}
+                      className="h-7 px-2.5 text-xs normal-case"
+                      onClick={onMoveAllOverdueToToday}
+                      size="sm"
+                      type="button"
+                      variant="ghost"
+                    >
+                      {t("task.moveAllToToday")}
+                    </Button>
+                  </div>
+                  <TaskList
+                    embedded
+                    leavingTaskIds={leavingTaskIds}
+                    onDropToTrash={onDropToTrash}
+                    onSelect={onSelectTask}
+                    onSidebarDrop={onSidebarDrop}
+                    onToggle={onToggleTask}
+                    overdue
+                    selectedTaskId={selectedTaskId}
+                    tasks={overdueTasks}
+                    testId="overdue-task-list"
+                  />
+                </section>
+              )}
               {stackViews.length > 0 ? (
                 <TaskList
                   embedded
@@ -313,6 +369,9 @@ export function NormalModeLayout({
                   onReorderStacks={onReorderStacks}
                   onReorderTaskWithinStack={onReorderTaskWithinStack}
                   onSplitTaskToNewStack={onSplitTaskToNewStack}
+                  onSidebarDrop={onSidebarDrop}
+                  onDropToTrash={onDropToTrash}
+                  leavingTaskIds={leavingTaskIds}
                   onToggleStackCollapsed={onToggleStackCollapsed}
                   selectedTaskId={selectedTaskId}
                   stackViews={stackViews}
@@ -336,6 +395,9 @@ export function NormalModeLayout({
                     onReorderStacks={onReorderStacks}
                     onReorderTaskWithinStack={onReorderTaskWithinStack}
                     onSplitTaskToNewStack={onSplitTaskToNewStack}
+                    onSidebarDrop={onSidebarDrop}
+                    onDropToTrash={onDropToTrash}
+                  leavingTaskIds={leavingTaskIds}
                     onToggleStackCollapsed={onToggleStackCollapsed}
                     selectedTaskId={selectedTaskId}
                     stackViews={todayCompletedStackViews}
@@ -385,6 +447,8 @@ export function NormalModeLayout({
         lastTaskAppsStartedAt={lastTaskAppsStartedAt}
         lastSavedAt={lastSavedAt}
         onAddImageAttachment={onAddImageAttachment}
+        onAddDroppedImageAttachments={onAddDroppedImageAttachments}
+        onAddPastedImageAttachment={onAddPastedImageAttachment}
         onAddScreenshotAttachment={onAddScreenshotAttachment}
         onAddTaskApp={onAddTaskApp}
         onDeleteAttachment={onDeleteAttachment}

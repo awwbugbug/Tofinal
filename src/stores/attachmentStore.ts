@@ -48,6 +48,8 @@ type AttachmentState = {
 type AttachmentActions = {
   loadByTaskId: (taskId: string) => Promise<void>;
   addImageAttachment: (taskId: string) => Promise<void>;
+  addDroppedImageAttachments: (taskId: string, sourcePaths: string[]) => Promise<void>;
+  addPastedImageAttachment: (taskId: string, bytes: Uint8Array, mimeType: string) => Promise<void>;
   addScreenshotAttachment: (taskId: string) => Promise<void>;
   confirmScreenshotAttachment: (screenshot: FinalScreenshot) => Promise<void>;
   cancelScreenshotAttachment: () => void;
@@ -82,13 +84,25 @@ const initialState = (): AttachmentState => ({
 
 const nowIso = () => new Date().toISOString();
 
-const screenshotOriginalName = () => {
+const timestampedOriginalName = (prefix: string, extension: string) => {
   const date = new Date();
   const pad = (value: number) => String(value).padStart(2, "0");
 
-  return `screenshot-${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(
+  return `${prefix}-${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(
     date.getHours(),
-  )}${pad(date.getMinutes())}${pad(date.getSeconds())}.png`;
+  )}${pad(date.getMinutes())}${pad(date.getSeconds())}.${extension}`;
+};
+
+const screenshotOriginalName = () => timestampedOriginalName("screenshot", "png");
+
+const pastedImageExtension = (mimeType: string) => {
+  if (mimeType === "image/jpeg") {
+    return "jpg";
+  }
+  if (mimeType === "image/webp") {
+    return "webp";
+  }
+  return "png";
 };
 
 const errorMessage = (error: unknown) => {
@@ -151,6 +165,50 @@ const createAttachmentStoreState: StateCreator<AttachmentStore> = (set, get) => 
     }
   };
 
+  const importImageFiles = async (
+    taskId: string,
+    sourcePaths: string[],
+    copyToAppData: (input: { taskId: string; attachmentId: string; sourcePath: string }) => ReturnType<AttachmentFileStorage["copyImageToAppData"]>,
+  ) => {
+    const existingAttachments = await dependencies.repository.listByTaskId(taskId);
+    let nextSortOrder =
+      existingAttachments.reduce((maxSortOrder, attachment) => Math.max(maxSortOrder, attachment.sortOrder), -1) + 1;
+
+    for (const sourcePath of sourcePaths) {
+      const attachmentId = `attachment-${crypto.randomUUID()}`;
+      const copied = await copyToAppData({ attachmentId, sourcePath, taskId });
+      const timestamp = nowIso();
+      const attachment: TaskAttachment = {
+        id: attachmentId,
+        taskId,
+        kind: "image",
+        originalName: copied.originalName,
+        storedName: copied.storedName,
+        relativePath: copied.relativePath,
+        mimeType: copied.mimeType,
+        sizeBytes: copied.sizeBytes,
+        width: copied.width,
+        height: copied.height,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        sortOrder: nextSortOrder,
+      };
+
+      try {
+        await dependencies.repository.insertAttachment(attachment);
+      } catch (error) {
+        await Promise.resolve(dependencies.fileStorage.deleteAttachmentFile(copied.relativePath)).catch(
+          () => undefined,
+        );
+        throw error;
+      }
+
+      nextSortOrder += 1;
+    }
+
+    await loadAndSetByTaskId(taskId);
+  };
+
   return {
     ...initialState(),
     loadByTaskId: loadAndSetByTaskId,
@@ -164,44 +222,71 @@ const createAttachmentStoreState: StateCreator<AttachmentStore> = (set, get) => 
           return;
         }
 
+        await importImageFiles(taskId, selectedFiles, (input) => dependencies.fileStorage.copyImageToAppData(input));
+        set({ adding: false, error: null });
+      } catch (error) {
+        set({ adding: false, error: errorMessage(error) });
+      }
+    },
+    addDroppedImageAttachments: async (taskId, sourcePaths) => {
+      if (sourcePaths.length === 0 || get().adding) {
+        return;
+      }
+
+      set({ adding: true, error: null });
+
+      try {
+        await importImageFiles(taskId, sourcePaths, (input) =>
+          dependencies.fileStorage.importDroppedImageToAppData(input),
+        );
+        set({ adding: false, error: null });
+      } catch (error) {
+        set({ adding: false, error: errorMessage(error) });
+      }
+    },
+    addPastedImageAttachment: async (taskId, bytes, mimeType) => {
+      if (bytes.byteLength === 0 || get().adding) {
+        return;
+      }
+
+      set({ adding: true, error: null });
+
+      try {
         const existingAttachments = await dependencies.repository.listByTaskId(taskId);
-        let nextSortOrder =
+        const sortOrder =
           existingAttachments.reduce((maxSortOrder, attachment) => Math.max(maxSortOrder, attachment.sortOrder), -1) + 1;
+        const attachmentId = `attachment-${crypto.randomUUID()}`;
+        const copied = await dependencies.fileStorage.writePastedImageToAppData({
+          attachmentId,
+          bytes,
+          mimeType,
+          originalName: timestampedOriginalName("pasted", pastedImageExtension(mimeType)),
+          taskId,
+        });
+        const timestamp = nowIso();
+        const attachment: TaskAttachment = {
+          id: attachmentId,
+          taskId,
+          kind: "image",
+          originalName: copied.originalName,
+          storedName: copied.storedName,
+          relativePath: copied.relativePath,
+          mimeType: copied.mimeType,
+          sizeBytes: copied.sizeBytes,
+          width: copied.width,
+          height: copied.height,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          sortOrder,
+        };
 
-        for (const sourcePath of selectedFiles) {
-          const attachmentId = `attachment-${crypto.randomUUID()}`;
-          const copied = await dependencies.fileStorage.copyImageToAppData({
-            attachmentId,
-            sourcePath,
-            taskId,
-          });
-          const timestamp = nowIso();
-          const attachment: TaskAttachment = {
-            id: attachmentId,
-            taskId,
-            kind: "image",
-            originalName: copied.originalName,
-            storedName: copied.storedName,
-            relativePath: copied.relativePath,
-            mimeType: copied.mimeType,
-            sizeBytes: copied.sizeBytes,
-            width: copied.width,
-            height: copied.height,
-            createdAt: timestamp,
-            updatedAt: timestamp,
-            sortOrder: nextSortOrder,
-          };
-
-          try {
-            await dependencies.repository.insertAttachment(attachment);
-          } catch (error) {
-            await Promise.resolve(dependencies.fileStorage.deleteAttachmentFile(copied.relativePath)).catch(
-              () => undefined,
-            );
-            throw error;
-          }
-
-          nextSortOrder += 1;
+        try {
+          await dependencies.repository.insertAttachment(attachment);
+        } catch (error) {
+          await Promise.resolve(dependencies.fileStorage.deleteAttachmentFile(copied.relativePath)).catch(
+            () => undefined,
+          );
+          throw error;
         }
 
         await loadAndSetByTaskId(taskId);

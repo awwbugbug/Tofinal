@@ -101,6 +101,7 @@ const createSeedTask = (
   stackId: singletonStackIdForTask(id),
   stackOrder: 0,
   completedAt: null,
+  deletedAt: null,
 });
 
 export const createSeedTasks = (): Task[] => {
@@ -184,6 +185,7 @@ export const normalizeStoredTask = (value: unknown): Task | null => {
     stackId: typeof candidate.stackId === "string" ? candidate.stackId : singletonStackIdForTask(candidate.id),
     stackOrder: typeof candidate.stackOrder === "number" && Number.isFinite(candidate.stackOrder) ? candidate.stackOrder : 0,
     completedAt: typeof candidate.completedAt === "string" ? candidate.completedAt : null,
+    deletedAt: typeof candidate.deletedAt === "string" ? candidate.deletedAt : null,
   };
 };
 

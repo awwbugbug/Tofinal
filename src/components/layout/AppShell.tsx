@@ -2,19 +2,30 @@
 
 import { DesktopPinLayout } from "@/components/layout/DesktopPinLayout";
 import { NormalModeLayout } from "@/components/layout/NormalModeLayout";
+import { TrashPanel } from "@/components/layout/TrashPanel";
 import { WindowTitleBar } from "@/components/layout/WindowTitleBar";
+import { UndoToast } from "@/components/ui/undo-toast";
 import { useI18n } from "@/i18n/useI18n";
 import { applyWindowMode } from "@/lib/windowMode";
 import { useAttachmentStore } from "@/stores/attachmentStore";
 import { usePreferencesStore } from "@/stores/preferencesStore";
 import { useTaskAppStore } from "@/stores/taskAppStore";
-import { useTaskStore } from "@/stores/taskStore";
+import { getLocalDateKey, getOverdueTasks, useTaskStore } from "@/stores/taskStore";
 import type { AppMode } from "@/types/task";
 
 const MODE_EXIT_MS = 140;
 const MODE_ENTER_MS = 220;
+const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+// Slightly longer than the 200ms CSS exit transition so it finishes cleanly.
+const LIST_EXIT_MS = 230;
 
 type ModeTransition = "normal-exit" | "normal-enter" | "pin-exit" | "pin-enter" | null;
+
+type UndoToastState = {
+  id: number;
+  message: string;
+  onUndo: () => void;
+};
 
 export function AppShell() {
   const { t } = useI18n();
@@ -46,6 +57,10 @@ export function AppShell() {
   const reorderTaskWithinStack = useTaskStore((state) => state.reorderTaskWithinStack);
   const moveTaskToStack = useTaskStore((state) => state.moveTaskToStack);
   const splitTaskToNewStack = useTaskStore((state) => state.splitTaskToNewStack);
+  const applySidebarDrop = useTaskStore((state) => state.applySidebarDrop);
+  const trashTask = useTaskStore((state) => state.trashTask);
+  const restoreTask = useTaskStore((state) => state.restoreTask);
+  const undoLastMerge = useTaskStore((state) => state.undoLastMerge);
   const attachmentsByTaskId = useAttachmentStore((state) => state.itemsByTaskId);
   const attachmentLoadingTaskIds = useAttachmentStore((state) => state.loadingTaskIds);
   const attachmentsAdding = useAttachmentStore((state) => state.adding);
@@ -56,6 +71,8 @@ export function AppShell() {
   const attachmentError = useAttachmentStore((state) => state.error);
   const loadAttachmentsByTaskId = useAttachmentStore((state) => state.loadByTaskId);
   const addImageAttachment = useAttachmentStore((state) => state.addImageAttachment);
+  const addDroppedImageAttachments = useAttachmentStore((state) => state.addDroppedImageAttachments);
+  const addPastedImageAttachment = useAttachmentStore((state) => state.addPastedImageAttachment);
   const addScreenshotAttachment = useAttachmentStore((state) => state.addScreenshotAttachment);
   const confirmScreenshotAttachment = useAttachmentStore((state) => state.confirmScreenshotAttachment);
   const cancelScreenshotAttachment = useAttachmentStore((state) => state.cancelScreenshotAttachment);
@@ -143,9 +160,169 @@ export function AppShell() {
     }
   }, [hydrated, loadTaskAppsByTaskId, mode, selectedTaskId]);
 
+  const [trashOpen, setTrashOpen] = useState(false);
+  const [undoToast, setUndoToast] = useState<UndoToastState | null>(null);
+  const [leavingTaskIds, setLeavingTaskIds] = useState<string[]>([]);
+  const overdueTasks = getOverdueTasks(tasks);
+  const undoToastIdRef = useRef(0);
+
+  // Mark a card as leaving, let the exit animation play, then commit the
+  // store mutation and clear the mark. Pending commits are flushed on unmount
+  // so a mode switch (or teardown) never loses a queued mutation.
+  const pendingExitCommitsRef = useRef<Map<number, () => void>>(new Map());
+  const commitAfterExit = useCallback((taskId: string, commit: () => void) => {
+    setLeavingTaskIds((current) => (current.includes(taskId) ? current : [...current, taskId]));
+    const run = () => {
+      commit();
+      setLeavingTaskIds((current) => current.filter((id) => id !== taskId));
+    };
+    const timeoutId = window.setTimeout(() => {
+      pendingExitCommitsRef.current.delete(timeoutId);
+      run();
+    }, LIST_EXIT_MS);
+    pendingExitCommitsRef.current.set(timeoutId, run);
+  }, []);
+
+  useEffect(() => () => {
+    pendingExitCommitsRef.current.forEach((run, timeoutId) => {
+      window.clearTimeout(timeoutId);
+      run();
+    });
+    pendingExitCommitsRef.current.clear();
+  }, []);
+  const trashedTasks = tasks.filter((task) => task.deletedAt);
+  const trashedCount = trashedTasks.length;
+
+  const showUndoToast = useCallback((message: string, onUndo: () => void) => {
+    undoToastIdRef.current += 1;
+    setUndoToast({ id: undoToastIdRef.current, message, onUndo });
+  }, []);
+
+  const runUndoToast = useCallback(() => {
+    setUndoToast((current) => {
+      current?.onUndo();
+      return null;
+    });
+  }, []);
+
+  // Ctrl+Z triggers the pending undo while the toast is visible.
+  useEffect(() => {
+    if (!undoToast) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!event.ctrlKey || event.key.toLowerCase() !== "z") {
+        return;
+      }
+      const target = event.target;
+      if (target instanceof HTMLElement && target.closest("input, textarea, [contenteditable='true']")) {
+        return;
+      }
+      event.preventDefault();
+      runUndoToast();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [runUndoToast, undoToast]);
+
+  // Move to trash instead of hard-deleting; attachments are cleaned up only on purge.
   const handleDeleteTask = (id: string) => {
-    void deleteTaskWithAttachmentCleanup(id, deleteTask);
+    const task = useTaskStore.getState().tasks.find((candidate) => candidate.id === id && !candidate.deletedAt);
+    if (!task) {
+      return;
+    }
+
+    commitAfterExit(id, () => {
+      if (!trashTask(id)) {
+        return;
+      }
+
+      showUndoToast(`${t("trash.movedToast")}「${task.title}」`, () => {
+        restoreTask(id);
+      });
+    });
   };
+
+  // Completing a task in Today removes its view from the list; delay the
+  // store toggle so the card can play its exit animation first. The checkbox
+  // itself flips optimistically inside TaskItem.
+  const handleToggleTask = (id: string) => {
+    const state = useTaskStore.getState();
+    const task = state.tasks.find((candidate) => candidate.id === id);
+    if (!task) {
+      return;
+    }
+
+    const today = getLocalDateKey();
+    const viewLeavesList = state.activeFilter === "today" && (
+      task.completed
+        ? // Reopening from the completed-today section removes it from that list.
+          task.completedAt?.slice(0, 10) === today
+        : // Completing removes the view when no other open today-task shares the stack.
+          !state.tasks.some((candidate) =>
+            candidate.id !== id &&
+            candidate.stackId === task.stackId &&
+            !candidate.deletedAt &&
+            !candidate.completed &&
+            candidate.plannedDate === today,
+          )
+    );
+
+    if (viewLeavesList && mode === "normal") {
+      commitAfterExit(id, () => toggleTask(id));
+      return;
+    }
+
+    toggleTask(id);
+  };
+
+  const handleDropToTrash = (taskIds: string[]) => {
+    const trashedIds = taskIds.filter((id) => trashTask(id));
+    if (trashedIds.length === 0) {
+      return;
+    }
+
+    showUndoToast(`${t("trash.movedToast")} (${trashedIds.length})`, () => {
+      trashedIds.forEach((id) => restoreTask(id));
+    });
+  };
+
+  const handleMoveTaskToStack = (taskId: string, targetStackId: string, targetIndex?: number) => {
+    const moved = moveTaskToStack(taskId, targetStackId, targetIndex);
+    if (moved) {
+      showUndoToast(t("stack.mergedToast"), () => {
+        undoLastMerge();
+      });
+    }
+    return moved;
+  };
+
+  const handlePurgeTask = useCallback((id: string) => {
+    void deleteTaskWithAttachmentCleanup(id, deleteTask);
+  }, [deleteTask, deleteTaskWithAttachmentCleanup]);
+
+  const handleEmptyTrash = () => {
+    useTaskStore.getState().getTrashedTasks().forEach((task) => handlePurgeTask(task.id));
+  };
+
+  // Auto-purge trashed tasks older than the retention window once per launch.
+  const autoPurgeRanRef = useRef(false);
+  useEffect(() => {
+    if (!hydrated || autoPurgeRanRef.current) {
+      return;
+    }
+
+    autoPurgeRanRef.current = true;
+    const cutoff = Date.now() - TRASH_RETENTION_MS;
+    useTaskStore.getState().getTrashedTasks().forEach((task) => {
+      const deletedAtMs = task.deletedAt ? Date.parse(task.deletedAt) : Number.NaN;
+      if (Number.isFinite(deletedAtMs) && deletedAtMs < cutoff) {
+        handlePurgeTask(task.id);
+      }
+    });
+  }, [handlePurgeTask, hydrated]);
 
   if (!hydrated) {
     return (
@@ -205,6 +382,12 @@ export function AppShell() {
           onAddImageAttachment={(taskId) => {
             void addImageAttachment(taskId);
           }}
+          onAddDroppedImageAttachments={(taskId, paths) => {
+            void addDroppedImageAttachments(taskId, paths);
+          }}
+          onAddPastedImageAttachment={(taskId, bytes, mimeType) => {
+            void addPastedImageAttachment(taskId, bytes, mimeType);
+          }}
           onAddScreenshotAttachment={(taskId) => {
             void addScreenshotAttachment(taskId);
           }}
@@ -232,12 +415,21 @@ export function AppShell() {
           onSelectTask={selectTask}
           onSearchChange={setSearchQuery}
           onSwitchToPin={() => switchModeWithTransition("pin")}
-          onMoveTaskToStack={moveTaskToStack}
+          onMoveTaskToStack={handleMoveTaskToStack}
           onReorderStacks={reorderStacks}
           onReorderTaskWithinStack={reorderTaskWithinStack}
           onSplitTaskToNewStack={splitTaskToNewStack}
+          onSidebarDrop={applySidebarDrop}
+          onDropToTrash={handleDropToTrash}
+          onOpenTrash={() => setTrashOpen(true)}
+          trashedCount={trashedCount}
+          leavingTaskIds={leavingTaskIds}
+          overdueTasks={overdueTasks}
+          onMoveAllOverdueToToday={() => {
+            applySidebarDrop(overdueTasks.map((task) => task.id), "today");
+          }}
           onToggleStackCollapsed={toggleStackCollapsed}
-          onToggleTask={toggleTask}
+          onToggleTask={handleToggleTask}
           onUpdateTask={updateTask}
           modeTransition={modeTransition}
           persistenceError={error}
@@ -249,6 +441,25 @@ export function AppShell() {
           tasks={tasks}
         />
       </div>
+      <TrashPanel
+        open={trashOpen}
+        trashedTasks={trashedTasks}
+        onClose={() => setTrashOpen(false)}
+        onEmpty={handleEmptyTrash}
+        onPurge={handlePurgeTask}
+        onRestore={(id) => {
+          restoreTask(id);
+        }}
+      />
+      {undoToast && (
+        <UndoToast
+          actionLabel={t("common.undo")}
+          key={undoToast.id}
+          message={undoToast.message}
+          onAction={runUndoToast}
+          onDismiss={() => setUndoToast(null)}
+        />
+      )}
     </div>
   );
 }

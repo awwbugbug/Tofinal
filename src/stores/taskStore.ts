@@ -27,6 +27,10 @@ type TaskActions = {
   updateTask: (id: string, update: TaskUpdate) => boolean;
   retryPersistTasks: () => void;
   deleteTask: (id: string) => void;
+  trashTask: (id: string) => boolean;
+  restoreTask: (id: string) => boolean;
+  getTrashedTasks: () => Task[];
+  undoLastMerge: () => boolean;
   toggleTask: (id: string) => void;
   togglePinned: (id: string) => void;
   toggleStackCollapsed: (stackId: string) => void;
@@ -34,6 +38,7 @@ type TaskActions = {
   reorderTaskWithinStack: (stackId: string, taskId: string, targetIndex: number) => boolean;
   moveTaskToStack: (taskId: string, targetStackId: string, targetIndex?: number) => boolean;
   splitTaskToNewStack: (taskId: string, targetGlobalIndex: number, visibleStackIds?: string[]) => boolean;
+  applySidebarDrop: (taskIds: string[], target: TaskFilter) => boolean;
   selectTask: (id: string) => void;
   setMode: (mode: AppMode) => void;
   setActiveFilter: (filter: TaskFilter) => void;
@@ -93,6 +98,7 @@ const createTask = (
   stackId: `stack-${id}`,
   stackOrder: 0,
   completedAt: null,
+  deletedAt: null,
 });
 
 const initialState = (): TaskState => ({
@@ -135,16 +141,20 @@ const taskMatchesFilter = (task: Task, filter: TaskFilter) => {
   return task.pinned;
 };
 
-const filterTasks = (tasks: Task[], filter: TaskFilter, query = "") => applySearch(tasks.filter((task) => taskMatchesFilter(task, filter)), query);
+const filterTasks = (tasks: Task[], filter: TaskFilter, query = "") =>
+  applySearch(tasks.filter((task) => !task.deletedAt && taskMatchesFilter(task, filter)), query);
 
 const filterTodayCompletedTasks = (tasks: Task[], query = "") => {
   const today = getLocalDateKey();
-  return applySearch(tasks.filter((task) => task.completed && task.completedAt?.slice(0, 10) === today), query);
+  return applySearch(tasks.filter((task) => !task.deletedAt && task.completed && task.completedAt?.slice(0, 10) === today), query);
 };
 
 export const buildStackViews = (tasks: Task[], stacks: TaskStack[]): TaskStackView[] => {
   const tasksByStackId = new Map<string, Task[]>();
   for (const task of tasks) {
+    if (task.deletedAt) {
+      continue;
+    }
     const stackTasks = tasksByStackId.get(task.stackId) ?? [];
     stackTasks.push(task);
     tasksByStackId.set(task.stackId, stackTasks);
@@ -195,6 +205,17 @@ const filterTodayCompletedStackViews = (tasks: Task[], stacks: TaskStack[], quer
 
 const visibleTaskIdsForViews = (views: TaskStackView[]) => new Set(views.flatMap((view) => view.tasks.map((task) => task.id)));
 
+/** Incomplete tasks planned before today, oldest plan first (Today's overdue section). */
+export const getOverdueTasks = (tasks: Task[], todayKey = getLocalDateKey()) =>
+  tasks
+    .filter((task) => !task.deletedAt && !task.completed && task.plannedDate !== null && task.plannedDate < todayKey)
+    .sort(
+      (first, second) =>
+        (first.plannedDate ?? "").localeCompare(second.plannedDate ?? "") ||
+        first.createdAt.localeCompare(second.createdAt) ||
+        first.id.localeCompare(second.id),
+    );
+
 const selectVisibleTask = (
   tasks: Task[],
   stacks: TaskStack[],
@@ -204,6 +225,10 @@ const selectVisibleTask = (
 ) => {
   const visibleViews = filterStackViews(tasks, stacks, activeFilter, searchQuery);
   const visibleTaskIds = visibleTaskIdsForViews(visibleViews);
+  if (activeFilter === "today") {
+    // The overdue section renders alongside Today, so its tasks stay selectable.
+    getOverdueTasks(tasks).forEach((task) => visibleTaskIds.add(task.id));
+  }
   if (selectedTaskId && visibleTaskIds.has(selectedTaskId)) {
     return selectedTaskId;
   }
@@ -334,6 +359,7 @@ const createStackIdForTask = (taskId: string, stacks: TaskStack[]) => {
 const createTaskStoreState: StateCreator<TaskStore> = (set, get) => {
   let saveChain = Promise.resolve();
   let latestSaveRequest = 0;
+  let lastMergeSnapshot: TaskSnapshot | null = null;
 
   const canMutateTasks = () => get().hydrated && !get().loading;
 
@@ -490,6 +516,96 @@ const createTaskStoreState: StateCreator<TaskStore> = (set, get) => {
       set({ tasks, stacks, selectedTaskId });
       queuePersistTasks();
     },
+    trashTask: (id) => {
+      if (!canMutateTasks()) {
+        return false;
+      }
+
+      const task = get().tasks.find((candidate) => candidate.id === id && !candidate.deletedAt);
+      if (!task) {
+        return false;
+      }
+
+      lastMergeSnapshot = null;
+      const timestamp = nowIso();
+      let tasks = get().tasks;
+      let stacks = get().stacks;
+      const stackMates = tasks.filter((candidate) => candidate.stackId === task.stackId && candidate.id !== id);
+
+      if (stackMates.length === 0) {
+        // Already a singleton: keep the stack row; hiding the task hides the view.
+        tasks = tasks.map((candidate) =>
+          candidate.id === id ? { ...candidate, deletedAt: timestamp, updatedAt: timestamp } : candidate,
+        );
+      } else {
+        // Detach into a fresh singleton stack so restore always lands cleanly.
+        const trashStackId = createStackIdForTask(id, stacks);
+        const maxSortOrder = Math.max(0, ...stacks.map((stack) => stack.sortOrder));
+        tasks = tasks.map((candidate) =>
+          candidate.id === id
+            ? { ...candidate, deletedAt: timestamp, updatedAt: timestamp, stackId: trashStackId, stackOrder: 0 }
+            : candidate,
+        );
+        tasks = normalizeStackTasks(tasks, task.stackId, timestamp);
+        stacks = [
+          ...stacks,
+          { id: trashStackId, sortOrder: maxSortOrder + 1, collapsed: true, createdAt: timestamp, updatedAt: timestamp },
+        ];
+      }
+
+      const selectedTaskId = selectVisibleTask(tasks, stacks, get().selectedTaskId === id ? null : get().selectedTaskId, get().activeFilter, get().searchQuery);
+
+      set({ tasks, stacks, selectedTaskId });
+      queuePersistTasks();
+      return true;
+    },
+    restoreTask: (id) => {
+      if (!canMutateTasks()) {
+        return false;
+      }
+
+      const task = get().tasks.find((candidate) => candidate.id === id && candidate.deletedAt);
+      if (!task) {
+        return false;
+      }
+
+      const timestamp = nowIso();
+      const minSortOrder = Math.min(0, ...get().stacks.map((stack) => stack.sortOrder));
+      const tasks = get().tasks.map((candidate) =>
+        candidate.id === id ? { ...candidate, deletedAt: null, updatedAt: timestamp, stackOrder: 0 } : candidate,
+      );
+      const hasStackRow = get().stacks.some((stack) => stack.id === task.stackId);
+      const stacks = hasStackRow
+        ? get().stacks.map((stack) =>
+            stack.id === task.stackId ? { ...stack, sortOrder: minSortOrder - 1, updatedAt: timestamp } : stack,
+          )
+        : [
+            { id: task.stackId, sortOrder: minSortOrder - 1, collapsed: true, createdAt: timestamp, updatedAt: timestamp },
+            ...get().stacks,
+          ];
+
+      set({ tasks, stacks, selectedTaskId: id });
+      queuePersistTasks();
+      return true;
+    },
+    getTrashedTasks: () =>
+      get().tasks
+        .filter((task) => task.deletedAt)
+        .sort((first, second) => (second.deletedAt ?? "").localeCompare(first.deletedAt ?? "")),
+    undoLastMerge: () => {
+      if (!lastMergeSnapshot || !canMutateTasks()) {
+        return false;
+      }
+
+      const snapshot = lastMergeSnapshot;
+      lastMergeSnapshot = null;
+      const stacks = snapshot.stacks ?? [];
+      const selectedTaskId = selectVisibleTask(snapshot.tasks, stacks, get().selectedTaskId, get().activeFilter, get().searchQuery);
+
+      set({ tasks: snapshot.tasks, stacks, selectedTaskId });
+      queuePersistTasks();
+      return true;
+    },
     toggleTask: (id) => {
       if (!canMutateTasks()) {
         return;
@@ -636,6 +752,7 @@ const createTaskStoreState: StateCreator<TaskStore> = (set, get) => {
         .map((stack) => stack.id === targetStackId ? { ...stack, updatedAt: timestamp } : stack);
       const selectedTaskId = selectVisibleTask(tasks, stacks, get().selectedTaskId, get().activeFilter, get().searchQuery);
 
+      lastMergeSnapshot = previousSnapshot;
       set({ tasks, stacks: normalizeGlobalStackOrders(stacks, timestamp), selectedTaskId });
       persistStackMutation(previousSnapshot);
       return true;
@@ -684,6 +801,47 @@ const createTaskStoreState: StateCreator<TaskStore> = (set, get) => {
       const selectedTaskId = selectVisibleTask(tasks, stacks, get().selectedTaskId, get().activeFilter, get().searchQuery);
       set({ tasks, stacks, selectedTaskId });
       persistStackMutation(previousSnapshot);
+      return true;
+    },
+    applySidebarDrop: (taskIds, target) => {
+      if (!canMutateTasks() || taskIds.length === 0) {
+        return false;
+      }
+
+      const idSet = new Set(taskIds);
+      const timestamp = nowIso();
+      const today = getLocalDateKey();
+      let changed = false;
+      const tasks = get().tasks.map((task) => {
+        if (!idSet.has(task.id)) {
+          return task;
+        }
+
+        const next = { ...task };
+        if (target === "today" && task.plannedDate !== today) {
+          next.plannedDate = today;
+        } else if (target === "all" && task.plannedDate !== null) {
+          next.plannedDate = null;
+        } else if (target === "important" && task.priority !== "important") {
+          next.priority = "important";
+        } else if (target === "pinned" && !task.pinned) {
+          next.pinned = true;
+        } else {
+          return task;
+        }
+
+        changed = true;
+        next.updatedAt = timestamp;
+        return next;
+      });
+
+      if (!changed) {
+        return false;
+      }
+
+      const selectedTaskId = selectVisibleTask(tasks, get().stacks, get().selectedTaskId, get().activeFilter, get().searchQuery);
+      set({ tasks, selectedTaskId });
+      queuePersistTasks();
       return true;
     },
     selectTask: (id) => {

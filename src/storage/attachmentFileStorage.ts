@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   BaseDirectory,
@@ -55,9 +56,30 @@ export type WriteScreenshotInput = {
   height: number | null;
 };
 
+export type DroppedImageFile = {
+  fileName: string;
+  bytes: Uint8Array;
+};
+
+export type ImportDroppedImageInput = {
+  taskId: string;
+  attachmentId: string;
+  sourcePath: string;
+};
+
+export type WritePastedImageInput = {
+  taskId: string;
+  attachmentId: string;
+  originalName: string;
+  bytes: Uint8Array;
+  mimeType: string;
+};
+
 export type AttachmentFileStorage = {
   pickImageFiles: () => Promise<string[]>;
   copyImageToAppData: (input: CopyImageInput) => Promise<CopiedAttachmentFile>;
+  importDroppedImageToAppData: (input: ImportDroppedImageInput) => Promise<CopiedAttachmentFile>;
+  writePastedImageToAppData: (input: WritePastedImageInput) => Promise<CopiedAttachmentFile>;
   writeScreenshotToAppData: (input: WriteScreenshotInput) => Promise<CopiedAttachmentFile>;
   deleteAttachmentFile: (relativePath: string) => Promise<void>;
   resolvePreview: (relativePath: string, mimeType: string) => Promise<AttachmentPreview>;
@@ -67,6 +89,7 @@ export type AttachmentFileStorage = {
 
 export type AttachmentFileStorageRuntime = {
   pickImageFiles: () => Promise<string[]>;
+  readDroppedImage: (path: string) => Promise<DroppedImageFile>;
   stat: (path: string, options?: unknown) => Promise<FileStat>;
   readFile: (path: string, options?: unknown) => Promise<Uint8Array>;
   writeFile: (path: string, data: Uint8Array, options?: unknown) => Promise<void>;
@@ -153,6 +176,71 @@ export const createAttachmentFileStorage = (
       height: null,
     };
   },
+  async importDroppedImageToAppData({ attachmentId, sourcePath, taskId }) {
+    // The dropped path lives outside the fs plugin scope; the narrow Rust
+    // command validates extension and size and returns the file bytes.
+    const dropped = await runtime.readDroppedImage(sourcePath);
+    if (dropped.bytes.byteLength === 0) {
+      throw new Error("Dropped image file is empty.");
+    }
+    if (dropped.bytes.byteLength > MAX_IMAGE_BYTES) {
+      throw new Error("Dropped image is larger than 10 MB.");
+    }
+
+    const extension = extensionFromName(dropped.fileName);
+    if (!extension) {
+      throw new Error("Unsupported image type. Use PNG, JPG, JPEG, or WebP.");
+    }
+
+    const storedExtension = normalizeStoredExtension(extension);
+    const storedName = `${sanitizePathSegment(attachmentId)}.${storedExtension}`;
+    const directory = attachmentDirectory(taskId);
+    const relativePath = `${directory}/${storedName}`;
+
+    await runtime.mkdir(directory, { ...appDataOptions, recursive: true });
+    await runtime.writeFile(relativePath, dropped.bytes, appDataOptions);
+
+    return {
+      originalName: dropped.fileName,
+      storedName,
+      relativePath,
+      mimeType: IMAGE_EXTENSIONS[extension],
+      sizeBytes: dropped.bytes.byteLength,
+      width: null,
+      height: null,
+    };
+  },
+  async writePastedImageToAppData({ attachmentId, bytes, mimeType, originalName, taskId }) {
+    if (bytes.byteLength === 0) {
+      throw new Error("Pasted image is empty.");
+    }
+    if (bytes.byteLength > MAX_IMAGE_BYTES) {
+      throw new Error("Pasted image is larger than 10 MB.");
+    }
+
+    const extensionEntry = Object.entries(IMAGE_EXTENSIONS).find(([, mime]) => mime === mimeType);
+    if (!extensionEntry) {
+      throw new Error("Unsupported image type. Use PNG, JPG, JPEG, or WebP.");
+    }
+
+    const storedExtension = normalizeStoredExtension(extensionEntry[0] as SupportedImageExtension);
+    const storedName = `${sanitizePathSegment(attachmentId)}.${storedExtension}`;
+    const directory = attachmentDirectory(taskId);
+    const relativePath = `${directory}/${storedName}`;
+
+    await runtime.mkdir(directory, { ...appDataOptions, recursive: true });
+    await runtime.writeFile(relativePath, bytes, appDataOptions);
+
+    return {
+      originalName,
+      storedName,
+      relativePath,
+      mimeType,
+      sizeBytes: bytes.byteLength,
+      width: null,
+      height: null,
+    };
+  },
   async writeScreenshotToAppData({ attachmentId, height, originalName, pngBytes, taskId, width }) {
     if (pngBytes.byteLength === 0) {
       throw new Error("Screenshot capture returned an empty PNG.");
@@ -217,8 +305,17 @@ const pickImageFiles = async () => {
   return Array.isArray(selected) ? selected : [selected];
 };
 
+const readDroppedImage = async (path: string): Promise<DroppedImageFile> => {
+  const result = await invoke<{ fileName: string; bytes: number[] }>("read_dropped_image", { path });
+  return {
+    fileName: result.fileName,
+    bytes: result.bytes instanceof Uint8Array ? result.bytes : Uint8Array.from(result.bytes),
+  };
+};
+
 export const tauriAttachmentFileStorage = createAttachmentFileStorage({
   pickImageFiles,
+  readDroppedImage,
   stat: (path, options) => stat(path, options as Parameters<typeof stat>[1]),
   readFile: (path, options) => readFile(path, options as Parameters<typeof readFile>[1]),
   writeFile: (path, data, options) => writeFile(path, data, options as Parameters<typeof writeFile>[2]),

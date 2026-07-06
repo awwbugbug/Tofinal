@@ -14,6 +14,7 @@ export type Task = {
   stackId: string;
   stackOrder: number;
   completedAt: string | null;
+  deletedAt: string | null;
 };
 
 export type TaskStack = {

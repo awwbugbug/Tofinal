@@ -1,10 +1,14 @@
 import { type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Layers3 } from "lucide-react";
 
 import { TaskItem } from "@/components/task/TaskItem";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useI18n } from "@/i18n/useI18n";
-import type { Task, TaskStackView } from "@/types/task";
+import { cn } from "@/lib/utils";
+import { useDragStore, type DropTargetId } from "@/stores/dragStore";
+import { getLocalDateKey } from "@/stores/taskStore";
+import type { Task, TaskFilter, TaskStackView } from "@/types/task";
 
 type TaskListProps = {
   tasks?: Task[];
@@ -13,6 +17,7 @@ type TaskListProps = {
   compact?: boolean;
   embedded?: boolean;
   limit?: number;
+  overdue?: boolean;
   testId?: string;
   onToggle: (id: string) => void;
   onSelect: (id: string) => void;
@@ -21,6 +26,9 @@ type TaskListProps = {
   onReorderTaskWithinStack?: (stackId: string, taskId: string, targetIndex: number) => boolean;
   onMoveTaskToStack?: (taskId: string, targetStackId: string, targetIndex?: number) => boolean;
   onSplitTaskToNewStack?: (taskId: string, targetGlobalIndex: number, visibleStackIds: string[]) => boolean;
+  onSidebarDrop?: (taskIds: string[], target: TaskFilter) => boolean;
+  onDropToTrash?: (taskIds: string[]) => void;
+  leavingTaskIds?: string[];
 };
 
 type DragState = {
@@ -34,11 +42,14 @@ type DragState = {
   startY: number;
 };
 
+type DragSource = Pick<DragState, "kind" | "sourceStackId" | "sourceStackSize" | "sourceTaskId">;
+
 type DropPreview =
   | { kind: "stack-reorder"; targetIndex: number }
   | { kind: "task-reorder"; targetIndex: number; targetStackId: string }
   | { kind: "merge"; targetStackId: string }
-  | { kind: "split"; targetIndex: number };
+  | { kind: "split"; targetIndex: number }
+  | { kind: "sidebar"; target: DropTargetId };
 
 type RectSnapshot = {
   id: string;
@@ -49,23 +60,61 @@ type RectSnapshot = {
   right: number;
 };
 
+type SidebarTargetRect = {
+  target: DropTargetId;
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+};
+
 type DragMeasurements = {
   stacks: RectSnapshot[];
   tasks: RectSnapshot[];
+  sidebarTargets: SidebarTargetRect[];
   stackGap: number;
   taskGap: number;
   draggedStackHeight: number;
   draggedTaskHeight: number;
+  draggedRect: { left: number; top: number; width: number; height: number };
   scrollParent: HTMLElement | null;
   scrollTop: number;
+};
+
+type GhostContent = {
+  task: Task;
+  stackCount?: number;
+  subtask: boolean;
+  collapsedMulti: boolean;
+};
+
+type GhostExitState = {
+  drag: DragSource;
+  content: GhostContent;
+  left: number;
+  top: number;
+  width: number;
+  mode: "return" | "absorb";
+  exitX: number;
+  exitY: number;
+  exitScale: number;
+  exitOpacity: number;
 };
 
 const DRAG_START_THRESHOLD = 6;
 const DEFAULT_STACK_GAP = 16;
 const DEFAULT_TASK_GAP = 9;
+const GHOST_EXIT_MS = 260;
+const UNFOLD_STAGGER_MS = 50;
+const UNFOLD_STAGGER_CAP_MS = 300;
+const FOLD_MS = 240;
+const FOLD_STAGGER_MS = 40;
+const FOLD_STAGGER_CAP_MS = 240;
 // Fraction of a card's height near its top/bottom edge that resolves to
 // insertion instead of merge while dragging a task over another stack.
 const MERGE_EDGE_FRACTION = 0.28;
+
+const noop = () => undefined;
 
 const isInteractiveElement = (target: EventTarget | null, currentTarget?: EventTarget | null) => {
   if (!(target instanceof HTMLElement)) {
@@ -123,17 +172,32 @@ const getScrollParent = (element: HTMLElement | null): HTMLElement | null => {
   return null;
 };
 
+const dragHidesTopLevel = (drag: DragSource | null, stackId: string) =>
+  Boolean(drag && drag.sourceStackId === stackId && (drag.kind === "stack" || drag.sourceStackSize === 1));
+
+const dragHidesTask = (drag: DragSource | null, taskId: string) =>
+  Boolean(drag && drag.kind === "task" && drag.sourceTaskId === taskId && drag.sourceStackSize > 1);
+
+const dateKeyToUtc = (key: string) => {
+  const [year, month, day] = key.split("-").map(Number);
+  return Date.UTC(year || 0, (month || 1) - 1, day || 1);
+};
+
 export function TaskList({
   compact = false,
   embedded = false,
+  leavingTaskIds = [],
   limit,
+  onDropToTrash,
   onMoveTaskToStack,
   onReorderStacks,
   onReorderTaskWithinStack,
   onSelect,
+  onSidebarDrop,
   onSplitTaskToNewStack,
   onToggle,
   onToggleStackCollapsed,
+  overdue = false,
   selectedTaskId,
   stackViews,
   tasks = [],
@@ -145,9 +209,17 @@ export function TaskList({
   const dragStateRef = useRef<DragState | null>(null);
   const dropPreviewRef = useRef<DropPreview | null>(null);
   const measurementsRef = useRef<DragMeasurements | null>(null);
+  const ghostContentRef = useRef<GhostContent | null>(null);
+  const dragDeltaRef = useRef<{ x: number; y: number } | null>(null);
+  const ghostExitTimeoutRef = useRef<number | null>(null);
+  const bodyDragStyleRef = useRef<{ userSelect: string; cursor: string } | null>(null);
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [dropPreview, setDropPreview] = useState<DropPreview | null>(null);
   const [dragDelta, setDragDelta] = useState<{ x: number; y: number } | null>(null);
+  const [ghostExit, setGhostExit] = useState<GhostExitState | null>(null);
+  const [collapsingStackIds, setCollapsingStackIds] = useState<string[]>([]);
+  const collapseTimeoutsRef = useRef<Set<number>>(new Set());
+  const overDropTarget = useDragStore((state) => state.overDropTarget);
   const views = stackViews ?? tasks.map((task, index) => ({
     stack: {
       id: task.stackId,
@@ -164,7 +236,7 @@ export function TaskList({
   } satisfies TaskStackView));
   const visibleViews = typeof limit === "number" ? views.slice(0, limit) : views;
   const visibleStackIds = useMemo(() => visibleViews.map((view) => view.stack.id), [visibleViews]);
-  const dragEnabled = !compact && Boolean(onReorderStacks || onMoveTaskToStack || onReorderTaskWithinStack || onSplitTaskToNewStack);
+  const dragEnabled = !compact && Boolean(onReorderStacks || onMoveTaskToStack || onReorderTaskWithinStack || onSplitTaskToNewStack || onSidebarDrop || onDropToTrash);
 
   useEffect(() => {
     dragStateRef.current = dragState;
@@ -174,13 +246,66 @@ export function TaskList({
     dropPreviewRef.current = dropPreview;
   }, [dropPreview]);
 
+  useEffect(() => () => {
+    if (ghostExitTimeoutRef.current !== null) {
+      window.clearTimeout(ghostExitTimeoutRef.current);
+    }
+    collapseTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
+    collapseTimeoutsRef.current.clear();
+    if (bodyDragStyleRef.current) {
+      document.body.style.userSelect = bodyDragStyleRef.current.userSelect;
+      document.body.style.cursor = bodyDragStyleRef.current.cursor;
+      bodyDragStyleRef.current = null;
+    }
+  }, []);
+
+  // Text selection is driven by mouse events, not pointer events, so
+  // preventDefault on pointermove does not stop the browser from sweeping a
+  // selection across the app while dragging. Disable selection globally for
+  // the duration of the drag instead (same pattern as the column resizers).
+  const lockBodyForDrag = () => {
+    if (bodyDragStyleRef.current) {
+      return;
+    }
+    bodyDragStyleRef.current = {
+      userSelect: document.body.style.userSelect,
+      cursor: document.body.style.cursor,
+    };
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "grabbing";
+    window.getSelection()?.removeAllRanges();
+  };
+
+  const unlockBodyAfterDrag = () => {
+    if (!bodyDragStyleRef.current) {
+      return;
+    }
+    document.body.style.userSelect = bodyDragStyleRef.current.userSelect;
+    document.body.style.cursor = bodyDragStyleRef.current.cursor;
+    bodyDragStyleRef.current = null;
+  };
+
   const resetDrag = () => {
     dragStateRef.current = null;
     dropPreviewRef.current = null;
     measurementsRef.current = null;
+    ghostContentRef.current = null;
+    dragDeltaRef.current = null;
     setDragState(null);
     setDropPreview(null);
     setDragDelta(null);
+    useDragStore.getState().setOverDropTarget(null);
+    unlockBodyAfterDrag();
+  };
+
+  const scheduleGhostExitCleanup = () => {
+    if (ghostExitTimeoutRef.current !== null) {
+      window.clearTimeout(ghostExitTimeoutRef.current);
+    }
+    ghostExitTimeoutRef.current = window.setTimeout(() => {
+      ghostExitTimeoutRef.current = null;
+      setGhostExit(null);
+    }, GHOST_EXIT_MS + 40);
   };
 
   const getStackFrames = () =>
@@ -194,28 +319,89 @@ export function TaskList({
         )
       : [];
     const taskRects = taskFrames.map((frame) => toRectSnapshot(frame, frame.dataset.taskId ?? ""));
-    const draggedStackHeight = stacks.find((rect) => rect.id === drag.sourceStackId)?.height ?? 0;
-    const draggedTaskHeight = taskRects.find((rect) => rect.id === drag.sourceTaskId)?.height ?? draggedStackHeight;
+    const sidebarTargets = onSidebarDrop || onDropToTrash
+      ? Array.from(document.querySelectorAll<HTMLElement>("[data-drop-target]")).flatMap<SidebarTargetRect>((element) => {
+          const target = element.dataset.dropTarget as DropTargetId;
+          if ((target === "trash" && !onDropToTrash) || (target !== "trash" && !onSidebarDrop)) {
+            return [];
+          }
+          const rect = element.getBoundingClientRect();
+          if (rect.width <= 0 || rect.height <= 0) {
+            return [];
+          }
+          return [{
+            target,
+            left: rect.left,
+            top: rect.top,
+            right: rect.right,
+            bottom: rect.bottom,
+          }];
+        })
+      : [];
+    const draggedStackRect = stacks.find((rect) => rect.id === drag.sourceStackId);
+    const draggedTaskRect = taskRects.find((rect) => rect.id === drag.sourceTaskId);
+    const draggedSource = (drag.kind === "task" ? draggedTaskRect : undefined) ?? draggedStackRect;
     const scrollParent = getScrollParent(listRef.current);
 
     return {
       stacks,
       tasks: taskRects,
+      sidebarTargets,
       stackGap: getFirstPositiveGap(stacks, DEFAULT_STACK_GAP),
       taskGap: getFirstPositiveGap(taskRects, DEFAULT_TASK_GAP),
-      draggedStackHeight,
-      draggedTaskHeight,
+      draggedStackHeight: draggedStackRect?.height ?? 0,
+      draggedTaskHeight: draggedTaskRect?.height ?? draggedStackRect?.height ?? 0,
+      draggedRect: draggedSource
+        ? { left: draggedSource.left, top: draggedSource.top, width: draggedSource.right - draggedSource.left, height: draggedSource.height }
+        : { left: 0, top: 0, width: 0, height: 0 },
       scrollParent,
       scrollTop: scrollParent?.scrollTop ?? 0,
     };
   };
 
+  const captureGhostContent = (drag: DragState): GhostContent | null => {
+    const view = visibleViews.find((candidate) => candidate.stack.id === drag.sourceStackId);
+    if (!view) {
+      return null;
+    }
+
+    const task = drag.kind === "task"
+      ? view.tasks.find((candidate) => candidate.id === drag.sourceTaskId) ?? view.mainTask
+      : view.mainTask;
+    const collapsedMulti = drag.kind === "stack" && view.totalCount > 1;
+
+    return {
+      task,
+      stackCount: collapsedMulti ? view.totalCount : undefined,
+      subtask: drag.kind === "task" && drag.sourceStackSize > 1 && task.id !== view.mainTask.id,
+      collapsedMulti,
+    };
+  };
+
+  const taskIdsForDrag = (drag: DragSource): string[] => {
+    if (drag.kind === "task") {
+      return drag.sourceTaskId ? [drag.sourceTaskId] : [];
+    }
+
+    const view = visibleViews.find((candidate) => candidate.stack.id === drag.sourceStackId);
+    return view ? view.tasks.map((task) => task.id) : [];
+  };
+
   // All drag geometry works in the coordinate space captured at drag start, so
   // push-apart transforms on siblings never feed back into hit testing.
+  // Sidebar targets are checked in raw viewport coordinates (the sidebar does
+  // not scroll with the task list).
   const resolveDropPreview = (drag: DragState, clientX: number, clientY: number): DropPreview | null => {
     const measurements = measurementsRef.current;
     if (!measurements) {
       return null;
+    }
+
+    const sidebarTarget = measurements.sidebarTargets.find((rect) =>
+      clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom,
+    );
+    if (sidebarTarget) {
+      return { kind: "sidebar", target: sidebarTarget.target };
     }
 
     const scrollDelta = (measurements.scrollParent?.scrollTop ?? 0) - measurements.scrollTop;
@@ -225,6 +411,7 @@ export function TaskList({
     if (drag.kind === "task") {
       const sourceStackRect = measurements.stacks.find((rect) => rect.id === drag.sourceStackId);
       if (
+        onReorderTaskWithinStack &&
         measurements.tasks.length > 1 &&
         sourceStackRect &&
         pointerY >= sourceStackRect.top &&
@@ -237,38 +424,43 @@ export function TaskList({
         };
       }
 
-      const mergeTarget = measurements.stacks.find((rect) => {
-        if (rect.id === drag.sourceStackId || rect.height <= 0) {
-          return false;
-        }
-        const edge = rect.height * MERGE_EDGE_FRACTION;
-        return (
-          clientX >= rect.left &&
-          clientX <= rect.right &&
-          pointerY >= rect.top + edge &&
-          pointerY <= rect.top + rect.height - edge
-        );
-      });
+      const mergeTarget = onMoveTaskToStack
+        ? measurements.stacks.find((rect) => {
+            if (rect.id === drag.sourceStackId || rect.height <= 0) {
+              return false;
+            }
+            const edge = rect.height * MERGE_EDGE_FRACTION;
+            return (
+              clientX >= rect.left &&
+              clientX <= rect.right &&
+              pointerY >= rect.top + edge &&
+              pointerY <= rect.top + rect.height - edge
+            );
+          })
+        : undefined;
       if (mergeTarget) {
         return { kind: "merge", targetStackId: mergeTarget.id };
       }
 
       if (drag.sourceStackSize > 1) {
-        return { kind: "split", targetIndex };
+        return onSplitTaskToNewStack ? { kind: "split", targetIndex } : null;
       }
 
-      return { kind: "stack-reorder", targetIndex };
+      return onReorderStacks ? { kind: "stack-reorder", targetIndex } : null;
     }
 
-    return { kind: "stack-reorder", targetIndex };
+    return onReorderStacks ? { kind: "stack-reorder", targetIndex } : null;
   };
 
-  const beginDrag = (
-    event: ReactPointerEvent,
-    drag: Pick<DragState, "kind" | "sourceStackId" | "sourceStackSize" | "sourceTaskId">,
-  ) => {
+  const beginDrag = (event: ReactPointerEvent, drag: DragSource) => {
     if (!dragEnabled || event.button !== 0 || isInteractiveElement(event.target, event.currentTarget)) {
       return;
+    }
+
+    if (ghostExitTimeoutRef.current !== null) {
+      window.clearTimeout(ghostExitTimeoutRef.current);
+      ghostExitTimeoutRef.current = null;
+      setGhostExit(null);
     }
 
     const nextDragState = {
@@ -283,7 +475,7 @@ export function TaskList({
   };
 
   const handleDrop = (drag: DragState, preview: DropPreview | null) => {
-    if (!preview) {
+    if (!preview || preview.kind === "sidebar") {
       return;
     }
 
@@ -310,6 +502,55 @@ export function TaskList({
     onSplitTaskToNewStack?.(drag.sourceTaskId ?? "", preview.targetIndex, visibleStackIds);
   };
 
+  const beginGhostReturn = (drag: DragState) => {
+    const measurements = measurementsRef.current;
+    const content = ghostContentRef.current;
+    const delta = dragDeltaRef.current;
+    if (!measurements || !content || !delta || measurements.draggedRect.width <= 0) {
+      return;
+    }
+
+    setGhostExit({
+      drag,
+      content,
+      left: measurements.draggedRect.left + delta.x,
+      top: measurements.draggedRect.top + delta.y,
+      width: measurements.draggedRect.width,
+      mode: "return",
+      exitX: -delta.x,
+      exitY: -delta.y,
+      exitScale: 1,
+      exitOpacity: 1,
+    });
+    scheduleGhostExitCleanup();
+  };
+
+  const beginGhostAbsorb = (drag: DragState, target: DropTargetId) => {
+    const measurements = measurementsRef.current;
+    const content = ghostContentRef.current;
+    const delta = dragDeltaRef.current;
+    const targetRect = measurements?.sidebarTargets.find((rect) => rect.target === target);
+    if (!measurements || !content || !delta || !targetRect || measurements.draggedRect.width <= 0) {
+      return;
+    }
+
+    const ghostLeft = measurements.draggedRect.left + delta.x;
+    const ghostTop = measurements.draggedRect.top + delta.y;
+    setGhostExit({
+      drag,
+      content,
+      left: ghostLeft,
+      top: ghostTop,
+      width: measurements.draggedRect.width,
+      mode: "absorb",
+      exitX: (targetRect.left + targetRect.right) / 2 - (ghostLeft + measurements.draggedRect.width / 2),
+      exitY: (targetRect.top + targetRect.bottom) / 2 - (ghostTop + measurements.draggedRect.height / 2),
+      exitScale: 0.12,
+      exitOpacity: 0,
+    });
+    scheduleGhostExitCleanup();
+  };
+
   useEffect(() => {
     if (!dragState) {
       return undefined;
@@ -330,13 +571,24 @@ export function TaskList({
       const nextDragState = dragState.active ? dragState : { ...dragState, active: true };
       if (!dragState.active) {
         measurementsRef.current = captureMeasurements(nextDragState);
+        ghostContentRef.current = captureGhostContent(nextDragState);
+        lockBodyForDrag();
         setDragState(nextDragState);
         dragStateRef.current = nextDragState;
       }
-      setDragDelta({ x: event.clientX - dragState.startX, y: event.clientY - dragState.startY });
+      const nextDelta = { x: event.clientX - dragState.startX, y: event.clientY - dragState.startY };
+      dragDeltaRef.current = nextDelta;
+      setDragDelta(nextDelta);
       const nextDropPreview = resolveDropPreview(nextDragState, event.clientX, event.clientY);
       dropPreviewRef.current = nextDropPreview;
       setDropPreview(nextDropPreview);
+      useDragStore.getState().setOverDropTarget(nextDropPreview?.kind === "sidebar" ? nextDropPreview.target : null);
+    };
+
+    const releaseSuppressedClick = () => {
+      window.setTimeout(() => {
+        suppressClickRef.current = false;
+      }, 0);
     };
 
     const handlePointerUp = (event: PointerEvent) => {
@@ -347,12 +599,30 @@ export function TaskList({
 
       if (latestDragState.active) {
         event.preventDefault();
-        handleDrop(latestDragState, dropPreviewRef.current);
+        const preview = dropPreviewRef.current;
+        if (preview?.kind === "sidebar") {
+          if (preview.target === "trash") {
+            onDropToTrash?.(taskIdsForDrag(latestDragState));
+          } else {
+            onSidebarDrop?.(taskIdsForDrag(latestDragState), preview.target);
+          }
+          useDragStore.getState().pulseDrop(preview.target);
+          beginGhostAbsorb(latestDragState, preview.target);
+        } else {
+          handleDrop(latestDragState, preview);
+        }
       }
       resetDrag();
-      window.setTimeout(() => {
-        suppressClickRef.current = false;
-      }, 0);
+      releaseSuppressedClick();
+    };
+
+    const cancelDrag = () => {
+      const latestDragState = dragStateRef.current;
+      if (latestDragState?.active) {
+        beginGhostReturn(latestDragState);
+      }
+      resetDrag();
+      releaseSuppressedClick();
     };
 
     const handlePointerCancel = (event: PointerEvent) => {
@@ -360,20 +630,30 @@ export function TaskList({
         return;
       }
 
-      resetDrag();
-      suppressClickRef.current = false;
+      cancelDrag();
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || !dragStateRef.current) {
+        return;
+      }
+
+      event.preventDefault();
+      cancelDrag();
     };
 
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerUp);
     window.addEventListener("pointercancel", handlePointerCancel);
+    window.addEventListener("keydown", handleKeyDown);
 
     return () => {
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
       window.removeEventListener("pointercancel", handlePointerCancel);
+      window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [dragState, dropPreview, onMoveTaskToStack, onReorderStacks, onReorderTaskWithinStack, onSplitTaskToNewStack, visibleStackIds]);
+  }, [dragState, dropPreview, onMoveTaskToStack, onReorderStacks, onReorderTaskWithinStack, onSidebarDrop, onSplitTaskToNewStack, visibleStackIds]);
 
   const suppressClickAfterDrag = (event: ReactMouseEvent) => {
     if (!suppressClickRef.current) {
@@ -393,10 +673,48 @@ export function TaskList({
     onToggleStackCollapsed?.(stackId);
   };
 
+  // Collapsing plays the reverse of the unfold animation first (children fold
+  // back under the main card, last child first), then commits the state switch.
+  const requestStackCollapse = (view: TaskStackView) => {
+    if (!onToggleStackCollapsed) {
+      return;
+    }
+
+    const stackId = view.stack.id;
+    if (collapsingStackIds.includes(stackId)) {
+      return;
+    }
+
+    const childCount = view.tasks.length - 1;
+    if (childCount <= 0) {
+      onToggleStackCollapsed(stackId);
+      return;
+    }
+
+    setCollapsingStackIds((current) => [...current, stackId]);
+    const totalMs = FOLD_MS + Math.min((childCount - 1) * FOLD_STAGGER_MS, FOLD_STAGGER_CAP_MS) + 30;
+    const timeoutId = window.setTimeout(() => {
+      collapseTimeoutsRef.current.delete(timeoutId);
+      onToggleStackCollapsed(stackId);
+      setCollapsingStackIds((current) => current.filter((id) => id !== stackId));
+    }, totalMs);
+    collapseTimeoutsRef.current.add(timeoutId);
+  };
+
+  const collapseStackFromKey = (event: ReactKeyboardEvent, view: TaskStackView) => {
+    if (event.target !== event.currentTarget || (event.key !== "Enter" && event.key !== " ")) {
+      return;
+    }
+
+    event.preventDefault();
+    requestStackCollapse(view);
+  };
+
   // Push-apart offsets derived from the snapshot geometry and the live drop
   // preview. Transforms only; layout never changes while dragging.
   const activeDrag = dragState?.active ? dragState : null;
   const measurements = activeDrag ? measurementsRef.current : null;
+  const hidingDrag: DragSource | null = activeDrag ?? (ghostExit?.mode === "return" ? ghostExit.drag : null);
   const stackShifts = new Map<string, number>();
   const taskShifts = new Map<string, number>();
   if (activeDrag && dropPreview && measurements) {
@@ -436,19 +754,69 @@ export function TaskList({
     }
   }
 
-  const buildFrameStyle = (dragging: boolean, shift: number): CSSProperties | undefined => {
-    if (dragging && dragDelta) {
-      return {
-        transform: `translate3d(${dragDelta.x}px, ${dragDelta.y}px, 0) scale(1.02)`,
-        transition: "none",
-        zIndex: 30,
-      };
-    }
-    if (shift !== 0) {
-      return { transform: `translate3d(0, ${shift}px, 0)` };
-    }
-    return undefined;
-  };
+  const frameShiftStyle = (shift: number): CSSProperties | undefined =>
+    shift !== 0 ? { transform: `translate3d(0, ${shift}px, 0)` } : undefined;
+
+  const renderGhostCard = (content: GhostContent) => (
+    <TaskItem
+      onSelect={noop}
+      onToggle={noop}
+      selected={false}
+      stackCount={content.stackCount}
+      subtask={content.subtask}
+      task={content.task}
+    />
+  );
+
+  const liveGhost = activeDrag && dragDelta && measurementsRef.current && ghostContentRef.current && measurementsRef.current.draggedRect.width > 0
+    ? createPortal(
+        <div
+          aria-hidden="true"
+          className="task-drag-ghost"
+          data-testid="task-drag-ghost"
+          style={{
+            left: measurementsRef.current.draggedRect.left,
+            top: measurementsRef.current.draggedRect.top,
+            width: measurementsRef.current.draggedRect.width,
+            transform: `translate3d(${dragDelta.x}px, ${dragDelta.y}px, 0)`,
+          }}
+        >
+          <div
+            className={cn(
+              "task-drag-ghost-inner",
+              ghostContentRef.current.collapsedMulti && "task-stack-collapsed-multi",
+              overDropTarget && "task-drag-ghost-inner-absorb",
+            )}
+          >
+            {renderGhostCard(ghostContentRef.current)}
+          </div>
+        </div>,
+        document.body,
+      )
+    : null;
+
+  const exitGhost = ghostExit
+    ? createPortal(
+        <div
+          aria-hidden="true"
+          className="task-drag-ghost task-drag-ghost-exit"
+          style={{
+            left: ghostExit.left,
+            top: ghostExit.top,
+            width: ghostExit.width,
+            "--ghost-exit-x": `${ghostExit.exitX}px`,
+            "--ghost-exit-y": `${ghostExit.exitY}px`,
+            "--ghost-exit-scale": `${ghostExit.exitScale}`,
+            "--ghost-exit-opacity": `${ghostExit.exitOpacity}`,
+          } as CSSProperties}
+        >
+          <div className={cn("task-drag-ghost-inner", ghostExit.content.collapsedMulti && "task-stack-collapsed-multi")}>
+            {renderGhostCard(ghostExit.content)}
+          </div>
+        </div>,
+        document.body,
+      )
+    : null;
 
   const renderStackMeta = (view: TaskStackView) => {
     if (view.totalCount <= 1) {
@@ -470,13 +838,12 @@ export function TaskList({
     const isSingleton = view.totalCount === 1;
     const isCollapsed = view.stack.collapsed || compact;
     const stackDropState = dropPreview?.kind === "merge" && dropPreview.targetStackId === view.stack.id ? "merge" : undefined;
-    const topLevelDragging = Boolean(
-      activeDrag &&
-      activeDrag.sourceStackId === view.stack.id &&
-      (activeDrag.kind === "stack" || activeDrag.sourceStackSize === 1),
-    );
+    const topLevelHidden = dragHidesTopLevel(hidingDrag, view.stack.id);
     const stackShift = stackShifts.get(view.stack.id) ?? 0;
     const collapsedMultiStack = !isSingleton && isCollapsed && !compact;
+    const overdueDays = overdue && view.mainTask.plannedDate
+      ? Math.max(1, Math.round((dateKeyToUtc(getLocalDateKey()) - dateKeyToUtc(view.mainTask.plannedDate)) / 86400000))
+      : undefined;
 
     if (isSingleton || isCollapsed) {
       return (
@@ -484,12 +851,11 @@ export function TaskList({
           aria-label={collapsedMultiStack ? t("stack.expand") : undefined}
           className={collapsedMultiStack ? "task-stack-shell task-stack-drag-frame task-stack-collapsed-multi" : "task-stack-shell task-stack-drag-frame"}
           data-dnd-stack-frame="true"
-          data-dragging={topLevelDragging ? "true" : undefined}
+          data-dragging={topLevelHidden ? "true" : undefined}
           data-drop-state={stackDropState}
           data-stack-size={collapsedMultiStack ? "multi" : "single"}
           data-stack-id={view.stack.id}
           data-testid="task-stack"
-          key={view.stack.id}
           onClickCapture={suppressClickAfterDrag}
           onDoubleClick={collapsedMultiStack ? (event) => {
             if (!isInteractiveElement(event.target, event.currentTarget)) {
@@ -504,13 +870,14 @@ export function TaskList({
             sourceTaskId: view.mainTask.id,
           })}
           role={collapsedMultiStack ? "button" : undefined}
-          style={buildFrameStyle(topLevelDragging, stackShift)}
+          style={frameShiftStyle(stackShift)}
           tabIndex={collapsedMultiStack ? 0 : undefined}
         >
           <TaskItem
             compact={compact}
             onSelect={onSelect}
             onToggle={onToggle}
+            overdueDays={overdueDays}
             selected={!compact && view.mainTask.id === selectedTaskId}
             stackCount={collapsedMultiStack ? view.totalCount : undefined}
             task={view.mainTask}
@@ -520,43 +887,40 @@ export function TaskList({
       );
     }
 
-    const mainTaskDragging = Boolean(
-      activeDrag &&
-      activeDrag.kind === "task" &&
-      activeDrag.sourceTaskId === view.mainTask.id &&
-      activeDrag.sourceStackSize > 1,
-    );
+    const mainTaskHidden = dragHidesTask(hidingDrag, view.mainTask.id);
+    const stackCollapsing = collapsingStackIds.includes(view.stack.id);
+    const childCount = view.tasks.length - 1;
+    const foldDurationMs = FOLD_MS + Math.min(Math.max(childCount - 1, 0) * FOLD_STAGGER_MS, FOLD_STAGGER_CAP_MS);
 
     return (
       <section
-        className="task-stack-unfolded task-stack-drag-frame"
+        className={cn("task-stack-unfolded task-stack-drag-frame", stackCollapsing && "task-stack-collapsing")}
         data-dnd-stack-frame="true"
-        data-dragging={topLevelDragging ? "true" : undefined}
+        data-dragging={topLevelHidden ? "true" : undefined}
         data-drop-state={stackDropState}
         data-stack-id={view.stack.id}
         data-testid="task-stack-expanded"
-        key={view.stack.id}
         onClickCapture={suppressClickAfterDrag}
         onPointerDown={(event) => beginDrag(event, {
           kind: "stack",
           sourceStackId: view.stack.id,
           sourceStackSize: view.totalCount,
         })}
-        style={buildFrameStyle(topLevelDragging, stackShift)}
+        style={frameShiftStyle(stackShift)}
       >
         <div
           aria-label={t("stack.collapse")}
           className="task-stack-main-frame"
           data-dnd-task-frame="true"
-          data-dragging={mainTaskDragging ? "true" : undefined}
+          data-dragging={mainTaskHidden ? "true" : undefined}
           data-stack-id={view.stack.id}
           data-task-id={view.mainTask.id}
           onDoubleClick={(event) => {
             if (!isInteractiveElement(event.target, event.currentTarget)) {
-              onToggleStackCollapsed?.(view.stack.id);
+              requestStackCollapse(view);
             }
           }}
-          onKeyDown={(event) => toggleCollapsedStackFromKey(event, view.stack.id)}
+          onKeyDown={(event) => collapseStackFromKey(event, view)}
           onPointerDown={(event) => {
             event.stopPropagation();
             beginDrag(event, {
@@ -567,7 +931,7 @@ export function TaskList({
             });
           }}
           role="button"
-          style={buildFrameStyle(mainTaskDragging, taskShifts.get(view.mainTask.id) ?? 0)}
+          style={frameShiftStyle(taskShifts.get(view.mainTask.id) ?? 0)}
           tabIndex={0}
         >
           <TaskItem
@@ -578,48 +942,79 @@ export function TaskList({
             task={view.mainTask}
           />
         </div>
-        <div className="task-stack-unfold-panel">
-          {view.tasks.slice(1).map((task) => {
-            const taskDragging = Boolean(
-              activeDrag &&
-              activeDrag.kind === "task" &&
-              activeDrag.sourceTaskId === task.id &&
-              activeDrag.sourceStackSize > 1,
-            );
+        <div
+          className={cn("task-stack-unfold-clip", stackCollapsing && "task-stack-unfold-clip-collapsing")}
+          style={stackCollapsing ? { animationDuration: `${foldDurationMs}ms` } : undefined}
+        >
+          <div className="task-stack-unfold-panel">
+          {view.tasks.slice(1).map((task, childIndex) => {
+            const taskHidden = dragHidesTask(hidingDrag, task.id);
+            // Unfold staggers top-down; folding reverses (last child first).
+            const staggerMs = stackCollapsing
+              ? Math.min((childCount - 1 - childIndex) * FOLD_STAGGER_MS, FOLD_STAGGER_CAP_MS)
+              : Math.min(childIndex * UNFOLD_STAGGER_MS, UNFOLD_STAGGER_CAP_MS);
             return (
               <div
-                className="stack-task-drag-frame"
-                data-dnd-task-frame="true"
-                data-dragging={taskDragging ? "true" : undefined}
-                data-stack-id={view.stack.id}
-                data-task-id={task.id}
+                className={cn("task-exit-wrap", leavingTaskIds.includes(task.id) && "task-exit-wrap-leaving")}
                 key={task.id}
-                onClickCapture={suppressClickAfterDrag}
-                onPointerDown={(event) => {
-                  event.stopPropagation();
-                  beginDrag(event, {
-                    kind: "task",
-                    sourceStackId: view.stack.id,
-                    sourceStackSize: view.totalCount,
-                    sourceTaskId: task.id,
-                  });
-                }}
-                style={buildFrameStyle(taskDragging, taskShifts.get(task.id) ?? 0)}
               >
-                <TaskItem
-                  onSelect={onSelect}
-                  onToggle={onToggle}
-                  selected={!compact && task.id === selectedTaskId}
-                  subtask
-                  task={task}
-                />
+                <div className="task-exit-inner">
+                  <div
+                    className="stack-task-drag-frame"
+                    data-dnd-task-frame="true"
+                    data-dragging={taskHidden ? "true" : undefined}
+                    data-stack-id={view.stack.id}
+                    data-task-id={task.id}
+                    onClickCapture={suppressClickAfterDrag}
+                    onPointerDown={(event) => {
+                      event.stopPropagation();
+                      beginDrag(event, {
+                        kind: "task",
+                        sourceStackId: view.stack.id,
+                        sourceStackSize: view.totalCount,
+                        sourceTaskId: task.id,
+                      });
+                    }}
+                    style={{ ...(frameShiftStyle(taskShifts.get(task.id) ?? 0) ?? {}), animationDelay: `${staggerMs}ms` }}
+                  >
+                    <TaskItem
+                      onSelect={onSelect}
+                      onToggle={onToggle}
+                      selected={!compact && task.id === selectedTaskId}
+                      subtask
+                      task={task}
+                    />
+                  </div>
+                </div>
               </div>
             );
           })}
+          </div>
         </div>
       </section>
     );
   };
+
+  // Entrance detection: animate stacks whose ids appear after the first
+  // render, but skip wholesale changes (filter/search switches).
+  const seenStackIdsRef = useRef<Set<string> | null>(null);
+  const enterStackIds = new Set<string>();
+  if (!compact) {
+    const currentIds = visibleViews.map((view) => view.stack.id);
+    if (seenStackIdsRef.current === null) {
+      seenStackIdsRef.current = new Set(currentIds);
+    } else {
+      const seen = seenStackIdsRef.current;
+      const freshIds = currentIds.filter((id) => !seen.has(id));
+      if (freshIds.length > 0 && freshIds.length <= 3 && freshIds.length < currentIds.length) {
+        freshIds.forEach((id) => enterStackIds.add(id));
+      }
+      currentIds.forEach((id) => seen.add(id));
+    }
+  }
+
+  const isViewLeaving = (view: TaskStackView) =>
+    view.tasks.length === 1 && leavingTaskIds.includes(view.tasks[0].id);
 
   const list = (
     <div
@@ -627,7 +1022,20 @@ export function TaskList({
       data-testid={testId}
       ref={listRef}
     >
-      {visibleViews.map(renderStack)}
+      {visibleViews.map((view) => (
+        <div
+          className={cn(
+            "task-exit-wrap",
+            isViewLeaving(view) && "task-exit-wrap-leaving",
+            enterStackIds.has(view.stack.id) && "task-enter-wrap",
+          )}
+          key={view.stack.id}
+        >
+          <div className="task-exit-inner">{renderStack(view)}</div>
+        </div>
+      ))}
+      {liveGhost}
+      {exitGhost}
     </div>
   );
 

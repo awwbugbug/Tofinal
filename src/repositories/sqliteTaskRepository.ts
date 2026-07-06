@@ -2,7 +2,7 @@
 import type { Task, TaskPriority, TaskStack } from "@/types/task";
 
 export const SQLITE_DATABASE_PATH = "sqlite:tofinal.db";
-export const SQLITE_SCHEMA_VERSION = "5";
+export const SQLITE_SCHEMA_VERSION = "6";
 
 export type SqlValue = string | number | null;
 
@@ -34,6 +34,7 @@ type SqlTaskRow = {
   stack_id?: unknown;
   stack_order?: unknown;
   sort_order?: unknown;
+  deleted_at?: unknown;
 };
 
 type SqlTaskStackRow = {
@@ -64,7 +65,8 @@ const SCHEMA_SQL = [
     planned_date TEXT NULL,
     stack_id TEXT NULL,
     stack_order INTEGER NULL,
-    sort_order INTEGER NOT NULL
+    sort_order INTEGER NOT NULL,
+    deleted_at TEXT NULL
   )`,
   `CREATE TABLE IF NOT EXISTS task_stacks (
     id TEXT PRIMARY KEY,
@@ -125,7 +127,8 @@ const SELECT_TASKS_SQL = `SELECT
   planned_date,
   stack_id,
   stack_order,
-  sort_order
+  sort_order,
+  deleted_at
 FROM tasks
 ORDER BY sort_order ASC, created_at DESC, id ASC`;
 
@@ -168,8 +171,9 @@ const UPSERT_TASK_SQL = `INSERT INTO tasks (
   planned_date,
   stack_id,
   stack_order,
-  sort_order
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  sort_order,
+  deleted_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
   title = excluded.title,
   note = excluded.note,
@@ -183,7 +187,8 @@ ON CONFLICT(id) DO UPDATE SET
   planned_date = excluded.planned_date,
   stack_id = excluded.stack_id,
   stack_order = excluded.stack_order,
-  sort_order = excluded.sort_order`;
+  sort_order = excluded.sort_order,
+  deleted_at = excluded.deleted_at`;
 
 const isPriority = (value: unknown): value is TaskPriority =>
   value === "normal" || value === "important" || value === "urgent";
@@ -246,6 +251,11 @@ export const taskFromSqlRow = (row: SqlTaskRow): Task => {
     throw new Error("Invalid SQLite planned_date field.");
   }
 
+  const deletedAt = row.deleted_at ?? null;
+  if (deletedAt !== null && typeof deletedAt !== "string") {
+    throw new Error("Invalid SQLite deleted_at field.");
+  }
+
   const id = stringField(row.id, "id");
   const stackId = typeof row.stack_id === "string" ? row.stack_id : singletonStackIdForTask(id);
   const stackOrder = typeof row.stack_order === "number" && Number.isFinite(row.stack_order) ? row.stack_order : 0;
@@ -264,6 +274,7 @@ export const taskFromSqlRow = (row: SqlTaskRow): Task => {
     stackId,
     stackOrder,
     completedAt,
+    deletedAt,
   };
 };
 
@@ -290,6 +301,7 @@ export const taskToSqlParams = (task: Task, sortOrder: number): SqlValue[] => [
   task.stackId,
   task.stackOrder,
   sortOrder,
+  task.deletedAt,
 ];
 
 const nowIso = () => new Date().toISOString();
@@ -416,6 +428,9 @@ export const ensureSqliteSchema = async (db: SqlDatabaseClient) => {
   }
   if (!(await tableHasColumn(db, "tasks", "stack_order"))) {
     await db.execute("ALTER TABLE tasks ADD COLUMN stack_order INTEGER NULL");
+  }
+  if (!(await tableHasColumn(db, "tasks", "deleted_at"))) {
+    await db.execute("ALTER TABLE tasks ADD COLUMN deleted_at TEXT NULL");
   }
   await db.execute("CREATE INDEX IF NOT EXISTS idx_tasks_stack_order ON tasks(stack_id, stack_order)");
   await migrateExistingTasksToSingletonStacks(db);

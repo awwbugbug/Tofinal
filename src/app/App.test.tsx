@@ -108,6 +108,28 @@ const createAttachmentFileStorage = (overrides: Partial<AttachmentFileStorage> =
       height: null,
     };
   },
+  async importDroppedImageToAppData({ attachmentId, taskId }) {
+    return {
+      originalName: "dropped.png",
+      storedName: `${attachmentId}.png`,
+      relativePath: `attachments/images/${taskId}/${attachmentId}.png`,
+      mimeType: "image/png",
+      sizeBytes: 8,
+      width: null,
+      height: null,
+    };
+  },
+  async writePastedImageToAppData({ attachmentId, bytes, mimeType, originalName, taskId }) {
+    return {
+      originalName,
+      storedName: `${attachmentId}.png`,
+      relativePath: `attachments/images/${taskId}/${attachmentId}.png`,
+      mimeType,
+      sizeBytes: bytes.byteLength,
+      width: null,
+      height: null,
+    };
+  },
   async writeScreenshotToAppData({ attachmentId, taskId }) {
     return {
       originalName: "screenshot-20260612-173000.png",
@@ -441,9 +463,11 @@ describe("App", () => {
     expect(within(expandedStack).getByText("Layered child task")).toBeInTheDocument();
     expect(expandedStack.querySelector(".task-stack-unfold-control-row")).not.toBeInTheDocument();
 
+    // Collapse plays the fold animation first, then commits the state switch.
     await userEvent.dblClick(expandedStack.querySelector(".task-stack-main-frame") as HTMLElement);
+    expect(expandedStack).toHaveClass("task-stack-collapsing");
 
-    expect(screen.queryByTestId("task-stack-expanded")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByTestId("task-stack-expanded")).not.toBeInTheDocument());
     expect(screen.getByRole("button", { name: /expand stack/i })).toHaveClass("task-stack-collapsed-multi");
   });
 
@@ -670,17 +694,61 @@ describe("App", () => {
     expect(detailPanel.getByDisplayValue("Second task saved note")).toBeInTheDocument();
   });
 
-  it("deletes the selected task after confirmation and updates the detail panel", async () => {
+  it("shows overdue tasks in a Today section and moves them all to today", async () => {
+    const seedTasks = createSeedTasks();
+    const tasks = [
+      { ...seedTasks[0], id: "task-overdue", title: "Yesterday leftover", plannedDate: "2020-01-01", stackId: "stack-task-overdue" },
+      ...seedTasks.slice(1),
+    ];
+    setTaskRepositoryForTest(createMemoryTaskRepository({ tasks }));
+    resetTaskStore();
+
+    await renderApp();
+
+    // Overdue section renders the stale task with an overdue-days label.
+    const overdueList = within(screen.getByTestId("overdue-task-list"));
+    expect(overdueList.getByText("Yesterday leftover")).toBeInTheDocument();
+    expect(overdueList.getByTestId("task-overdue-label")).toBeInTheDocument();
+    expect(within(screen.getByTestId("task-list")).queryByText("Yesterday leftover")).not.toBeInTheDocument();
+
+    // The Today count includes the overdue task (3 planned today + 1 overdue).
+    expect(screen.getByRole("button", { name: /today 4/i })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /move all to today/i }));
+
+    expect(screen.queryByTestId("overdue-section")).not.toBeInTheDocument();
+    expect(within(screen.getByTestId("task-list")).getByText("Yesterday leftover")).toBeInTheDocument();
+  });
+
+  it("moves the deleted task to trash immediately, supports undo, and restores from the trash panel", async () => {
     await renderApp();
 
     const detailPanel = within(screen.getByTestId("detail-panel"));
     await userEvent.click(detailPanel.getByRole("button", { name: /delete task/i }));
-    expect(screen.getByRole("dialog", { name: /delete this task/i })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /^delete$/i }));
 
-    expect(screen.queryByText("Finalize the first-stage desktop shell")).not.toBeInTheDocument();
+    // No confirm dialog; the undo toast appears once the exit animation commits.
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await screen.findByTestId("undo-toast");
+    expect(within(screen.getByTestId("task-list")).queryByText("Finalize the first-stage desktop shell")).not.toBeInTheDocument();
     expect(detailPanel.getByDisplayValue("Sketch the desktop pin interaction")).toBeInTheDocument();
     expect(screen.getByText("3 open")).toBeInTheDocument();
+
+    // Undo restores the task.
+    await userEvent.click(within(screen.getByTestId("undo-toast")).getByRole("button", { name: /undo/i }));
+    expect(within(screen.getByTestId("task-list")).getByText("Finalize the first-stage desktop shell")).toBeInTheDocument();
+    expect(screen.getByText("4 open")).toBeInTheDocument();
+
+    // Delete again and restore through the trash panel instead.
+    await userEvent.click(detailPanel.getByRole("button", { name: /delete task/i }));
+    await screen.findByTestId("undo-toast");
+    await userEvent.click(screen.getByRole("button", { name: /open trash/i }));
+
+    const trashPanel = within(screen.getByRole("dialog", { name: /trash/i }));
+    expect(trashPanel.getByText("Finalize the first-stage desktop shell")).toBeInTheDocument();
+    await userEvent.click(trashPanel.getByRole("button", { name: /restore finalize/i }));
+
+    await userEvent.click(screen.getByRole("button", { name: /close trash/i }));
+    expect(within(screen.getByTestId("task-list")).getByText("Finalize the first-stage desktop shell")).toBeInTheDocument();
   });
 
   it("filters with real navigation including Pinned", async () => {
@@ -1041,7 +1109,7 @@ describe("App", () => {
     expect(detailPanel.queryByText("stale.png")).not.toBeInTheDocument();
   });
 
-  it("cleans attachment files when deleting a task and leaves desktop pin mode unchanged", async () => {
+  it("keeps attachment files while a task sits in trash and cleans them on purge", async () => {
     const deleteAttachmentFile = vi.fn();
     const { repository, rows } = createAttachmentRepository([createAttachment()]);
     setAttachmentDependenciesForTest({
@@ -1052,11 +1120,21 @@ describe("App", () => {
 
     const detailPanel = within(screen.getByTestId("detail-panel"));
     await userEvent.click(detailPanel.getByRole("button", { name: /delete task/i }));
-    await userEvent.click(screen.getByRole("button", { name: /^delete$/i }));
+    await screen.findByTestId("undo-toast");
+
+    // Trash keeps metadata and files.
+    expect(rows).toHaveLength(1);
+    expect(deleteAttachmentFile).not.toHaveBeenCalled();
+
+    // Purging from the trash panel removes both.
+    await userEvent.click(screen.getByRole("button", { name: /open trash/i }));
+    const trashPanel = within(screen.getByRole("dialog", { name: /trash/i }));
+    await userEvent.click(trashPanel.getByRole("button", { name: /delete forever/i }));
 
     await waitFor(() => expect(rows).toHaveLength(0));
     expect(deleteAttachmentFile).toHaveBeenCalledWith("attachments/images/task-1/attachment-1.png");
 
+    await userEvent.click(screen.getByRole("button", { name: /close trash/i }));
     await userEvent.click(screen.getByRole("button", { name: /desktop pin mode/i }));
     expect(await screen.findByTestId("desktop-pin-layout")).toBeInTheDocument();
   });

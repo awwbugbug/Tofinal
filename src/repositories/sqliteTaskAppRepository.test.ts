@@ -204,7 +204,7 @@ describe("sqlite task app repository", () => {
 
     expect(db.taskAppsTableExists).toBe(true);
     expect(db.foreignKeysEnabled).toBe(true);
-    expect(db.meta.get("schema_version")).toBe("5");
+    expect(db.meta.get("schema_version")).toBe("6");
     expect(db.tasks.map((row) => row.title)).toEqual(["Task with apps"]);
     expect(db.taskAttachments).toHaveLength(1);
   });

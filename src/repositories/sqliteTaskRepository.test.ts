@@ -33,6 +33,7 @@ type TaskRow = {
   stack_id: string;
   stack_order: number;
   sort_order: number;
+  deleted_at?: string | null;
 };
 
 const task = (overrides: Partial<Task> = {}): Task => {
@@ -51,6 +52,7 @@ const task = (overrides: Partial<Task> = {}): Task => {
     plannedDate: null,
     stackId: `stack-${id}`,
     stackOrder: 0,
+    deletedAt: null,
     ...overrides,
   } as Task;
 };
@@ -288,6 +290,7 @@ describe("sqlite task repository", () => {
       openTask.stackId,
       openTask.stackOrder,
       2,
+      null,
     ]);
 
     expect(taskToSqlParams(doneTask, 0)[3]).toBe(1);
@@ -307,7 +310,7 @@ describe("sqlite task repository", () => {
     });
   });
 
-  it("adds stack columns during schema migration and writes schema version 5", async () => {
+  it("adds stack columns during schema migration and writes schema version 6", async () => {
     const db = new FakeSqlDatabase();
     db.taskColumns.delete("planned_date");
     db.taskColumns.delete("stack_id");
@@ -325,7 +328,7 @@ describe("sqlite task repository", () => {
     const stackIndexPosition = db.executed.findIndex((sql) => sql.includes("idx_tasks_stack_order"));
     const stackOrderColumnPosition = db.executed.findIndex((sql) => sql.includes("ALTER TABLE tasks ADD COLUMN stack_order"));
     expect(stackIndexPosition).toBeGreaterThan(stackOrderColumnPosition);
-    expect(db.meta.get("schema_version")).toBe("5");
+    expect(db.meta.get("schema_version")).toBe("6");
   });
 
   it("migrates existing v4 tasks into singleton stacks", async () => {
@@ -353,7 +356,7 @@ describe("sqlite task repository", () => {
 
     expect(snapshot.tasks).toEqual([localTask]);
     expect(snapshot.stacks).toEqual([expect.objectContaining({ id: "stack-task-local" })]);
-    expect(db.meta.get("schema_version")).toBe("5");
+    expect(db.meta.get("schema_version")).toBe("6");
     expect(db.meta.get("localstorage_v1_migrated")).toBe("true");
     expect(localStorage.getItem(TASK_STORAGE_KEY)).toContain("Migrated from localStorage");
   });
@@ -368,7 +371,7 @@ describe("sqlite task repository", () => {
     expect(snapshot.tasks).toHaveLength(createSeedTasks().length);
     expect(snapshot.stacks).toHaveLength(createSeedTasks().length);
     expect(snapshot.tasks[0].title).toBe("Finalize the first-stage desktop shell");
-    expect(db.meta.get("schema_version")).toBe("5");
+    expect(db.meta.get("schema_version")).toBe("6");
     expect(db.meta.get("seed_initialized")).toBe("true");
   });
 
@@ -465,6 +468,7 @@ const taskToRow = (value: Task, sortOrder: number): TaskRow => ({
   stack_id: value.stackId,
   stack_order: value.stackOrder,
   sort_order: sortOrder,
+  deleted_at: value.deletedAt,
 });
 
 const stackToRow = (value: TaskStack): StackRow => ({

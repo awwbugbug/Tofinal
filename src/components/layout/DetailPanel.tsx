@@ -23,6 +23,8 @@ type DetailPanelProps = {
   lastSavedAt: string | null;
   persistenceError: string | null;
   onAddImageAttachment: (taskId: string) => void;
+  onAddDroppedImageAttachments: (taskId: string, paths: string[]) => void;
+  onAddPastedImageAttachment: (taskId: string, bytes: Uint8Array, mimeType: string) => void;
   onAddScreenshotAttachment: (taskId: string) => void;
   onConfirmScreenshotAttachment: (screenshot: FinalScreenshot) => void;
   onCancelScreenshotAttachment: () => void;
@@ -58,6 +60,8 @@ export function DetailPanel({
   lastTaskAppsStartedAt,
   lastSavedAt,
   onAddImageAttachment,
+  onAddDroppedImageAttachments,
+  onAddPastedImageAttachment,
   onAddScreenshotAttachment,
   onAddTaskApp,
   onDeleteAttachment,
@@ -95,6 +99,8 @@ export function DetailPanel({
         lastTaskAppsStartedAt={lastTaskAppsStartedAt}
         lastSavedAt={lastSavedAt}
         onAddImageAttachment={onAddImageAttachment}
+        onAddDroppedImageAttachments={onAddDroppedImageAttachments}
+        onAddPastedImageAttachment={onAddPastedImageAttachment}
         onAddScreenshotAttachment={onAddScreenshotAttachment}
         onAddTaskApp={onAddTaskApp}
         onDeleteAttachment={onDeleteAttachment}

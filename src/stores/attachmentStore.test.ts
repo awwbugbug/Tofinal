@@ -74,6 +74,28 @@ const createFileStorage = (overrides: Partial<AttachmentFileStorage> = {}): Atta
       height: null,
     };
   },
+  async importDroppedImageToAppData({ attachmentId, taskId }) {
+    return {
+      originalName: "dropped.png",
+      storedName: `${attachmentId}.png`,
+      relativePath: `attachments/images/${taskId}/${attachmentId}.png`,
+      mimeType: "image/png",
+      sizeBytes: 8,
+      width: null,
+      height: null,
+    };
+  },
+  async writePastedImageToAppData({ attachmentId, bytes, mimeType, originalName, taskId }) {
+    return {
+      originalName,
+      storedName: `${attachmentId}.png`,
+      relativePath: `attachments/images/${taskId}/${attachmentId}.png`,
+      mimeType,
+      sizeBytes: bytes.byteLength,
+      width: null,
+      height: null,
+    };
+  },
   async writeScreenshotToAppData({ attachmentId, taskId }) {
     return {
       originalName: "screenshot-20260612-173000.png",

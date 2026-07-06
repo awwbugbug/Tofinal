@@ -520,6 +520,104 @@ describe("task store", () => {
     expect(repository.savedSnapshots[repository.savedSnapshots.length - 1].tasks.find((task) => task.id === childTask.id)?.stackOrder).toBe(0);
   });
 
+  it("trashes tasks into the recycle bin, restores them, and hides them from views", async () => {
+    const { store, repository } = await createHydratedStore();
+    const [firstTask, secondTask, ...remainingTasks] = store.getState().tasks;
+    const combinedStack = { ...store.getState().stacks[0], id: "stack-combined", collapsed: false };
+    const mainTask = { ...firstTask, id: "task-main", stackId: combinedStack.id, stackOrder: 0 };
+    const childTask = { ...secondTask, id: "task-child", stackId: combinedStack.id, stackOrder: 1 };
+    store.setState({
+      tasks: [mainTask, childTask, ...remainingTasks],
+      stacks: [combinedStack, ...store.getState().stacks.slice(2)],
+      selectedTaskId: mainTask.id,
+    });
+
+    // Trash a stack member: it detaches into its own hidden singleton stack.
+    expect(store.getState().trashTask(childTask.id)).toBe(true);
+    await flushPromises();
+
+    const trashedChild = store.getState().tasks.find((task) => task.id === childTask.id);
+    expect(trashedChild?.deletedAt).toBeTruthy();
+    expect(trashedChild?.stackId).not.toBe(combinedStack.id);
+    expect(store.getState().getTrashedTasks().map((task) => task.id)).toEqual([childTask.id]);
+    expect(store.getState().getStackViews("all").flatMap((view) => view.tasks.map((task) => task.id))).not.toContain(childTask.id);
+    expect(store.getState().getFilteredTasks("all").map((task) => task.id)).not.toContain(childTask.id);
+
+    // Trashed tasks persist in the snapshot with deletedAt set.
+    const lastSnapshot = repository.savedSnapshots[repository.savedSnapshots.length - 1];
+    expect(lastSnapshot.tasks.find((task) => task.id === childTask.id)?.deletedAt).toBeTruthy();
+
+    // Restore brings it back as a visible singleton at the top and selects it.
+    expect(store.getState().restoreTask(childTask.id)).toBe(true);
+    await flushPromises();
+
+    const restored = store.getState().tasks.find((task) => task.id === childTask.id);
+    expect(restored?.deletedAt).toBeNull();
+    expect(store.getState().selectedTaskId).toBe(childTask.id);
+    expect(store.getState().getStackViews("all")[0].mainTask.id).toBe(childTask.id);
+    expect(store.getState().getTrashedTasks()).toHaveLength(0);
+
+    // Hard delete (purge) removes the row entirely.
+    store.getState().trashTask(childTask.id);
+    store.getState().deleteTask(childTask.id);
+    await flushPromises();
+    expect(store.getState().tasks.some((task) => task.id === childTask.id)).toBe(false);
+  });
+
+  it("undoes the last merge through the stored snapshot", async () => {
+    const { store } = await createHydratedStore();
+    const [sourceView, targetView] = store.getState().getStackViews("all");
+    const sourceTaskId = sourceView.mainTask.id;
+
+    expect(store.getState().moveTaskToStack(sourceTaskId, targetView.stack.id)).toBe(true);
+    expect(store.getState().tasks.find((task) => task.id === sourceTaskId)?.stackId).toBe(targetView.stack.id);
+
+    expect(store.getState().undoLastMerge()).toBe(true);
+    await flushPromises();
+
+    expect(store.getState().tasks.find((task) => task.id === sourceTaskId)?.stackId).toBe(sourceView.stack.id);
+    expect(store.getState().stacks.some((stack) => stack.id === sourceView.stack.id)).toBe(true);
+    // Undo is single-shot.
+    expect(store.getState().undoLastMerge()).toBe(false);
+  });
+
+  it("applies sidebar drops to planned date, priority, and pinned state", async () => {
+    const { store, repository } = await createHydratedStore();
+    const [firstTask, secondTask] = store.getState().tasks;
+    store.setState({
+      tasks: store.getState().tasks.map((task) =>
+        task.id === firstTask.id || task.id === secondTask.id
+          ? { ...task, plannedDate: null, priority: "normal" as const, pinned: false }
+          : task,
+      ),
+    });
+
+    expect(store.getState().applySidebarDrop([firstTask.id], "today")).toBe(true);
+    expect(store.getState().tasks.find((task) => task.id === firstTask.id)?.plannedDate).toBe(getLocalDateKey());
+
+    expect(store.getState().applySidebarDrop([firstTask.id], "important")).toBe(true);
+    expect(store.getState().tasks.find((task) => task.id === firstTask.id)?.priority).toBe("important");
+
+    expect(store.getState().applySidebarDrop([firstTask.id, secondTask.id], "pinned")).toBe(true);
+    expect(store.getState().tasks.find((task) => task.id === firstTask.id)?.pinned).toBe(true);
+    expect(store.getState().tasks.find((task) => task.id === secondTask.id)?.pinned).toBe(true);
+
+    expect(store.getState().applySidebarDrop([firstTask.id], "all")).toBe(true);
+    expect(store.getState().tasks.find((task) => task.id === firstTask.id)?.plannedDate).toBeNull();
+
+    // No-op drops report false and queue no extra save.
+    expect(store.getState().applySidebarDrop([firstTask.id], "all")).toBe(false);
+    expect(store.getState().applySidebarDrop([], "today")).toBe(false);
+
+    await flushPromises();
+    const lastSnapshot = repository.savedSnapshots[repository.savedSnapshots.length - 1];
+    expect(lastSnapshot.tasks.find((task) => task.id === firstTask.id)).toMatchObject({
+      plannedDate: null,
+      priority: "important",
+      pinned: true,
+    });
+  });
+
   it("merges a singleton task into a target stack and removes the source stack", async () => {
     const { store, repository } = await createHydratedStore();
     const [sourceView, targetView] = store.getState().getStackViews("all");

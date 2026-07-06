@@ -627,7 +627,10 @@ body {
     position: relative;
     transition:
       color 220ms ease,
-      opacity 220ms ease;
+      opacity 220ms ease,
+      transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      background 180ms ease,
+      border-color 180ms ease;
     z-index: 1;
   }
 
@@ -1058,6 +1061,40 @@ body {
     background: var(--surface-card-hover);
   }
 
+  /*
+   * Exit/enter list animations. The wrapper collapses its grid row (height)
+   * and its own list-gap margin, so surviving cards glide up to fill the
+   * hole; overflow is clipped only while leaving so drag ghosts and stack
+   * plates can still overflow normally.
+   */
+  .task-exit-wrap {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition:
+      grid-template-rows 200ms cubic-bezier(0.22, 1, 0.36, 1),
+      margin 200ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 170ms ease;
+  }
+
+  .task-exit-inner {
+    min-height: 0;
+  }
+
+  .task-exit-wrap-leaving {
+    grid-template-rows: 0fr;
+    margin: 0 !important;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .task-exit-wrap-leaving > .task-exit-inner {
+    overflow: hidden;
+  }
+
+  .task-enter-wrap {
+    animation: task-enter 260ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+
   .task-stack-drag-frame,
   .stack-task-drag-frame {
     position: relative;
@@ -1067,16 +1104,144 @@ body {
       filter 180ms ease;
   }
 
+  /* While dragging, the source frame becomes an invisible placeholder that
+     keeps its layout slot; the visible card is the fixed-position ghost. */
   .task-stack-drag-frame[data-dragging="true"],
   .stack-task-drag-frame[data-dragging="true"] {
-    cursor: grabbing;
-    opacity: 0.92;
-    z-index: 30;
+    opacity: 0;
+    transition: none;
   }
 
-  .task-stack-drag-frame[data-dragging="true"] .task-card-shell,
-  .stack-task-drag-frame[data-dragging="true"] .task-card-shell {
+  .task-drag-ghost {
+    cursor: grabbing;
+    margin: 0;
+    pointer-events: none;
+    position: fixed;
+    will-change: transform;
+    z-index: 80;
+  }
+
+  .task-drag-ghost-inner {
+    position: relative;
+    transform: scale(1.03);
+    transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .task-drag-ghost-inner .task-card-shell {
     box-shadow: var(--shadow-card-around);
+  }
+
+  /* Hovering a sidebar drop target: the ghost tucks in, ready to be absorbed. */
+  .task-drag-ghost-inner-absorb {
+    transform: scale(0.9);
+  }
+
+  .task-drag-ghost-exit {
+    animation: task-ghost-exit 260ms cubic-bezier(0.3, 0.7, 0.4, 1) forwards;
+  }
+
+  .filter-nav-item-drop-active {
+    background: color-mix(in srgb, var(--accent-surface) 78%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 42%, transparent);
+    color: var(--accent-hover);
+    transform: scale(1.04);
+  }
+
+  .filter-nav-item-drop-pulse {
+    animation: sidebar-drop-pulse 420ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .task-overdue-label {
+    color: color-mix(in srgb, var(--danger) 68%, var(--text-muted));
+  }
+
+  .trash-bin-icon {
+    overflow: visible;
+  }
+
+  .trash-bin-icon-lid {
+    transform-origin: 4px 6px;
+    transition: transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .trash-bin-icon-open .trash-bin-icon-lid {
+    transform: rotate(-24deg) translateY(-2.5px);
+  }
+
+  /* Bare icon trigger: no button chrome, just the bin, a tiny count badge,
+     and a lid that swings open while a card hovers during a drag. */
+  .trash-bin-trigger {
+    align-items: center;
+    border-radius: 999px;
+    color: var(--text-faint);
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    margin-inline: auto;
+    padding: 0.5rem;
+    position: relative;
+    top: -0.3rem;
+    transition:
+      color 180ms ease,
+      transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    width: fit-content;
+  }
+
+  .trash-bin-trigger:hover {
+    color: var(--text-secondary);
+    transform: scale(1.08);
+  }
+
+  .trash-bin-trigger:focus-visible {
+    box-shadow: 0 0 0 3px var(--ring-soft);
+    outline: none;
+  }
+
+  .trash-bin-trigger-drop-active {
+    color: color-mix(in srgb, var(--danger) 74%, var(--text-primary));
+    transform: scale(1.22);
+  }
+
+  .trash-bin-count {
+    align-items: center;
+    background: var(--surface-muted);
+    border-radius: 999px;
+    color: var(--text-muted);
+    display: inline-flex;
+    font-size: 0.6rem;
+    justify-content: center;
+    line-height: 1;
+    min-width: 1rem;
+    padding: 0.15rem 0.25rem;
+    position: absolute;
+    right: -0.2rem;
+    top: -0.2rem;
+  }
+
+  .undo-toast {
+    align-items: center;
+    animation: undo-toast-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
+    background: color-mix(in srgb, var(--surface-detail) 92%, transparent);
+    border: 1px solid var(--border-medium);
+    border-radius: 999px;
+    bottom: 1.5rem;
+    box-shadow: var(--shadow-soft);
+    display: flex;
+    gap: 0.5rem;
+    left: 50%;
+    max-width: min(26rem, calc(100vw - 3rem));
+    padding: 0.45rem 0.6rem 0.45rem 1.1rem;
+    position: fixed;
+    transform: translateX(-50%);
+    z-index: 60;
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    backdrop-filter: blur(14px) saturate(140%);
+  }
+
+  .undo-toast-action {
+    border-radius: 999px;
+    color: var(--accent-hover);
+    flex-shrink: 0;
   }
 
   .task-stack-drag-frame[data-drop-state="merge"] {
@@ -1107,15 +1272,38 @@ body {
     box-shadow: 0 0 0 3px var(--ring-soft);
   }
 
-  .task-stack-unfold-panel {
+  /* Height clip around the unfold panel: expanding grows the row from 0fr so
+     the stacks below glide down instead of jumping; collapsing shrinks it in
+     sync with the child fold animation (duration set inline by TaskList). */
+  .task-stack-unfold-clip {
+    animation: stack-panel-unfold 320ms cubic-bezier(0.22, 1, 0.36, 1);
     display: grid;
-    gap: 0.65rem;
+    grid-template-rows: 1fr;
+  }
+
+  .task-stack-unfold-clip > * {
+    min-height: 0;
+  }
+
+  .task-stack-unfold-clip-collapsing {
+    animation: stack-panel-fold 300ms cubic-bezier(0.55, 0, 0.72, 0.28) forwards;
+  }
+
+  /* Margin-based spacing (not grid gap) so leaving items can collapse their
+     own gap during the exit animation. */
+  .task-stack-unfold-panel {
     padding: 0.65rem 0 0.35rem;
     position: relative;
   }
 
+  .task-stack-unfold-panel > * + * {
+    margin-top: 0.65rem;
+  }
+
   /* Children stay slightly narrower than the main card, echoing the collapsed
      plate silhouettes they unfold from. */
+  /* Stagger delays come from an inline animation-delay computed per child in
+     TaskList, so any number of children participates. */
   .task-stack-unfold-panel .stack-task-drag-frame {
     animation: stack-child-unfold 360ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
     margin-inline: auto;
@@ -1123,17 +1311,27 @@ body {
     width: calc(100% - 0.9rem);
   }
 
-  .task-stack-unfold-panel .stack-task-drag-frame:nth-child(2) {
-    animation-delay: 50ms;
+  /* Collapse: children fold back under the main card (reverse of unfold);
+     the state switch is committed after the animation by TaskList. */
+  .task-stack-collapsing .stack-task-drag-frame {
+    animation: stack-child-fold 240ms cubic-bezier(0.55, 0, 0.72, 0.28) forwards;
+    pointer-events: none;
+  }
+  .attachment-enter {
+    animation: task-enter 260ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
   }
 
-  .task-stack-unfold-panel .stack-task-drag-frame:nth-child(3) {
-    animation-delay: 100ms;
+  /* Drop target rendered as an in-list attachment slot: same shape and
+     surface family as attachment cards, lit with accent while hovering. */
+  .attachment-drop-slot-active {
+    animation: attachment-drop-slot-in 200ms cubic-bezier(0.22, 1, 0.36, 1);
+    background: color-mix(in srgb, var(--accent-surface) 62%, var(--surface-field));
+    border-color: color-mix(in srgb, var(--accent) 52%, transparent);
+    color: var(--accent-hover);
+    font-weight: 500;
+    text-align: center;
   }
 
-  .task-stack-unfold-panel .stack-task-drag-frame:nth-child(4) {
-    animation-delay: 150ms;
-  }
   .detail-action-row {
     align-items: stretch;
     display: flex;
@@ -1282,6 +1480,87 @@ body {
   }
 }
 
+@keyframes attachment-drop-slot-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes task-ghost-exit {
+  to {
+    opacity: var(--ghost-exit-opacity, 0);
+    transform: translate3d(var(--ghost-exit-x, 0px), var(--ghost-exit-y, 0px), 0) scale(var(--ghost-exit-scale), var(--ghost-exit-scale));
+  }
+}
+
+@keyframes task-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes undo-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(0.6rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@keyframes sidebar-drop-pulse {
+  0% {
+    transform: scale(1);
+  }
+
+  35% {
+    background: color-mix(in srgb, var(--accent-surface) 88%, transparent);
+    transform: scale(1.07);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes stack-panel-unfold {
+  from {
+    grid-template-rows: 0fr;
+  }
+
+  to {
+    grid-template-rows: 1fr;
+  }
+}
+
+@keyframes stack-panel-fold {
+  to {
+    grid-template-rows: 0fr;
+  }
+}
+
+@keyframes stack-child-fold {
+  to {
+    opacity: 0;
+    transform: translateY(-0.8rem) scaleX(0.94) scaleY(0.96);
+  }
+}
+
 /* Children grow out of the collapsed plate state (narrow, tucked under the
    top card) so expansion reads as the plates becoming real cards. */
 @keyframes stack-child-unfold {
@@ -1313,8 +1592,16 @@ body {
   }
 
   .task-stack-drag-frame,
-  .stack-task-drag-frame {
+  .stack-task-drag-frame,
+  .task-exit-wrap {
     transition-duration: 1ms;
+  }
+
+  .task-enter-wrap,
+  .task-stack-unfold-clip,
+  .task-stack-unfold-clip-collapsing {
+    /* !important beats the inline fold duration set by TaskList. */
+    animation-duration: 1ms !important;
   }
 }
 

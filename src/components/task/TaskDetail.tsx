@@ -17,12 +17,12 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { AttachmentLightbox } from "@/components/task/AttachmentLightbox";
 import { ScreenshotEditorOverlay } from "@/components/task/ScreenshotEditorOverlay";
 import { useI18n } from "@/i18n/useI18n";
+import { useExternalImageDrop } from "@/lib/useExternalImageDrop";
 import { cn } from "@/lib/utils";
 import type { AttachmentView, FinalScreenshot, PendingScreenshot } from "@/stores/attachmentStore";
 import type { TaskAppView } from "@/stores/taskAppStore";
@@ -48,6 +48,8 @@ type TaskDetailProps = {
   lastSavedAt: string | null;
   persistenceError: string | null;
   onAddImageAttachment: (taskId: string) => void;
+  onAddDroppedImageAttachments: (taskId: string, paths: string[]) => void;
+  onAddPastedImageAttachment: (taskId: string, bytes: Uint8Array, mimeType: string) => void;
   onAddScreenshotAttachment: (taskId: string) => void;
   onConfirmScreenshotAttachment: (screenshot: FinalScreenshot) => void;
   onCancelScreenshotAttachment: () => void;
@@ -142,6 +144,8 @@ export function TaskDetail({
   lastTaskAppsStartedAt,
   lastSavedAt,
   onAddImageAttachment,
+  onAddDroppedImageAttachments,
+  onAddPastedImageAttachment,
   onAddScreenshotAttachment,
   onAddTaskApp,
   onDeleteAttachment,
@@ -162,10 +166,70 @@ export function TaskDetail({
   const [tags, setTags] = useState("");
   const [pinned, setPinned] = useState(false);
   const [error, setError] = useState("");
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [brokenAttachmentIds, setBrokenAttachmentIds] = useState<Record<string, boolean>>({});
   const [lightboxAttachment, setLightboxAttachment] = useState<AttachmentView | null>(null);
   const titleRef = useRef<HTMLTextAreaElement>(null);
+  const attachmentDropZoneRef = useRef<HTMLElement | null>(null);
+  const taskId = task?.id ?? null;
+  const dropActive = useExternalImageDrop({
+    enabled: Boolean(taskId) && !attachmentsAdding && !attachmentsCapturing && !screenshotEditing,
+    zoneRef: attachmentDropZoneRef,
+    onDropPaths: (paths) => {
+      if (taskId) {
+        onAddDroppedImageAttachments(taskId, paths);
+      }
+    },
+  });
+
+  // Ctrl+V anywhere outside text fields pastes a clipboard image as an
+  // attachment of the selected task. Text-field pastes are left alone, and
+  // non-image clipboards are ignored silently.
+  useEffect(() => {
+    if (!taskId || attachmentsAdding || attachmentsCapturing || screenshotEditing) {
+      return undefined;
+    }
+
+    const handlePaste = (event: ClipboardEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLElement && target.closest("input, textarea, [contenteditable='true']")) {
+        return;
+      }
+
+      const imageItem = Array.from(event.clipboardData?.items ?? []).find(
+        (item) => item.kind === "file" && item.type.startsWith("image/"),
+      );
+      const file = imageItem?.getAsFile();
+      if (!file) {
+        return;
+      }
+
+      event.preventDefault();
+      void file.arrayBuffer().then((buffer) => {
+        onAddPastedImageAttachment(taskId, new Uint8Array(buffer), file.type);
+      });
+    };
+
+    document.addEventListener("paste", handlePaste);
+    return () => document.removeEventListener("paste", handlePaste);
+  }, [attachmentsAdding, attachmentsCapturing, onAddPastedImageAttachment, screenshotEditing, taskId]);
+
+  // Entrance detection for newly added attachments (paste/drop/pick): animate
+  // fresh ids, but skip the initial load and task switches.
+  const seenAttachmentIdsRef = useRef<{ taskId: string | null; ids: Set<string> }>({ taskId: null, ids: new Set() });
+  const enterAttachmentIds = new Set<string>();
+  {
+    const currentIds = attachments.map((attachment) => attachment.id);
+    const seen = seenAttachmentIdsRef.current;
+    if (seen.taskId !== taskId) {
+      seenAttachmentIdsRef.current = { taskId, ids: new Set(currentIds) };
+    } else {
+      const freshIds = currentIds.filter((id) => !seen.ids.has(id));
+      if (freshIds.length > 0 && freshIds.length < currentIds.length) {
+        freshIds.forEach((id) => enterAttachmentIds.add(id));
+      }
+      currentIds.forEach((id) => seen.ids.add(id));
+    }
+  }
 
   useEffect(() => {
     const titleField = titleRef.current;
@@ -184,7 +248,6 @@ export function TaskDetail({
     setTags(task?.tags.join(", ") ?? "");
     setPinned(task?.pinned ?? false);
     setError("");
-    setDeleteDialogOpen(false);
     setBrokenAttachmentIds({});
     setLightboxAttachment(null);
   }, [task]);
@@ -239,17 +302,13 @@ export function TaskDetail({
     setError(saved ? "" : t("task.titleRequired"));
   };
 
+  // Deleting moves the task to the recycle bin (undoable), so no confirm dialog.
   const handleDelete = () => {
-    setDeleteDialogOpen(true);
+    onDeleteTask(task.id);
   };
 
   const handlePriorityChange = (nextPriority: TaskPriority) => {
     setPriority(nextPriority);
-  };
-
-  const handleConfirmDelete = () => {
-    onDeleteTask(task.id);
-    setDeleteDialogOpen(false);
   };
 
   return (
@@ -337,7 +396,11 @@ export function TaskDetail({
           )}
         </div>
 
-        <section className="space-y-3" aria-labelledby="task-attachments-label">
+        <section
+          aria-labelledby="task-attachments-label"
+          className="space-y-3"
+          ref={attachmentDropZoneRef}
+        >
           <div className="detail-action-row">
             <div
               className="text-xs font-medium uppercase text-[var(--text-faint)]"
@@ -379,8 +442,14 @@ export function TaskDetail({
               {t("attachments.loading")}
             </div>
           ) : attachments.length === 0 ? (
-            <div className="rounded-3xl border border-dashed border-[var(--border-soft)] bg-[var(--surface-field)] p-4 text-sm text-[var(--text-faint)]">
-              {t("attachments.empty")}
+            <div
+              className={cn(
+                "rounded-3xl border border-dashed border-[var(--border-soft)] bg-[var(--surface-field)] p-4 text-sm text-[var(--text-faint)]",
+                dropActive && "attachment-drop-slot-active",
+              )}
+              data-testid={dropActive ? "attachment-drop-slot" : undefined}
+            >
+              {dropActive ? t("attachments.dropHint") : t("attachments.empty")}
             </div>
           ) : (
             <div className="space-y-3">
@@ -389,7 +458,10 @@ export function TaskDetail({
 
                 return (
                   <article
-                    className="flex gap-3 rounded-3xl border border-[var(--border-soft)] bg-[var(--surface-field)] p-3"
+                    className={cn(
+                      "flex gap-3 rounded-3xl border border-[var(--border-soft)] bg-[var(--surface-field)] p-3",
+                      enterAttachmentIds.has(attachment.id) && "attachment-enter",
+                    )}
                     key={attachment.id}
                   >
                     <button
@@ -436,6 +508,15 @@ export function TaskDetail({
                   </article>
                 );
               })}
+              {dropActive && (
+                <div
+                  aria-hidden="true"
+                  className="rounded-3xl border border-dashed p-4 text-sm attachment-drop-slot-active"
+                  data-testid="attachment-drop-slot"
+                >
+                  {t("attachments.dropHint")}
+                </div>
+              )}
             </div>
           )}
         </section>
@@ -592,15 +673,6 @@ export function TaskDetail({
         </div>
       </div>
 
-      <ConfirmDialog
-        cancelLabel={t("common.cancel")}
-        confirmLabel={t("task.delete")}
-        description={t("task.deleteDialogDescription")}
-        open={deleteDialogOpen}
-        title={t("task.deleteDialogTitle")}
-        onCancel={() => setDeleteDialogOpen(false)}
-        onConfirm={handleConfirmDelete}
-      />
       {lightboxAttachment && (
         <AttachmentLightbox attachment={lightboxAttachment} onClose={() => setLightboxAttachment(null)} />
       )}

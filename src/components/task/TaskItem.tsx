@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef } from "react";
+﻿import { useEffect, useRef, useState } from "react";
 import confetti from "canvas-confetti";
 import { AlertCircle, CircleDot, Flag, Layers3 } from "lucide-react";
 
@@ -15,6 +15,7 @@ type TaskItemProps = {
   compact?: boolean;
   subtask?: boolean;
   stackCount?: number;
+  overdueDays?: number;
   onToggle: (id: string) => void;
   onSelect: (id: string) => void;
 };
@@ -102,13 +103,21 @@ const fireCompletionConfetti = (element: HTMLElement | null) => {
   });
 };
 
-export function TaskItem({ compact = false, onSelect, onToggle, selected = false, stackCount, subtask = false, task }: TaskItemProps) {
+export function TaskItem({ compact = false, onSelect, onToggle, overdueDays, selected = false, stackCount, subtask = false, task }: TaskItemProps) {
   const { t } = useI18n();
   const completionCelebrationsEnabled = usePreferencesStore((state) => state.completionCelebrationsEnabled);
   const PriorityIcon = priorityIcon[task.priority];
   const itemRef = useRef<HTMLElement | null>(null);
   const previousCompletedRef = useRef(task.completed);
   const completionCelebrationHandledRef = useRef(false);
+  // The store toggle may be delayed to let the exit animation play, so the
+  // checkbox flips optimistically the moment it is clicked.
+  const [optimisticCompleted, setOptimisticCompleted] = useState<boolean | null>(null);
+  const displayCompleted = optimisticCompleted ?? task.completed;
+
+  useEffect(() => {
+    setOptimisticCompleted(null);
+  }, [task.completed]);
 
   useEffect(() => {
     const wasCompleted = previousCompletedRef.current;
@@ -132,7 +141,7 @@ export function TaskItem({ compact = false, onSelect, onToggle, selected = false
         selected
           ? "z-10 scale-[1.012] border-[color-mix(in_srgb,var(--accent)_38%,var(--border-medium))] bg-[color-mix(in_srgb,var(--accent-surface)_82%,var(--surface-elevated))] shadow-[var(--shadow-card-around)]"
           : "scale-100 border-[var(--border-soft)] bg-[color-mix(in_srgb,var(--surface-card)_64%,transparent)] hover:scale-[1.004] hover:border-[var(--border-medium)] hover:bg-[var(--surface-card-hover)] hover:shadow-[var(--shadow-card-hover)]",
-        task.completed && "opacity-70",
+        displayCompleted && "opacity-70",
         compact && "rounded-[18px] p-2.5 hover:bg-[var(--surface-card-hover)]",
         subtask && "rounded-[18px] bg-[color-mix(in_srgb,var(--surface-card)_44%,transparent)] p-3 shadow-none hover:scale-[1.002]",
       )}
@@ -150,9 +159,10 @@ export function TaskItem({ compact = false, onSelect, onToggle, selected = false
       >
         <Checkbox
           aria-label={task.completed ? `Mark ${task.title} incomplete` : `Mark ${task.title} complete`}
-          checked={task.completed}
+          checked={displayCompleted}
           onChange={(event) => {
             event.stopPropagation();
+            setOptimisticCompleted(!task.completed);
             if (!task.completed && completionCelebrationsEnabled) {
               completionCelebrationHandledRef.current = true;
               fireCompletionConfetti(itemRef.current);
@@ -163,7 +173,7 @@ export function TaskItem({ compact = false, onSelect, onToggle, selected = false
         <h3
           className={cn(
             "min-w-0 truncate text-sm font-medium leading-5",
-            task.completed ? "text-[var(--text-faint)] line-through" : "text-[var(--text-secondary)]",
+            displayCompleted ? "text-[var(--text-faint)] line-through" : "text-[var(--text-secondary)]",
           )}
         >
           {task.title}
@@ -175,6 +185,14 @@ export function TaskItem({ compact = false, onSelect, onToggle, selected = false
           </Badge>
         )}
         {!compact && <p className="col-start-2 min-w-0 line-clamp-2 text-xs leading-5 text-[var(--text-muted)]">{task.note}</p>}
+        {!compact && typeof overdueDays === "number" && (
+          <span
+            className="task-overdue-label col-start-3 row-start-2 self-end justify-self-end text-[11px] font-medium leading-none"
+            data-testid="task-overdue-label"
+          >
+            {t("task.overdueBadgePrefix")}{overdueDays}{t("task.overdueBadgeSuffix")}
+          </span>
+        )}
         {!compact && typeof stackCount === "number" && stackCount > 1 && (
           <span
             aria-hidden="true"

@@ -5,15 +5,19 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PreferencesPanel } from "@/components/layout/PreferencesPanel";
 import { Separator } from "@/components/ui/separator";
+import { TrashBinIcon } from "@/components/ui/trash-bin-icon";
 import { useI18n } from "@/i18n/useI18n";
 import { cn } from "@/lib/utils";
-import { getTasksForFilter } from "@/stores/taskStore";
+import { useDragStore } from "@/stores/dragStore";
+import { getOverdueTasks, getTasksForFilter } from "@/stores/taskStore";
 import type { Task, TaskFilter } from "@/types/task";
 
 type SidebarProps = {
   activeFilter: TaskFilter;
   tasks: Task[];
+  trashedCount: number;
   onFilterChange: (filter: TaskFilter) => void;
+  onOpenTrash: () => void;
 };
 
 const navItems: Array<{
@@ -34,10 +38,13 @@ const activeFilterOffsets = [
   "calc((var(--filter-item-height) + var(--filter-item-gap)) + (var(--filter-item-height) + var(--filter-item-gap)) + (var(--filter-item-height) + var(--filter-item-gap)))",
 ];
 
-export function Sidebar({ activeFilter, onFilterChange, tasks }: SidebarProps) {
+export function Sidebar({ activeFilter, onFilterChange, onOpenTrash, tasks, trashedCount }: SidebarProps) {
   const { t } = useI18n();
   const [preferencesOpen, setPreferencesOpen] = useState(false);
-  const openCount = tasks.filter((task) => !task.completed).length;
+  const overDropTarget = useDragStore((state) => state.overDropTarget);
+  const pulseDropTarget = useDragStore((state) => state.pulseDropTarget);
+  const clearPulse = useDragStore((state) => state.clearPulse);
+  const openCount = tasks.filter((task) => !task.completed && !task.deletedAt).length;
   const activeFilterIndex = Math.max(
     navItems.findIndex((item) => item.filter === activeFilter),
     0,
@@ -56,7 +63,9 @@ export function Sidebar({ activeFilter, onFilterChange, tasks }: SidebarProps) {
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = item.filter === activeFilter;
-          const count = getTasksForFilter(tasks, item.filter).length;
+          // The Today count includes overdue tasks: both need attention today.
+          const count = getTasksForFilter(tasks, item.filter).length
+            + (item.filter === "today" ? getOverdueTasks(tasks).length : 0);
           const label = t(item.labelKey);
 
           return (
@@ -66,8 +75,12 @@ export function Sidebar({ activeFilter, onFilterChange, tasks }: SidebarProps) {
               className={cn(
                 "filter-nav-item flex w-full items-center justify-between rounded-2xl border border-transparent px-3 py-2.5 text-left text-sm text-[var(--text-muted)] hover:text-[var(--accent-hover)]",
                 isActive && "text-[var(--accent-hover)]",
+                overDropTarget === item.filter && "filter-nav-item-drop-active",
+                pulseDropTarget === item.filter && "filter-nav-item-drop-pulse",
               )}
+              data-drop-target={item.filter}
               key={item.filter}
+              onAnimationEnd={pulseDropTarget === item.filter ? clearPulse : undefined}
               onClick={() => onFilterChange(item.filter)}
               type="button"
             >
@@ -91,6 +104,22 @@ export function Sidebar({ activeFilter, onFilterChange, tasks }: SidebarProps) {
       </div>
 
       <div className="mt-auto space-y-3">
+        <button
+          aria-label={t("trash.open")}
+          className={cn(
+            "trash-bin-trigger",
+            overDropTarget === "trash" && "trash-bin-trigger-drop-active",
+            pulseDropTarget === "trash" && "filter-nav-item-drop-pulse",
+          )}
+          data-drop-target="trash"
+          onAnimationEnd={pulseDropTarget === "trash" ? clearPulse : undefined}
+          onClick={onOpenTrash}
+          title={t("trash.title")}
+          type="button"
+        >
+          <TrashBinIcon className="h-6 w-6" open={overDropTarget === "trash"} />
+          {trashedCount > 0 && <span className="trash-bin-count">{trashedCount}</span>}
+        </button>
         <Button
           aria-label={t("settings.open")}
           className="w-full justify-start"

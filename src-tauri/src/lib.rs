@@ -78,6 +78,52 @@ fn launch_shortcut(_path: &Path) -> Result<(), String> {
     Err("Shortcut launch is only supported on Windows.".to_string())
 }
 
+const MAX_DROPPED_IMAGE_BYTES: u64 = 10 * 1024 * 1024;
+const DROPPED_IMAGE_EXTENSIONS: [&str; 4] = ["png", "jpg", "jpeg", "webp"];
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DroppedImageFile {
+    file_name: String,
+    bytes: Vec<u8>,
+}
+
+/// Narrow read command for OS drag-and-drop image imports. Dropped paths are
+/// outside the fs plugin scope, so this validates extension and size before
+/// returning the bytes; the frontend writes them into AppData attachments.
+#[tauri::command]
+fn read_dropped_image(path: String) -> Result<DroppedImageFile, String> {
+    let path = Path::new(&path);
+    if !path.is_file() {
+        return Err("Dropped file is unavailable.".to_string());
+    }
+
+    let extension = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if !DROPPED_IMAGE_EXTENSIONS.contains(&extension.as_str()) {
+        return Err("Unsupported image type. Use PNG, JPG, JPEG, or WebP.".to_string());
+    }
+
+    let metadata = std::fs::metadata(path)
+        .map_err(|error| format!("Failed to read dropped file: {error}"))?;
+    if metadata.len() > MAX_DROPPED_IMAGE_BYTES {
+        return Err("Dropped image is larger than 10 MB.".to_string());
+    }
+
+    let bytes =
+        std::fs::read(path).map_err(|error| format!("Failed to read dropped file: {error}"))?;
+    let file_name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("dropped-image")
+        .to_string();
+
+    Ok(DroppedImageFile { file_name, bytes })
+}
+
 #[tauri::command]
 fn capture_fullscreen_screenshot() -> Result<ScreenshotCaptureResult, String> {
     let monitors =
@@ -166,7 +212,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             launch_task_app,
-            capture_fullscreen_screenshot
+            capture_fullscreen_screenshot,
+            read_dropped_image
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

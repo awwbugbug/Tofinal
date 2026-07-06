@@ -25,6 +25,7 @@ const baseTask: Task = {
   stackId: "stack-task-1",
   stackOrder: 0,
   completedAt: null,
+  deletedAt: null,
 };
 
 describe("TaskItem completion celebrations", () => {

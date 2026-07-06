@@ -121,7 +121,7 @@ type Task = {
 
 - Current persistence is SQLite.
 - Database path: `sqlite:tofinal.db`.
-- SQLite schema version: `2`, stored in `schema_meta`.
+- SQLite schema version: `6`, stored in `schema_meta`.
 - Tasks are stored in the `tasks` table with `sort_order` for deterministic ordering.
 - Attachment metadata is stored in `task_attachments`; image files themselves are not stored in SQLite.
 - Image attachment files are copied into the Tauri AppData base directory under `attachments/images/<taskId>/<attachmentId>.<ext>`.
@@ -277,6 +277,8 @@ Phase 4B adds local image file handling behind `src/storage/attachmentFileStorag
 6. Preview URLs are created from the app-owned copied file, not from the original source path.
 
 Deleting an attachment removes metadata first and then attempts to remove the copied file. If file deletion fails, metadata stays deleted and the error is surfaced through attachment store state.
+
+OS drag-and-drop image import reuses this boundary. Tauri v2 intercepts native file drops (DOM drop events never carry paths), so `src/lib/useExternalImageDrop.ts` listens to the webview drag-drop event, converts physical positions with `devicePixelRatio`, and hit-tests the TaskDetail attachments dropzone. Dropped paths live outside the fs plugin scope, so the narrow Rust command `read_dropped_image` validates extension and size and returns the file bytes; `attachmentFileStorage.importDroppedImageToAppData` re-validates and writes them into the same AppData attachments directory, and `attachmentStore.addDroppedImageAttachments` inserts `kind = "image"` metadata through the existing import loop. The hook is best-effort: in browser preview or tests the webview API import fails silently and drag-and-drop stays inert.
 
 Screenshot capture reuses this boundary by writing only confirmed screenshot PNGs into the same attachments directory and inserting a `task_attachments` row with `kind = "screenshot"`.
 
@@ -480,7 +482,9 @@ DnD strategy:
 - `Today` drag/drop never changes `plannedDate` and does not support cross-view transfer.
 - `All Tasks` remains the main stack-management view.
 - All drag geometry (insertion index, merge target, push-apart offsets) is computed against a rect snapshot captured once at drag activation, with scroll-delta compensation. Live `getBoundingClientRect`/`elementFromPoint` are not used during the drag, so sibling transforms never feed back into hit testing.
-- The dragged frame follows the pointer through an inline transform; siblings are pushed apart with `translate3d` transforms plus the shared 220ms transition. Layout never changes during a drag, and the old drop-indicator lines were removed in favor of the moving gap.
+- The dragged card renders as a fixed-position portal ghost on `document.body` (dnd-kit DragOverlay pattern), so it escapes scroll-container clipping and column stacking contexts and can travel across the whole window. The in-list source frame becomes an invisible placeholder that keeps its layout slot. Siblings are pushed apart with `translate3d` transforms plus the shared 220ms transition; the old drop-indicator lines were removed in favor of the moving gap.
+- Sidebar filter rows are drop targets during a drag: `data-drop-target` rects are snapshotted at drag start and checked in raw viewport coordinates before any list hit testing. Dropping applies `taskStore.applySidebarDrop(taskIds, target)` — today sets `plannedDate` to today, all clears `plannedDate`, important sets priority, pinned sets pinned; dropping a whole stack applies to all of its tasks. A tiny `dragStore` (`src/stores/dragStore.ts`) carries hover/pulse UI state from TaskList to Sidebar.
+- Drop feedback: hovering a sidebar target highlights the row and tucks the ghost in; dropping absorbs the ghost into the target with a scale/fade flight and pulses the row. Escape or pointer-cancel springs the ghost back to its origin slot before the source card reappears. Successful in-list drops unmount the ghost instantly so the card settles into its new slot.
 - While dragging a task over another stack, the middle band of the target card resolves to merge and the top/bottom edge bands (28% each) resolve to insertion, replacing the old element-under-pointer merge rule.
 
 Store mutation API:
@@ -516,3 +520,39 @@ Current limits:
 - No nested stacks.
 - No keyboard DnD.
 - No cross-view drag between Today and All.
+
+## Trash And Undo Boundary
+
+Phase 10 upgrades task persistence to SQLite schema version `6` with a nullable `tasks.deleted_at` column.
+
+Trash semantics:
+
+- Deleting a task (DetailPanel button or dragging a card onto the sidebar trash bin) soft-deletes it: `deletedAt` is set, the task detaches into its own singleton stack, and every view filter excludes it. There is no confirm dialog; an undo toast appears instead.
+- Attachment files and metadata are kept while a task sits in the trash; they are cleaned up only on purge (`deleteTask`) through the existing `deleteTaskWithAttachmentCleanup` pipeline.
+- The sidebar trash button is a drag drop target (`data-drop-target="trash"`); its two-part bin icon swings its lid open while a card hovers.
+- `TrashPanel` lists trashed tasks with restore, permanent delete, and confirm-guarded empty-all. Restoring clears `deletedAt`, moves the task's stack to the top, and selects it.
+- Trashed tasks older than 30 days are purged once per launch after hydration.
+
+Undo:
+
+- `UndoToast` is a single bottom-centered toast owned by `AppShell`; Ctrl+Z triggers the pending action while it is visible.
+- Trash undo calls `restoreTask`; merge undo restores the pre-merge snapshot through `undoLastMerge` (single-shot, invalidated by later trash operations).
+
+## Overdue Section Boundary
+
+- `getOverdueTasks(tasks)` returns incomplete, non-deleted tasks with `plannedDate` before today, oldest first.
+- The Today view renders an overdue section above the main list (hidden while searching): flat singleton cards with an overdue-days label, per-card drag to the sidebar `Today` target, and a move-all-to-today action that reuses `applySidebarDrop`.
+- The sidebar Today count includes overdue tasks. Overdue tasks stay selectable while the Today filter is active.
+
+## List Animation Boundary
+
+- Every list row renders inside a `task-exit-wrap` grid wrapper. Leaving rows collapse their grid row and their own list-gap margin over 200ms, so survivors glide up; overflow is clipped only while leaving.
+- `AppShell.commitAfterExit` marks a task as leaving, waits for the exit animation, then commits the store mutation; pending commits are flushed on unmount so mode switches never lose a queued mutation. It drives DetailPanel deletes and Today-view completion toggles whose view leaves the list.
+- `TaskItem` flips its checkbox (and completed styling) optimistically because the store toggle may be delayed.
+- Newly appearing stacks and attachments animate in; wholesale id changes (filter or search switches, initial loads) are detected and skipped.
+
+## Clipboard Paste Boundary
+
+- A document-level `paste` listener in TaskDetail imports clipboard images as attachments of the selected task. It ignores pastes targeted at text fields, non-image clipboards, and runs only while no other attachment operation is active.
+- `attachmentFileStorage.writePastedImageToAppData` validates mime (`image/png`, `image/jpeg`, `image/webp`) and the 10 MB cap, then writes the bytes into the same AppData attachments directory; `attachmentStore.addPastedImageAttachment` inserts `kind = "image"` metadata with a `pasted-<timestamp>` name.
+- No clipboard plugin or extra permission is used; the image bytes come from the DOM clipboard event.
