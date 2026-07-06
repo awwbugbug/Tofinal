@@ -634,6 +634,15 @@ body {
     z-index: 1;
   }
 
+  /* Recessed track behind the category tabs, separating navigation from the
+     settings content below it. */
+  .preferences-tab-track {
+    background: var(--surface-segment);
+    border: 1px solid var(--border-soft);
+    border-radius: 18px;
+    padding: 0.3rem;
+  }
+
   /* Fixed-height, scrollable body: the panel never outgrows small windows
      and keeps the same height across tabs. */
   .preferences-panel-body {

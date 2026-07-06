@@ -114,7 +114,7 @@ export function PreferencesPanel({ onClose, open }: PreferencesPanelProps) {
           </Button>
         </header>
 
-        <div className="mt-4 grid grid-cols-3 gap-2" role="tablist">
+        <div className="preferences-tab-track mt-4 grid grid-cols-3 gap-1" role="tablist">
           {preferenceSections.map((section) => {
             const selected = activeSection === section.value;
             return (
