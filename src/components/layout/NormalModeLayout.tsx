@@ -1,5 +1,5 @@
 ﻿import { type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
-import { PanelTopOpen, Search } from "lucide-react";
+import { PanelTopOpen, Plus, Search } from "lucide-react";
 
 import { Sidebar } from "@/components/layout/Sidebar";
 import { DetailPanel } from "@/components/layout/DetailPanel";
@@ -246,6 +246,27 @@ export function NormalModeLayout({
               ? t("date.tomorrow")
               : new Intl.DateTimeFormat(locale, { month: "long", day: "numeric" }).format(parseViewDate);
 
+  const focusQuickAdd = () => {
+    document.querySelector<HTMLInputElement>("[data-quick-add-input]")?.focus();
+  };
+
+  // Empty date-view days invite planning with a single plus button.
+  const emptyStateContent = hasSearch ? (
+    t("task.noSearchResults")
+  ) : isDateView ? (
+    <button
+      aria-label={t("task.addTask")}
+      className="empty-add-button"
+      data-testid="empty-add-button"
+      onClick={focusQuickAdd}
+      type="button"
+    >
+      <Plus className="h-5 w-5" />
+    </button>
+  ) : (
+    t("task.noTasksInView")
+  );
+
   const liveTasks = tasks.filter((task) => !task.deletedAt);
   const completedTodayCount = liveTasks.filter(
     (task) => task.completed && task.completedAt && isoToLocalDateKey(task.completedAt) === todayKey,
@@ -476,11 +497,7 @@ export function NormalModeLayout({
                 />
               ) : (
                 <div className="flex min-h-40 items-center justify-center rounded-3xl border border-dashed border-[var(--border-soft)] bg-[var(--surface-card-hover)] p-6 text-center text-sm text-[var(--text-faint)]">
-                  {hasSearch
-                    ? t("task.noSearchResults")
-                    : isDateView && !isViewingToday
-                      ? t("task.noTasksForDate")
-                      : t("task.noTasksToday")}
+                  {emptyStateContent}
                 </div>
               )}
               {showTodayCompletedSection && (
@@ -511,7 +528,7 @@ export function NormalModeLayout({
           </div>
         ) : (
           <div className="flex flex-1 items-center justify-center rounded-3xl border border-dashed border-[var(--border-soft)] bg-[var(--surface-card-hover)] p-6 text-center text-sm text-[var(--text-faint)]">
-            {hasSearch ? t("task.noSearchResults") : activeFilter === "today" ? t("task.noTasksToday") : t("task.noTasksInView")}
+            {emptyStateContent}
           </div>
         )}
       </section>

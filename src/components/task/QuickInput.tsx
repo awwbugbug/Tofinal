@@ -36,9 +36,8 @@ export function QuickInput({ compact = false, onAddTask }: QuickInputProps) {
         placeholder={t("task.addPlaceholder")}
         value={title}
       />
-      <Button aria-label={t("task.addTask")} size={compact ? "icon" : "default"} type="submit">
+      <Button aria-label={t("task.addTask")} size="icon" type="submit">
         <Plus className="h-4 w-4" />
-        {!compact && <span>{t("task.add")}</span>}
       </Button>
     </form>
   );
