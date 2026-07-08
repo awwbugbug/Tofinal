@@ -771,9 +771,9 @@ describe("App", () => {
     expect(allList.getByText("Finalize the first-stage desktop shell")).toBeInTheDocument();
     expect(allList.getByTestId("task-planned-label")).toHaveTextContent(/tomorrow/i);
 
-    // Clearing sends it back to the unscheduled pool without a planned label.
+    // Selecting "None" sends it back to the unscheduled pool without a planned label.
     await userEvent.click(allList.getByText("Finalize the first-stage desktop shell"));
-    await userEvent.click(detailPanel.getByRole("button", { name: /^clear$/i }));
+    await userEvent.click(detailPanel.getByRole("button", { name: /^none$/i }));
     expect(allList.queryByTestId("task-planned-label")).not.toBeInTheDocument();
   });
 

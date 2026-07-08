@@ -11,6 +11,8 @@ type CalendarPopoverProps = {
   onClose: () => void;
   /** When set, renders a footer shortcut that selects today. */
   todayShortcutLabel?: string;
+  /** Horizontal anchoring: align to the anchor's left edge or its center. */
+  align?: "start" | "center";
 };
 
 type CalendarDay = {
@@ -41,7 +43,7 @@ const buildCalendarDays = (year: number, month: number): CalendarDay[] => {
   });
 };
 
-export function CalendarPopover({ onClose, onSelect, todayShortcutLabel, value }: CalendarPopoverProps) {
+export function CalendarPopover({ align = "start", onClose, onSelect, todayShortcutLabel, value }: CalendarPopoverProps) {
   const language = usePreferencesStore((state) => state.language);
   const locale = language === "en-US" ? "en-US" : "zh-CN";
   const initial = value ? parseDateKey(value) : new Date();
@@ -74,11 +76,13 @@ export function CalendarPopover({ onClose, onSelect, todayShortcutLabel, value }
     }
     top = Math.max(margin, Math.min(top, window.innerHeight - popoverRect.height - margin));
 
-    let left = anchorRect.left;
+    let left = align === "center"
+      ? anchorRect.left + anchorRect.width / 2 - popoverRect.width / 2
+      : anchorRect.left;
     left = Math.max(margin, Math.min(left, window.innerWidth - popoverRect.width - margin));
 
     setPlacement({ top, left, flipped });
-  }, [viewYear, viewMonth]);
+  }, [align, viewYear, viewMonth]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
