@@ -4,6 +4,7 @@ import {
   Camera,
   CheckCircle2,
   Clock3,
+  Maximize2,
   MonitorUp,
   ImageIcon,
   ImageOff,
@@ -20,6 +21,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { AttachmentLightbox } from "@/components/task/AttachmentLightbox";
+import { NoteMarkdown } from "@/components/task/NoteMarkdown";
+import { NotePreviewOverlay } from "@/components/task/NotePreviewOverlay";
 import { CalendarPopover } from "@/components/ui/calendar-popover";
 import { ScreenshotEditorOverlay } from "@/components/task/ScreenshotEditorOverlay";
 import { useI18n } from "@/i18n/useI18n";
@@ -172,6 +175,8 @@ export function TaskDetail({
   const [brokenAttachmentIds, setBrokenAttachmentIds] = useState<Record<string, boolean>>({});
   const [lightboxAttachment, setLightboxAttachment] = useState<AttachmentView | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [notePreviewing, setNotePreviewing] = useState(false);
+  const [noteExpanded, setNoteExpanded] = useState(false);
   const language = usePreferencesStore((state) => state.language);
   const titleRef = useRef<HTMLTextAreaElement>(null);
   const attachmentDropZoneRef = useRef<HTMLElement | null>(null);
@@ -256,6 +261,8 @@ export function TaskDetail({
     setBrokenAttachmentIds({});
     setLightboxAttachment(null);
     setCalendarOpen(false);
+    setNotePreviewing(false);
+    setNoteExpanded(false);
   }, [task]);
 
   if (!task) {
@@ -365,15 +372,53 @@ export function TaskDetail({
         />
         {error && <p className="text-xs text-red-500">{error}</p>}
 
-        <label className="block text-xs font-medium uppercase text-[var(--text-faint)]" htmlFor="task-note">
-          {t("task.note")}
-        </label>
-        <textarea
-          className="focus-soft min-h-32 w-full resize-none rounded-[22px] border border-[var(--border-soft)] bg-[var(--surface-field)] p-4 text-sm leading-[1.55] text-[var(--text-secondary)] placeholder:text-[var(--text-faint)] outline-none"
-          id="task-note"
-          value={note}
-          onChange={(event) => setNote(event.target.value)}
-        />
+        <div className="flex items-center justify-between gap-2">
+          <label className="block text-xs font-medium uppercase text-[var(--text-faint)]" htmlFor="task-note">
+            {t("task.note")}
+          </label>
+          <div className="flex items-center gap-1">
+            <button
+              aria-pressed={!notePreviewing}
+              className={cn("note-mode-chip", !notePreviewing && "note-mode-chip-selected")}
+              onClick={() => setNotePreviewing(false)}
+              type="button"
+            >
+              {t("note.edit")}
+            </button>
+            <button
+              aria-pressed={notePreviewing}
+              className={cn("note-mode-chip", notePreviewing && "note-mode-chip-selected")}
+              onClick={() => setNotePreviewing(true)}
+              type="button"
+            >
+              {t("note.preview")}
+            </button>
+            <button
+              aria-label={t("note.expand")}
+              className="note-mode-chip"
+              onClick={() => setNoteExpanded(true)}
+              type="button"
+            >
+              <Maximize2 className="h-3 w-3" />
+            </button>
+          </div>
+        </div>
+        {notePreviewing ? (
+          <div className="note-preview-box" data-testid="note-preview-box">
+            {note.trim() ? (
+              <NoteMarkdown text={note} />
+            ) : (
+              <span className="text-sm text-[var(--text-faint)]">{t("note.empty")}</span>
+            )}
+          </div>
+        ) : (
+          <textarea
+            className="focus-soft min-h-32 w-full resize-none rounded-[22px] border border-[var(--border-soft)] bg-[var(--surface-field)] p-4 text-sm leading-[1.55] text-[var(--text-secondary)] placeholder:text-[var(--text-faint)] outline-none"
+            id="task-note"
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+          />
+        )}
 
         <div className="block text-xs font-medium uppercase text-[var(--text-faint)]" id="task-priority-label">
           {t("task.priority")}
@@ -746,6 +791,9 @@ export function TaskDetail({
         </div>
       </div>
 
+      {noteExpanded && (
+        <NotePreviewOverlay note={note} onClose={() => setNoteExpanded(false)} title={title || task.title} />
+      )}
       {lightboxAttachment && (
         <AttachmentLightbox attachment={lightboxAttachment} onClose={() => setLightboxAttachment(null)} />
       )}

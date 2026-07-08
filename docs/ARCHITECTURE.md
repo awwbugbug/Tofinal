@@ -578,6 +578,11 @@ The former Today view is a date-parameterized view driven by `taskStore.viewDate
 - Bindings: Ctrl+N quick-add focus, Ctrl+F search focus, ArrowUp/Down selection navigation (overdue section → open list with expanded children → completed-today, scrolls the card into view), Space toggle complete (through the animated toggle path), Delete to trash, E stack expand/collapse, Ctrl+1–4 filters, Esc clears search. Ctrl+Z remains owned by the undo toast.
 - The shortcut list is documented in the preferences Shortcuts section.
 
+## Note Markdown Boundary
+
+- `src/lib/markdown.tsx` is a dependency-free subset Markdown renderer that outputs React elements only — never HTML strings — so raw HTML in a note renders as literal text and script injection is structurally impossible (the webview holds IPC access). Supported: `#`–`###` headings, bold/italic/inline code, fenced code, flat lists and read-only checklists, quotes, `https` links (opened through the opener plugin), rules, and hard line breaks; anything else degrades to plain text.
+- The DetailPanel note section has an Edit/Preview toggle (previewing the current draft) plus an expand action opening `NotePreviewOverlay`, a read-only modal rendering the full note. Editing stays in the panel textarea; the draft/save flow is unchanged.
+
 ## Clipboard Paste Boundary
 
 - A document-level `paste` listener in TaskDetail imports clipboard images as attachments of the selected task. It ignores pastes targeted at text fields, non-image clipboards, and runs only while no other attachment operation is active.
