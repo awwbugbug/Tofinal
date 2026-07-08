@@ -212,6 +212,10 @@ export function TaskDetail({
   const [brokenAttachmentIds, setBrokenAttachmentIds] = useState<Record<string, boolean>>({});
   const [lightboxAttachment, setLightboxAttachment] = useState<AttachmentView | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  // Clicking the custom segment first slides the thumb there, then opens the
+  // calendar once the slide has landed; closing without picking slides back.
+  const [customPending, setCustomPending] = useState(false);
+  const customPendingTimeoutRef = useRef<number | null>(null);
   const [noteExpanded, setNoteExpanded] = useState(false);
   const [noteHeight, setNoteHeight] = useState<number | null>(null);
   const noteTextareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -300,8 +304,15 @@ export function TaskDetail({
     setBrokenAttachmentIds({});
     setLightboxAttachment(null);
     setCalendarOpen(false);
+    setCustomPending(false);
     setNoteExpanded(false);
   }, [task]);
+
+  useEffect(() => () => {
+    if (customPendingTimeoutRef.current !== null) {
+      window.clearTimeout(customPendingTimeoutRef.current);
+    }
+  }, []);
 
   if (!task) {
     return (
@@ -372,7 +383,29 @@ export function TaskDetail({
         ? "tomorrow"
         : "custom";
   const applyPlannedDate = (plannedDate: string | null) => {
+    setCustomPending(false);
     onUpdateTask(task.id, { plannedDate });
+  };
+  // The thumb previews the custom slot while the calendar is being opened.
+  const displaySegment: DateSegment = customPending ? "custom" : dateSegment;
+  const handleCustomSegmentClick = () => {
+    if (calendarOpen) {
+      setCalendarOpen(false);
+      setCustomPending(false);
+      return;
+    }
+    if (dateSegment === "custom") {
+      setCalendarOpen(true);
+      return;
+    }
+    setCustomPending(true);
+    if (customPendingTimeoutRef.current !== null) {
+      window.clearTimeout(customPendingTimeoutRef.current);
+    }
+    customPendingTimeoutRef.current = window.setTimeout(() => {
+      customPendingTimeoutRef.current = null;
+      setCalendarOpen(true);
+    }, 260);
   };
   const formatPlannedDate = (dateKey: string) => {
     const [year, month, day] = dateKey.split("-").map(Number);
@@ -500,7 +533,7 @@ export function TaskDetail({
             aria-labelledby="task-planned-date-label"
             className="priority-segment-shell date-segment-shell grid grid-cols-4 gap-2 overflow-visible rounded-[24px] border p-2"
             role="group"
-            style={dateSegmentStyle[dateSegment] as CSSProperties}
+            style={dateSegmentStyle[displaySegment] as CSSProperties}
           >
             <span aria-hidden="true" className="priority-segment-thumb date-segment-thumb glass-soft" />
             <button
@@ -535,15 +568,15 @@ export function TaskDetail({
             </button>
             <button
               aria-label={t("date.custom")}
-              aria-pressed={dateSegment === "custom"}
+              aria-pressed={displaySegment === "custom"}
               className="priority-segment gap-1 text-center font-medium"
-              data-selected={dateSegment === "custom"}
-              onClick={() => setCalendarOpen((current) => !current)}
+              data-selected={displaySegment === "custom"}
+              onClick={handleCustomSegmentClick}
               style={{ "--segment-text": dateSegmentText.custom } as CSSProperties}
               type="button"
             >
               <Calendar className="h-3.5 w-3.5 shrink-0" />
-              {dateSegment === "custom" && task.plannedDate ? formatPlannedDate(task.plannedDate) : t("date.custom")}
+              {dateSegment === "custom" && task.plannedDate ? formatPlannedDate(task.plannedDate) : null}
             </button>
           </div>
           {calendarOpen && (
