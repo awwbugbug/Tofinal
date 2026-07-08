@@ -411,7 +411,8 @@ export function TaskDetail({
     const [year, month, day] = dateKey.split("-").map(Number);
     const date = new Date(year || 1970, (month || 1) - 1, day || 1);
     const locale = language === "en-US" ? "en-US" : "zh-CN";
-    return new Intl.DateTimeFormat(locale, { month: language === "en-US" ? "short" : "long", day: "numeric" }).format(date);
+    // Compact numeric form (e.g. 7/15) so it never overruns the 25% segment.
+    return new Intl.DateTimeFormat(locale, { month: "numeric", day: "numeric" }).format(date);
   };
 
   const handlePriorityChange = (nextPriority: TaskPriority) => {
@@ -537,9 +538,9 @@ export function TaskDetail({
           >
             <span aria-hidden="true" className="priority-segment-thumb date-segment-thumb glass-soft" />
             <button
-              aria-pressed={dateSegment === "none"}
+              aria-pressed={displaySegment === "none"}
               className="priority-segment text-center font-medium"
-              data-selected={dateSegment === "none"}
+              data-selected={displaySegment === "none"}
               onClick={() => applyPlannedDate(null)}
               style={{ "--segment-text": dateSegmentText.none } as CSSProperties}
               type="button"
@@ -547,9 +548,9 @@ export function TaskDetail({
               {t("date.none")}
             </button>
             <button
-              aria-pressed={dateSegment === "today"}
+              aria-pressed={displaySegment === "today"}
               className="priority-segment text-center font-medium"
-              data-selected={dateSegment === "today"}
+              data-selected={displaySegment === "today"}
               onClick={() => applyPlannedDate(todayKey)}
               style={{ "--segment-text": dateSegmentText.today } as CSSProperties}
               type="button"
@@ -557,9 +558,9 @@ export function TaskDetail({
               {t("date.today")}
             </button>
             <button
-              aria-pressed={dateSegment === "tomorrow"}
+              aria-pressed={displaySegment === "tomorrow"}
               className="priority-segment text-center font-medium"
-              data-selected={dateSegment === "tomorrow"}
+              data-selected={displaySegment === "tomorrow"}
               onClick={() => applyPlannedDate(tomorrowKey)}
               style={{ "--segment-text": dateSegmentText.tomorrow } as CSSProperties}
               type="button"
@@ -569,14 +570,17 @@ export function TaskDetail({
             <button
               aria-label={t("date.custom")}
               aria-pressed={displaySegment === "custom"}
-              className="priority-segment gap-1 text-center font-medium"
+              className="priority-segment min-w-0 gap-1 text-center font-medium"
               data-selected={displaySegment === "custom"}
               onClick={handleCustomSegmentClick}
               style={{ "--segment-text": dateSegmentText.custom } as CSSProperties}
               type="button"
             >
-              <Calendar className="h-3.5 w-3.5 shrink-0" />
-              {dateSegment === "custom" && task.plannedDate ? formatPlannedDate(task.plannedDate) : null}
+              {dateSegment === "custom" && task.plannedDate ? (
+                <span className="truncate">{formatPlannedDate(task.plannedDate)}</span>
+              ) : (
+                <Calendar className="h-3.5 w-3.5 shrink-0" />
+              )}
             </button>
           </div>
           {calendarOpen && (
