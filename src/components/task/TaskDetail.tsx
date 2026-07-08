@@ -122,6 +122,9 @@ const formatDate = (value: string | null) => {
 
 const parseTags = (value: string) => value.split(",");
 
+const NOTE_MIN_HEIGHT = 128;
+const NOTE_MAX_HEIGHT = 384;
+
 const formatFileSize = (sizeBytes: number) => {
   if (sizeBytes < 1024 * 1024) {
     return `${Math.max(1, Math.round(sizeBytes / 1024))} KB`;
@@ -175,6 +178,9 @@ export function TaskDetail({
   const [lightboxAttachment, setLightboxAttachment] = useState<AttachmentView | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [noteExpanded, setNoteExpanded] = useState(false);
+  const [noteHeight, setNoteHeight] = useState<number | null>(null);
+  const noteTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const noteResizeRef = useRef<{ startY: number; startHeight: number } | null>(null);
   const language = usePreferencesStore((state) => state.language);
   const titleRef = useRef<HTMLTextAreaElement>(null);
   const attachmentDropZoneRef = useRef<HTMLElement | null>(null);
@@ -374,8 +380,10 @@ export function TaskDetail({
         </label>
         <div className="relative">
           <textarea
-            className="focus-soft max-h-96 min-h-32 w-full resize-y rounded-[22px] border border-[var(--border-soft)] bg-[var(--surface-field)] p-4 pr-11 text-sm leading-[1.55] text-[var(--text-secondary)] placeholder:text-[var(--text-faint)] outline-none"
+            className="focus-soft max-h-96 min-h-32 w-full resize-none rounded-[22px] border border-[var(--border-soft)] bg-[var(--surface-field)] p-4 pr-11 text-sm leading-[1.55] text-[var(--text-secondary)] placeholder:text-[var(--text-faint)] outline-none"
             id="task-note"
+            ref={noteTextareaRef}
+            style={noteHeight !== null ? { height: noteHeight } : undefined}
             value={note}
             onChange={(event) => setNote(event.target.value)}
           />
@@ -387,6 +395,35 @@ export function TaskDetail({
           >
             <Maximize2 className="h-3.5 w-3.5" />
           </button>
+          <div
+            aria-label={t("note.resize")}
+            aria-orientation="horizontal"
+            className="note-resize-handle"
+            onPointerDown={(event) => {
+              event.preventDefault();
+              const currentHeight = noteTextareaRef.current?.getBoundingClientRect().height ?? NOTE_MIN_HEIGHT;
+              noteResizeRef.current = { startY: event.clientY, startHeight: currentHeight };
+              event.currentTarget.setPointerCapture(event.pointerId);
+            }}
+            onPointerMove={(event) => {
+              const resizeState = noteResizeRef.current;
+              if (!resizeState) {
+                return;
+              }
+              const nextHeight = Math.min(
+                NOTE_MAX_HEIGHT,
+                Math.max(NOTE_MIN_HEIGHT, resizeState.startHeight + (event.clientY - resizeState.startY)),
+              );
+              setNoteHeight(nextHeight);
+            }}
+            onPointerUp={() => {
+              noteResizeRef.current = null;
+            }}
+            onPointerCancel={() => {
+              noteResizeRef.current = null;
+            }}
+            role="separator"
+          />
         </div>
 
         <div className="block text-xs font-medium uppercase text-[var(--text-faint)]" id="task-priority-label">

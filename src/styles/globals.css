@@ -1630,10 +1630,43 @@ body {
     width: 1.6rem;
   }
 
+  /* Whole-pixel lift only: fractional icon scaling shimmers on Windows. */
   .note-expand-button:hover {
     background: var(--surface-muted);
+    box-shadow: 0 2px 8px rgb(15 23 32 / 0.14);
     color: var(--accent-hover);
-    transform: scale(1.1);
+    transform: translateY(-1px);
+  }
+
+  /* Invisible grab strip along the note box's bottom edge; a small pill
+     appears on hover to hint at the resize. */
+  .note-resize-handle {
+    bottom: -0.35rem;
+    cursor: ns-resize;
+    height: 0.85rem;
+    left: 15%;
+    position: absolute;
+    right: 15%;
+    touch-action: none;
+  }
+
+  .note-resize-handle::after {
+    background: var(--border-medium);
+    border-radius: 999px;
+    content: "";
+    height: 4px;
+    left: 50%;
+    opacity: 0;
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    transition: opacity 140ms ease;
+    width: 2.4rem;
+  }
+
+  .note-resize-handle:hover::after,
+  .note-resize-handle:active::after {
+    opacity: 1;
   }
 
   .note-overlay {
