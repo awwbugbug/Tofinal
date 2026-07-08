@@ -644,11 +644,14 @@ body {
   }
 
   /* Fixed-height, scrollable body: the panel never outgrows small windows
-     and keeps the same height across tabs. */
+     and keeps the same height across tabs. The negative margin + matching
+     padding pushes the scroll container's clip boundary outward so hover
+     scale and shadows of edge buttons are not cut off. */
   .preferences-panel-body {
     height: min(21rem, 55vh);
+    margin-inline: -0.6rem;
     overflow-y: auto;
-    padding-right: 0.3rem;
+    padding: 0.3rem 0.6rem 0.4rem;
     scrollbar-width: thin;
   }
 

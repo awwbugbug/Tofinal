@@ -66,7 +66,7 @@ export function TrashPanel({ onClose, onEmpty, onPurge, onRestore, open, trashed
           </Button>
         </header>
 
-        <div className="mt-4 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1" data-testid="trash-panel-list">
+        <div className="-mx-1 mt-4 min-h-0 flex-1 space-y-2 overflow-y-auto px-1 py-1" data-testid="trash-panel-list">
           {trashedTasks.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-[var(--border-soft)] bg-[var(--surface-field)] p-4 text-center text-sm text-[var(--text-faint)]">
               {t("trash.emptyState")}
