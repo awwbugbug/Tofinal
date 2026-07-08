@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { CalendarPopover } from "@/components/ui/calendar-popover";
 import { ProgressRing } from "@/components/ui/progress-ring";
 import { useI18n } from "@/i18n/useI18n";
+import { cn } from "@/lib/utils";
 import { getLocalDateKey, isoToLocalDateKey } from "@/stores/taskStore";
 import { usePreferencesStore } from "@/stores/preferencesStore";
 import type { AttachmentView, FinalScreenshot, PendingScreenshot } from "@/stores/attachmentStore";
@@ -214,18 +215,26 @@ export function NormalModeLayout({
   const isViewingToday = viewDateKey === todayKey;
   const showOverdueSection = isDateView && isViewingToday && !hasSearch && overdueTasks.length > 0;
   const [dateCalendarOpen, setDateCalendarOpen] = useState(false);
-  // Direction of the last view-date change drives the title roll animation.
-  // It is pinned to the current date key (not recomputed per render), so
-  // unrelated re-renders during the 260ms animation never strip the class
-  // and cancel the roll.
-  const rollStateRef = useRef<{ key: string; direction: 0 | 1 | -1 }>({ key: viewDateKey, direction: 0 });
-  if (rollStateRef.current.key !== viewDateKey) {
-    rollStateRef.current = {
-      key: viewDateKey,
-      direction: viewDateKey > rollStateRef.current.key ? 1 : -1,
-    };
+  // Title roll: switching views rolls vertically (direction follows the
+  // sidebar order), changing the date rolls horizontally. The animation class
+  // is pinned to the composite key so unrelated re-renders during the 260ms
+  // roll never strip it and cancel the animation mid-flight.
+  const filterOrder: Record<TaskFilter, number> = { today: 0, all: 1, important: 2, pinned: 3 };
+  const titleKey = `${activeFilter}:${isDateView ? viewDateKey : ""}`;
+  const titleAnimRef = useRef<{ key: string; filter: TaskFilter; date: string; anim: string }>({
+    key: titleKey,
+    filter: activeFilter,
+    date: viewDateKey,
+    anim: "",
+  });
+  if (titleAnimRef.current.key !== titleKey) {
+    const previous = titleAnimRef.current;
+    const anim = previous.filter !== activeFilter
+      ? (filterOrder[activeFilter] > filterOrder[previous.filter] ? "view-title-text-roll-down" : "view-title-text-roll-up")
+      : (viewDateKey > previous.date ? "view-title-text-roll-next" : "view-title-text-roll-prev");
+    titleAnimRef.current = { key: titleKey, filter: activeFilter, date: viewDateKey, anim };
   }
-  const titleRollDirection = rollStateRef.current.direction;
+  const titleTextClassName = cn("view-title-text", titleAnimRef.current.anim);
 
   const parseViewDate = (() => {
     const [year, month, day] = viewDateKey.split("-").map(Number);
@@ -376,16 +385,7 @@ export function NormalModeLayout({
                     onClick={() => setDateCalendarOpen((current) => !current)}
                     type="button"
                   >
-                    <span
-                      className={
-                        titleRollDirection === 1
-                          ? "view-title-text view-title-text-roll-next"
-                          : titleRollDirection === -1
-                            ? "view-title-text view-title-text-roll-prev"
-                            : "view-title-text"
-                      }
-                      key={viewDateKey}
-                    >
+                    <span className={titleTextClassName} key={titleKey}>
                       {title}
                     </span>
                   </button>
@@ -403,7 +403,11 @@ export function NormalModeLayout({
                 )}
               </div>
             ) : (
-              <h2 className="text-3xl font-semibold tracking-normal text-[var(--text-primary)]">{title}</h2>
+              <h2 className="text-3xl font-semibold tracking-normal text-[var(--text-primary)]">
+                <span className={titleTextClassName} key={titleKey}>
+                  {title}
+                </span>
+              </h2>
             )}
           </div>
           {isDateView && isViewingToday && todayTotal > 0 && (

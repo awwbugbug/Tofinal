@@ -1278,6 +1278,14 @@ body {
     animation: view-title-roll-prev 260ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
+  .view-title-text-roll-down {
+    animation: view-title-roll-down 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .view-title-text-roll-up {
+    animation: view-title-roll-up 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
 
   .calendar-today-shortcut {
     border-radius: 10px;
@@ -1784,6 +1792,30 @@ body {
   from {
     opacity: 0;
     transform: translateX(-20px) rotateY(24deg);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes view-title-roll-down {
+  from {
+    opacity: 0;
+    transform: translateY(16px) rotateX(-28deg);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes view-title-roll-up {
+  from {
+    opacity: 0;
+    transform: translateY(-16px) rotateX(28deg);
   }
 
   to {
