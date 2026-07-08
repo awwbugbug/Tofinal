@@ -1184,41 +1184,32 @@ body {
     white-space: nowrap;
   }
 
-  .date-chip {
-    align-items: center;
-    background: var(--surface-field);
-    border: 1px solid var(--border-soft);
-    border-radius: 999px;
-    color: var(--text-muted);
-    cursor: pointer;
-    display: inline-flex;
-    font-size: 0.75rem;
-    font-weight: 500;
-    gap: 0.3rem;
-    padding: 0.35rem 0.75rem;
+  /* Planned-date segmented control: same track as the priority selector,
+     but the thumb fades away entirely when no date is planned. */
+  .date-segment-thumb {
     transition:
-      background 160ms ease,
-      border-color 160ms ease,
-      color 160ms ease,
-      transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+      left var(--ios-spring-motion),
+      opacity 200ms ease,
+      transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+      background-color 220ms ease,
+      box-shadow 220ms ease;
   }
 
-  .date-chip:hover {
-    border-color: var(--border-medium);
-    color: var(--text-secondary);
-    transform: scale(1.05);
+  .date-segment-shell[data-empty="true"] .date-segment-thumb {
+    opacity: 0;
+    transform: scale(0.92);
   }
 
-  .date-chip-selected {
-    background: color-mix(in srgb, var(--accent-surface) 82%, transparent);
-    border-color: color-mix(in srgb, var(--accent) 42%, transparent);
-    color: var(--accent-hover);
-  }
-
-  .date-chip-quiet {
-    background: transparent;
-    border-color: transparent;
+  .date-clear-button {
     color: var(--text-faint);
+    cursor: pointer;
+    font-size: 0.68rem;
+    font-weight: 500;
+    transition: color 140ms ease;
+  }
+
+  .date-clear-button:hover {
+    color: var(--accent-hover);
   }
 
   .calendar-popover {

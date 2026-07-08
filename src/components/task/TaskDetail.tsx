@@ -89,6 +89,26 @@ type PrioritySegmentStyle = CSSProperties & {
   "--segment-ring": string;
 };
 
+// The planned-date segmented control reuses the priority track geometry with
+// a neutral thumb tint.
+const dateSegmentStyle = {
+  today: {
+    "--priority-left": "var(--priority-padding)",
+    "--segment-bg": "var(--normal-bg)",
+    "--segment-ring": "rgb(86 101 121 / 0.18)",
+  },
+  tomorrow: {
+    "--priority-left": "calc(33.333333% + 0.333333rem)",
+    "--segment-bg": "var(--normal-bg)",
+    "--segment-ring": "rgb(86 101 121 / 0.18)",
+  },
+  custom: {
+    "--priority-left": "calc(66.666667% + 0.166667rem)",
+    "--segment-bg": "var(--normal-bg)",
+    "--segment-ring": "rgb(86 101 121 / 0.18)",
+  },
+} satisfies Record<"today" | "tomorrow" | "custom", PrioritySegmentStyle>;
+
 const prioritySegmentStyle = {
   normal: {
     "--priority-left": "var(--priority-padding)",
@@ -329,7 +349,13 @@ export function TaskDetail({
     const [year, month, day] = todayKey.split("-").map(Number);
     return getLocalDateKey(new Date(year || 1970, (month || 1) - 1, (day || 1) + 1));
   })();
-  const customPlanned = Boolean(task.plannedDate && task.plannedDate !== todayKey && task.plannedDate !== tomorrowKey);
+  const dateSegment: "today" | "tomorrow" | "custom" | null = !task.plannedDate
+    ? null
+    : task.plannedDate === todayKey
+      ? "today"
+      : task.plannedDate === tomorrowKey
+        ? "tomorrow"
+        : "custom";
   const applyPlannedDate = (plannedDate: string | null) => {
     onUpdateTask(task.id, { plannedDate });
   };
@@ -451,43 +477,62 @@ export function TaskDetail({
           ))}
         </div>
 
-        <div className="block text-xs font-medium uppercase text-[var(--text-faint)]" id="task-planned-date-label">
-          {t("date.planned")}
-        </div>
-        <div aria-labelledby="task-planned-date-label" className="relative" role="group">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="block text-xs font-medium uppercase text-[var(--text-faint)]" id="task-planned-date-label">
+            {t("date.planned")}
+          </div>
+          {task.plannedDate && (
             <button
-              aria-pressed={task.plannedDate === todayKey}
-              className={cn("date-chip", task.plannedDate === todayKey && "date-chip-selected")}
-              onClick={() => applyPlannedDate(todayKey)}
+              aria-label={t("date.clear")}
+              className="date-clear-button"
+              onClick={() => applyPlannedDate(null)}
+              type="button"
+            >
+              {t("date.clear")}
+            </button>
+          )}
+        </div>
+        <div className="relative">
+          <div
+            aria-labelledby="task-planned-date-label"
+            className="priority-segment-shell date-segment-shell grid grid-cols-3 gap-2 overflow-visible rounded-[24px] border p-2"
+            data-empty={dateSegment === null ? "true" : undefined}
+            role="group"
+            style={dateSegmentStyle[dateSegment ?? "today"] as CSSProperties}
+          >
+            <span aria-hidden="true" className="priority-segment-thumb date-segment-thumb glass-soft" />
+            <button
+              aria-pressed={dateSegment === "today"}
+              className="priority-segment text-center font-medium"
+              data-selected={dateSegment === "today"}
+              onClick={() => applyPlannedDate(dateSegment === "today" ? null : todayKey)}
+              style={{ "--segment-text": "var(--accent-hover)" } as CSSProperties}
               type="button"
             >
               {t("date.today")}
             </button>
             <button
-              aria-pressed={task.plannedDate === tomorrowKey}
-              className={cn("date-chip", task.plannedDate === tomorrowKey && "date-chip-selected")}
-              onClick={() => applyPlannedDate(tomorrowKey)}
+              aria-pressed={dateSegment === "tomorrow"}
+              className="priority-segment text-center font-medium"
+              data-selected={dateSegment === "tomorrow"}
+              onClick={() => applyPlannedDate(dateSegment === "tomorrow" ? null : tomorrowKey)}
+              style={{ "--segment-text": "var(--accent-hover)" } as CSSProperties}
               type="button"
             >
               {t("date.tomorrow")}
             </button>
             <button
               aria-label={t("date.custom")}
-              aria-pressed={customPlanned}
-              className={cn("date-chip", customPlanned && "date-chip-selected")}
+              aria-pressed={dateSegment === "custom"}
+              className="priority-segment gap-1.5 text-center font-medium"
+              data-selected={dateSegment === "custom"}
               onClick={() => setCalendarOpen((current) => !current)}
+              style={{ "--segment-text": "var(--accent-hover)" } as CSSProperties}
               type="button"
             >
-              <Calendar className="h-3.5 w-3.5" />
-              {customPlanned && task.plannedDate ? formatPlannedDate(task.plannedDate) : t("date.custom")}
+              <Calendar className="h-3.5 w-3.5 shrink-0" />
+              {dateSegment === "custom" && task.plannedDate ? formatPlannedDate(task.plannedDate) : t("date.custom")}
             </button>
-            {task.plannedDate && (
-              <button aria-label={t("date.clear")} className="date-chip date-chip-quiet" onClick={() => applyPlannedDate(null)} type="button">
-                {t("date.clear")}
-              </button>
-            )}
-            {!task.plannedDate && <span className="text-xs text-[var(--text-faint)]">{t("date.none")}</span>}
           </div>
           {calendarOpen && (
             <CalendarPopover
