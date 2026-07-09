@@ -1558,20 +1558,20 @@ body {
 
   /* Children stay slightly narrower than the main card, echoing the collapsed
      plate silhouettes they unfold from. */
-  /* Stagger delays come from an inline animation-delay computed per child in
-     TaskList, so any number of children participates. */
   .task-stack-unfold-panel .stack-task-drag-frame {
-    animation: stack-child-unfold 360ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
     margin-inline: auto;
     transform-origin: top center;
     width: calc(100% - 0.9rem);
   }
 
-  /* After a reorder/merge, a task can mount into an already-open stack (e.g. a
-     head swap). Suppress the entrance animation for that brief window so the
-     fill-in card lands in place instead of replaying the expand (jumping up). */
-  .task-stack-entrance-locked .stack-task-drag-frame {
-    animation: none;
+  /* Entrance animation is opt-in: it only runs while the stack carries the
+     unfolding marker (set by TaskList when the user actually expands it). This
+     is what keeps a reorder/merge — which can mount a child into an already
+     open stack (e.g. a head swap) — from replaying the expand. Stagger delays
+     come from an inline animation-delay computed per child, so any number of
+     children participates. */
+  .task-stack-unfolding .stack-task-drag-frame {
+    animation: stack-child-unfold 360ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
   }
 
   /* Collapse: children fold back under the main card (reverse of unfold);
@@ -2086,7 +2086,7 @@ body {
     animation-duration: 1ms;
   }
 
-  .task-stack-unfold-panel .stack-task-drag-frame {
+  .task-stack-unfolding .stack-task-drag-frame {
     animation-duration: 1ms;
   }
 
