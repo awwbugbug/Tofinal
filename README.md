@@ -4,8 +4,12 @@ A local-first, minimal desktop task manager built with [Tauri](https://tauri.app
 
 > **Note:** ToFinal is developed and tested on Windows 11. It is built with Tauri, so macOS/Linux builds may work but are currently untested. Some features (launching bound `.lnk` shortcuts, screen capture) are Windows-focused.
 
-<!-- TODO: add a screenshot or short GIF here -->
-<!-- ![ToFinal](docs/screenshot.png) -->
+<p align="center">
+  <img src="docs/screenshot-light.png" alt="ToFinal in light mode" width="49%" />
+  <img src="docs/screenshot-dark.png" alt="ToFinal in dark mode" width="49%" />
+</p>
+
+<p align="center"><em>Light and dark themes</em></p>
 
 ## Features
 

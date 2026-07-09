@@ -16,6 +16,10 @@ src-tauri/target/
 .env.*
 *.local
 
+# Large local media — upload demo videos to a GitHub Release/issue for inline
+# playback instead of committing them (keeps the repo lean).
+docs/*.mp4
+
 # Agent / assistant working directories
 .agents
 .claude
