@@ -22,7 +22,7 @@ A local-first, minimal desktop task manager built with [Tauri](https://tauri.app
 
 ## Install
 
-Download the latest installer from the [Releases](https://github.com/awwbugbug/tofinal/releases) page.
+Download the latest installer from the [Releases](https://github.com/awwbugbug/Tofinal/releases) page.
 
 > The installer is currently **unsigned**, so Windows SmartScreen may show an "unknown publisher" warning on first run. Choose **More info → Run anyway**. (See [Security & privacy](#security--privacy) for what the app can and cannot do.)
 
