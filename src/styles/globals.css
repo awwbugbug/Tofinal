@@ -664,6 +664,7 @@ body {
     font-weight: 500;
     height: 2.25rem;
     padding-inline: 0.5rem;
+    white-space: nowrap;
     transition:
       background-color 180ms ease,
       border-color 180ms ease,
@@ -753,6 +754,7 @@ body {
     top: var(--priority-padding);
     transition:
       left var(--ios-spring-motion),
+      width var(--ios-spring-motion),
       background-color 220ms ease,
       box-shadow 220ms ease;
     width: var(--priority-thumb-width);

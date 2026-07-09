@@ -27,6 +27,7 @@ import { ScreenshotEditorOverlay } from "@/components/task/ScreenshotEditorOverl
 import { useI18n } from "@/i18n/useI18n";
 import { useExternalImageDrop } from "@/lib/useExternalImageDrop";
 import { useSegmentDrag } from "@/lib/useSegmentDrag";
+import { useSegmentThumb } from "@/lib/useSegmentThumb";
 import { cn } from "@/lib/utils";
 import { getLocalDateKey } from "@/stores/taskStore";
 import { usePreferencesStore } from "@/stores/preferencesStore";
@@ -319,6 +320,12 @@ export function TaskDetail({
   const dateDragActionRef = useRef<(index: number) => void>(() => {});
   const priorityDrag = useSegmentDrag({ onSelectIndex: (index) => priorityDragActionRef.current(index) });
   const dateDrag = useSegmentDrag({ onSelectIndex: (index) => dateDragActionRef.current(index) });
+  // Measured thumbs let the segments size to their content (so long labels like
+  // "Tomorrow" get the room they need) while the thumb still lands exactly on
+  // the active one. The keys just have to change whenever the selection does.
+  const { shellRef: priorityShellRef, thumbStyle: priorityThumbStyle } = useSegmentThumb(priority, language);
+  const dateThumbKey = customPending ? "custom" : task?.plannedDate ? `d:${task.plannedDate}` : "none";
+  const { shellRef: dateShellRef, thumbStyle: dateThumbStyle } = useSegmentThumb(dateThumbKey, language);
 
   if (!task) {
     return (
@@ -528,12 +535,13 @@ export function TaskDetail({
         </div>
         <div
           aria-labelledby="task-priority-label"
-          className="priority-segment-shell grid grid-cols-3 gap-2 overflow-visible rounded-[24px] border p-2 touch-none"
+          className="priority-segment-shell grid gap-2 overflow-visible rounded-[24px] border p-2 touch-none"
+          ref={priorityShellRef}
           role="group"
-          style={prioritySegmentStyle[priority] as CSSProperties}
+          style={{ ...(prioritySegmentStyle[priority] as CSSProperties), gridTemplateColumns: "repeat(3, minmax(min-content, 1fr))" }}
           {...priorityDrag}
         >
-          <span aria-hidden="true" className="priority-segment-thumb glass-soft" />
+          <span aria-hidden="true" className="priority-segment-thumb glass-soft" style={priorityThumbStyle} />
           {priorityOptions.map((option) => (
             <button
               aria-pressed={priority === option.value}
@@ -556,12 +564,13 @@ export function TaskDetail({
         <div className="relative">
           <div
             aria-labelledby="task-planned-date-label"
-            className="priority-segment-shell date-segment-shell grid grid-cols-4 gap-2 overflow-visible rounded-[24px] border p-2 touch-none"
+            className="priority-segment-shell date-segment-shell grid gap-2 overflow-visible rounded-[24px] border p-2 touch-none"
+            ref={dateShellRef}
             role="group"
-            style={dateSegmentStyle[displaySegment] as CSSProperties}
+            style={{ ...(dateSegmentStyle[displaySegment] as CSSProperties), gridTemplateColumns: "repeat(4, minmax(min-content, 1fr))" }}
             {...dateDrag}
           >
-            <span aria-hidden="true" className="priority-segment-thumb date-segment-thumb glass-soft" />
+            <span aria-hidden="true" className="priority-segment-thumb date-segment-thumb glass-soft" style={dateThumbStyle} />
             <button
               aria-pressed={displaySegment === "none"}
               className="priority-segment text-center font-medium"
