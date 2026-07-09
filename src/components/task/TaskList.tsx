@@ -111,6 +111,10 @@ const FOLD_STAGGER_CAP_MS = 240;
 // Fraction of a card's height near its top/bottom edge that resolves to
 // insertion instead of merge while dragging a task over another stack.
 const MERGE_EDGE_FRACTION = 0.28;
+// After a reorder that can swap a stack's head, a former head/child mounts as a
+// new element. Suppress its entrance animation for this window so the fill-in
+// card does not replay the expand animation (jump up) on drop.
+const CHILD_ENTRANCE_LOCK_MS = 500;
 // Hysteresis around each card's midpoint: once the insertion point has settled
 // on one side, the pointer must travel this far past the mid to flip it. Keeps
 // the push-apart fill-in from twitching up/down when hovering near a boundary.
@@ -224,6 +228,8 @@ export function TaskList({
   const [dropSettling, setDropSettling] = useState(false);
   const [collapsingStackIds, setCollapsingStackIds] = useState<string[]>([]);
   const collapseTimeoutsRef = useRef<Set<number>>(new Set());
+  const [entranceLockedStackIds, setEntranceLockedStackIds] = useState<string[]>([]);
+  const entranceLockTimeoutsRef = useRef<Set<number>>(new Set());
   const overDropTarget = useDragStore((state) => state.overDropTarget);
   const views = stackViews ?? tasks.map((task, index) => ({
     stack: {
@@ -277,6 +283,8 @@ export function TaskList({
     }
     collapseTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
     collapseTimeoutsRef.current.clear();
+    entranceLockTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
+    entranceLockTimeoutsRef.current.clear();
     if (bodyDragStyleRef.current) {
       document.body.style.userSelect = bodyDragStyleRef.current.userSelect;
       document.body.style.cursor = bodyDragStyleRef.current.cursor;
@@ -514,6 +522,18 @@ export function TaskList({
   const toPostRemovalIndex = (targetIndex: number, sourceIndex: number) =>
     sourceIndex >= 0 && targetIndex > sourceIndex ? targetIndex - 1 : targetIndex;
 
+  // Suppress the child entrance animation for a stack that just had a task
+  // mount into it (head swap from a reorder, or a merge), so the newly-mounted
+  // frame does not replay the expand animation.
+  const lockStackEntrance = (stackId: string) => {
+    setEntranceLockedStackIds((current) => (current.includes(stackId) ? current : [...current, stackId]));
+    const timeoutId = window.setTimeout(() => {
+      entranceLockTimeoutsRef.current.delete(timeoutId);
+      setEntranceLockedStackIds((current) => current.filter((id) => id !== stackId));
+    }, CHILD_ENTRANCE_LOCK_MS);
+    entranceLockTimeoutsRef.current.add(timeoutId);
+  };
+
   const handleDrop = (drag: DragState, preview: DropPreview | null) => {
     if (!preview || preview.kind === "sidebar") {
       return;
@@ -537,6 +557,7 @@ export function TaskList({
 
     if (preview.kind === "task-reorder") {
       const sourceTaskIndex = measurementsRef.current?.tasks.findIndex((rect) => rect.id === drag.sourceTaskId) ?? -1;
+      lockStackEntrance(preview.targetStackId);
       onReorderTaskWithinStack?.(
         preview.targetStackId,
         drag.sourceTaskId ?? "",
@@ -546,6 +567,7 @@ export function TaskList({
     }
 
     if (preview.kind === "merge") {
+      lockStackEntrance(preview.targetStackId);
       onMoveTaskToStack?.(drag.sourceTaskId ?? "", preview.targetStackId);
       return;
     }
@@ -941,12 +963,17 @@ export function TaskList({
 
     const mainTaskHidden = dragHidesTask(hidingDrag, view.mainTask.id);
     const stackCollapsing = collapsingStackIds.includes(view.stack.id);
+    const entranceLocked = entranceLockedStackIds.includes(view.stack.id);
     const childCount = view.tasks.length - 1;
     const foldDurationMs = FOLD_MS + Math.min(Math.max(childCount - 1, 0) * FOLD_STAGGER_MS, FOLD_STAGGER_CAP_MS);
 
     return (
       <section
-        className={cn("task-stack-unfolded task-stack-drag-frame", stackCollapsing && "task-stack-collapsing")}
+        className={cn(
+          "task-stack-unfolded task-stack-drag-frame",
+          stackCollapsing && "task-stack-collapsing",
+          entranceLocked && "task-stack-entrance-locked",
+        )}
         data-dnd-stack-frame="true"
         data-dragging={topLevelHidden ? "true" : undefined}
         data-drop-state={stackDropState}

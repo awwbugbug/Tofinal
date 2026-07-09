@@ -1567,6 +1567,13 @@ body {
     width: calc(100% - 0.9rem);
   }
 
+  /* After a reorder/merge, a task can mount into an already-open stack (e.g. a
+     head swap). Suppress the entrance animation for that brief window so the
+     fill-in card lands in place instead of replaying the expand (jumping up). */
+  .task-stack-entrance-locked .stack-task-drag-frame {
+    animation: none;
+  }
+
   /* Collapse: children fold back under the main card (reverse of unfold);
      the state switch is committed after the animation by TaskList. */
   .task-stack-collapsing .stack-task-drag-frame {
