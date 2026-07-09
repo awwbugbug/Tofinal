@@ -25,25 +25,40 @@ const windowProfiles = {
   },
 } satisfies Record<AppMode, Record<string, number | boolean | null>>;
 
-export async function applyWindowMode(mode: AppMode) {
+async function applyWindowModeNow(mode: AppMode) {
   try {
     const tauriWindow: TauriWindowModule = await import("@tauri-apps/api/window");
     const appWindow = tauriWindow.getCurrentWindow();
+    const { LogicalSize } = tauriWindow;
     const profile = windowProfiles[mode];
 
-    await appWindow.setMinSize(
-      new tauriWindow.LogicalSize(profile.minWidth as number, profile.minHeight as number),
-    );
-    await appWindow.setMaxSize(
-      profile.maxWidth && profile.maxHeight
-        ? new tauriWindow.LogicalSize(profile.maxWidth as number, profile.maxHeight as number)
-        : null,
-    );
     await appWindow.setResizable(true);
-    await appWindow.setSize(new tauriWindow.LogicalSize(profile.width as number, profile.height as number));
+    // Relax both constraints before resizing so setSize is the ONLY resize.
+    // If the target max is smaller than the current window (shrinking to pin)
+    // or the target min is larger than it (growing to normal), applying the
+    // constraint first forces the OS to clamp the window immediately — a second
+    // resize on top of setSize. That double resize is what can leave WebView2
+    // painting a black frame during the mode switch.
+    await appWindow.setMaxSize(null);
+    await appWindow.setMinSize(new LogicalSize(1, 1));
+    await appWindow.setSize(new LogicalSize(profile.width as number, profile.height as number));
+    await appWindow.setMinSize(new LogicalSize(profile.minWidth as number, profile.minHeight as number));
+    if (profile.maxWidth && profile.maxHeight) {
+      await appWindow.setMaxSize(new LogicalSize(profile.maxWidth as number, profile.maxHeight as number));
+    }
     await appWindow.setAlwaysOnTop(profile.alwaysOnTop as boolean);
     await appWindow.setSkipTaskbar(profile.skipTaskbar as boolean);
   } catch {
     // Browser preview or restricted Tauri permissions still keep the UI mode switch usable.
   }
+}
+
+// Serialize calls: overlapping mode switches must not interleave their
+// setMinSize/setSize/setMaxSize calls, or the window can land in a clamped,
+// half-applied size.
+let pending: Promise<void> = Promise.resolve();
+
+export function applyWindowMode(mode: AppMode): Promise<void> {
+  pending = pending.then(() => applyWindowModeNow(mode));
+  return pending;
 }
