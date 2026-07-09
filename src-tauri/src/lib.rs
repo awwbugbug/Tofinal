@@ -21,11 +21,6 @@ struct CapturedMonitor {
 }
 
 #[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
-
-#[tauri::command]
 fn launch_task_app(app_path: String, app_kind: String) -> Result<(), String> {
     let path = Path::new(&app_path);
     if !path.exists() {
@@ -210,7 +205,6 @@ pub fn run() {
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
-            greet,
             launch_task_app,
             capture_fullscreen_screenshot,
             read_dropped_image

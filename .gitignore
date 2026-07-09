@@ -16,6 +16,10 @@ src-tauri/target/
 .env.*
 *.local
 
+# Agent / assistant working directories
+.agents
+.claude
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
