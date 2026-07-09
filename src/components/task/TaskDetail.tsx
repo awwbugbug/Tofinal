@@ -26,6 +26,7 @@ import { CalendarPopover } from "@/components/ui/calendar-popover";
 import { ScreenshotEditorOverlay } from "@/components/task/ScreenshotEditorOverlay";
 import { useI18n } from "@/i18n/useI18n";
 import { useExternalImageDrop } from "@/lib/useExternalImageDrop";
+import { useSegmentDrag } from "@/lib/useSegmentDrag";
 import { cn } from "@/lib/utils";
 import { getLocalDateKey } from "@/stores/taskStore";
 import { usePreferencesStore } from "@/stores/preferencesStore";
@@ -314,6 +315,11 @@ export function TaskDetail({
     }
   }, []);
 
+  const priorityDragActionRef = useRef<(index: number) => void>(() => {});
+  const dateDragActionRef = useRef<(index: number) => void>(() => {});
+  const priorityDrag = useSegmentDrag({ onSelectIndex: (index) => priorityDragActionRef.current(index) });
+  const dateDrag = useSegmentDrag({ onSelectIndex: (index) => dateDragActionRef.current(index) });
+
   if (!task) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-[var(--text-faint)]">
@@ -419,6 +425,22 @@ export function TaskDetail({
     setPriority(nextPriority);
   };
 
+  // The drag hooks live above the early return (hooks must be unconditional);
+  // these refs feed them the current segment actions each render.
+  priorityDragActionRef.current = (index) => {
+    const option = priorityOptions[index];
+    if (option) {
+      handlePriorityChange(option.value);
+    }
+  };
+  const dateSegmentActions = [
+    () => applyPlannedDate(null),
+    () => applyPlannedDate(todayKey),
+    () => applyPlannedDate(tomorrowKey),
+    handleCustomSegmentClick,
+  ];
+  dateDragActionRef.current = (index) => dateSegmentActions[index]?.();
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="-mx-3 min-h-0 flex-1 space-y-5 overflow-y-auto px-3 py-3">
@@ -506,14 +528,16 @@ export function TaskDetail({
         </div>
         <div
           aria-labelledby="task-priority-label"
-          className="priority-segment-shell grid grid-cols-3 gap-2 overflow-visible rounded-[24px] border p-2"
+          className="priority-segment-shell grid grid-cols-3 gap-2 overflow-visible rounded-[24px] border p-2 touch-none"
           role="group"
           style={prioritySegmentStyle[priority] as CSSProperties}
+          {...priorityDrag}
         >
           <span aria-hidden="true" className="priority-segment-thumb glass-soft" />
           {priorityOptions.map((option) => (
             <button
               aria-pressed={priority === option.value}
+              data-segment-button
               data-selected={priority === option.value}
               className="priority-segment text-center font-medium"
               key={option.value}
@@ -532,14 +556,16 @@ export function TaskDetail({
         <div className="relative">
           <div
             aria-labelledby="task-planned-date-label"
-            className="priority-segment-shell date-segment-shell grid grid-cols-4 gap-2 overflow-visible rounded-[24px] border p-2"
+            className="priority-segment-shell date-segment-shell grid grid-cols-4 gap-2 overflow-visible rounded-[24px] border p-2 touch-none"
             role="group"
             style={dateSegmentStyle[displaySegment] as CSSProperties}
+            {...dateDrag}
           >
             <span aria-hidden="true" className="priority-segment-thumb date-segment-thumb glass-soft" />
             <button
               aria-pressed={displaySegment === "none"}
               className="priority-segment text-center font-medium"
+              data-segment-button
               data-selected={displaySegment === "none"}
               onClick={() => applyPlannedDate(null)}
               style={{ "--segment-text": dateSegmentText.none } as CSSProperties}
@@ -550,6 +576,7 @@ export function TaskDetail({
             <button
               aria-pressed={displaySegment === "today"}
               className="priority-segment text-center font-medium"
+              data-segment-button
               data-selected={displaySegment === "today"}
               onClick={() => applyPlannedDate(todayKey)}
               style={{ "--segment-text": dateSegmentText.today } as CSSProperties}
@@ -560,6 +587,7 @@ export function TaskDetail({
             <button
               aria-pressed={displaySegment === "tomorrow"}
               className="priority-segment text-center font-medium"
+              data-segment-button
               data-selected={displaySegment === "tomorrow"}
               onClick={() => applyPlannedDate(tomorrowKey)}
               style={{ "--segment-text": dateSegmentText.tomorrow } as CSSProperties}
@@ -571,6 +599,7 @@ export function TaskDetail({
               aria-label={t("date.custom")}
               aria-pressed={displaySegment === "custom"}
               className="priority-segment min-w-0 gap-1 text-center font-medium"
+              data-segment-button
               data-selected={displaySegment === "custom"}
               onClick={handleCustomSegmentClick}
               style={{ "--segment-text": dateSegmentText.custom } as CSSProperties}

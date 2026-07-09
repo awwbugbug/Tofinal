@@ -8,6 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { TrashBinIcon } from "@/components/ui/trash-bin-icon";
 import { useI18n } from "@/i18n/useI18n";
 import { cn } from "@/lib/utils";
+import { useSegmentDrag } from "@/lib/useSegmentDrag";
 import { useDragStore } from "@/stores/dragStore";
 import { usePreferencesStore } from "@/stores/preferencesStore";
 import { getLocalDateKey, getOverdueTasks, getTasksForFilter } from "@/stores/taskStore";
@@ -54,6 +55,15 @@ export function Sidebar({ activeFilter, onFilterChange, onOpenTrash, tasks, tras
     0,
   );
   const navStyle = { "--active-filter-offset": activeFilterOffsets[activeFilterIndex] } as CSSProperties;
+  const filterDrag = useSegmentDrag({
+    orientation: "vertical",
+    onSelectIndex: (index) => {
+      const item = navItems[index];
+      if (item) {
+        onFilterChange(item.filter);
+      }
+    },
+  });
 
   return (
     <aside className="surface-sidebar flex h-full flex-col rounded-[var(--radius-panel)] border p-4">
@@ -62,7 +72,7 @@ export function Sidebar({ activeFilter, onFilterChange, onOpenTrash, tasks, tras
         <h1 className="mt-2 text-2xl font-semibold tracking-normal text-[var(--text-primary)]">{t("sidebar.tasks")}</h1>
       </div>
 
-      <nav aria-label="Task filters" className="filter-nav mt-8" style={navStyle}>
+      <nav aria-label="Task filters" className="filter-nav mt-8 touch-none" style={navStyle} {...filterDrag}>
         <span aria-hidden="true" className="filter-nav-thumb glass-soft selected-glass-pill" />
         {navItems.map((item) => {
           const isDateItem = item.filter === "today";
@@ -92,6 +102,7 @@ export function Sidebar({ activeFilter, onFilterChange, onOpenTrash, tasks, tras
                 pulseDropTarget === item.filter && "filter-nav-item-drop-pulse",
               )}
               data-drop-target={item.filter}
+              data-segment-button
               key={item.filter}
               onAnimationEnd={pulseDropTarget === item.filter ? clearPulse : undefined}
               onClick={() => onFilterChange(item.filter)}
