@@ -2,6 +2,13 @@
   "name": "tofinal",
   "private": true,
   "version": "0.1.0",
+  "description": "A local-first, minimal desktop task manager built with Tauri and React.",
+  "license": "MIT",
+  "author": "awwbugbug",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/awwbugbug/tofinal.git"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",

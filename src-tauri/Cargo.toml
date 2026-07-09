@@ -2,7 +2,9 @@
 name = "tofinal"
 version = "0.1.0"
 description = "Local-first minimal task app"
-authors = ["you"]
+authors = ["awwbugbug"]
+license = "MIT"
+repository = "https://github.com/awwbugbug/tofinal"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
