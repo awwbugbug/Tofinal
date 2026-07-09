@@ -1010,7 +1010,11 @@ export function TaskList({
                 className={cn("task-exit-wrap", leavingTaskIds.includes(task.id) && "task-exit-wrap-leaving")}
                 key={task.id}
               >
-                <div className="task-exit-inner">
+                {/* Push-apart shift rides the wrapper, not the frame: the frame
+                    owns the entrance animation and the two must not share the
+                    transform property (else the fill-in card snaps back to the
+                    unfold "from" state and replays the expand animation). */}
+                <div className="task-exit-inner" style={frameShiftStyle(taskShifts.get(task.id) ?? 0)}>
                   <div
                     className="stack-task-drag-frame"
                     data-dnd-task-frame="true"
@@ -1027,7 +1031,7 @@ export function TaskList({
                         sourceTaskId: task.id,
                       });
                     }}
-                    style={{ ...(frameShiftStyle(taskShifts.get(task.id) ?? 0) ?? {}), animationDelay: `${staggerMs}ms` }}
+                    style={{ animationDelay: `${staggerMs}ms` }}
                   >
                     <TaskItem
                       onSelect={onSelect}

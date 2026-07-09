@@ -1099,6 +1099,10 @@ body {
 
   .task-exit-inner {
     min-height: 0;
+    /* Carries the drag push-apart shift for stack children (decoupled from the
+       frame's entrance animation). Harmless at the top level, where no shift
+       transform is ever set on this element. */
+    transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .task-exit-wrap-leaving {
@@ -2081,7 +2085,8 @@ body {
 
   .task-stack-drag-frame,
   .stack-task-drag-frame,
-  .task-exit-wrap {
+  .task-exit-wrap,
+  .task-exit-inner {
     transition-duration: 1ms;
   }
 
