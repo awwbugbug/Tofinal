@@ -6,12 +6,15 @@ import { TaskList } from "@/components/task/TaskList";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n/useI18n";
 import { usePreferencesStore } from "@/stores/preferencesStore";
-import type { Task, TaskStackView } from "@/types/task";
+import { getLocalDateKey } from "@/stores/taskStore";
+import type { Task, TaskFilter, TaskStackView } from "@/types/task";
 
 type DesktopPinLayoutProps = {
   tasks: Task[];
   stackViews: TaskStackView[];
   selectedTaskId: string | null;
+  activeFilter: TaskFilter;
+  viewDateKey: string;
   onAddTask: (title: string) => void;
   onSelectTask: (id: string) => void;
   onToggleTask: (id: string) => void;
@@ -22,6 +25,7 @@ type DesktopPinLayoutProps = {
 const stackHasPinnedTask = (view: TaskStackView) => view.tasks.some((task) => task.pinned);
 
 export function DesktopPinLayout({
+  activeFilter,
   modeTransition = null,
   onAddTask,
   onSelectTask,
@@ -30,9 +34,21 @@ export function DesktopPinLayout({
   selectedTaskId,
   stackViews,
   tasks,
+  viewDateKey,
 }: DesktopPinLayoutProps) {
   const { t } = useI18n();
+  const language = usePreferencesStore((state) => state.language);
   const completionCelebrationsEnabled = usePreferencesStore((state) => state.completionCelebrationsEnabled);
+  // Title mirrors the normal-mode view so it is obvious which list is shown: the
+  // active filter, or the browsed date when viewing a day other than today.
+  const pinTitle = activeFilter === "today" && viewDateKey !== getLocalDateKey()
+    ? (() => {
+        const [year, month, day] = viewDateKey.split("-").map(Number);
+        const locale = language === "en-US" ? "en-US" : "zh-CN";
+        return new Intl.DateTimeFormat(locale, { month: language === "en-US" ? "short" : "long", day: "numeric" })
+          .format(new Date(year || 1970, (month || 1) - 1, day || 1));
+      })()
+    : t(`filters.${activeFilter}`);
   const [recentlyCompletedTaskIds, setRecentlyCompletedTaskIds] = useState<string[]>([]);
   const celebrationTimeoutsRef = useRef(new Map<string, number>());
   const pinStackViews = useMemo(
@@ -102,7 +118,7 @@ export function DesktopPinLayout({
         <header className="mb-4 flex items-center justify-between">
           <div>
             <p className="text-xs font-medium uppercase text-[var(--text-faint)]">{t("mode.pin")}</p>
-            <h1 className="mt-1 text-xl font-semibold tracking-normal text-[var(--text-primary)]">{t("sidebar.tasks")}</h1>
+            <h1 className="mt-1 text-xl font-semibold tracking-normal text-[var(--text-primary)]">{pinTitle}</h1>
           </div>
           <Button
             aria-label={t("window.switchToNormal")}

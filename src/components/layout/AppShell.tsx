@@ -100,7 +100,9 @@ export function AppShell() {
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null;
   const stackViews = getStackViews(activeFilter);
   const todayCompletedStackViews = activeFilter === "today" ? getTodayCompletedStackViews() : [];
-  const pinStackViews = getStackViews("all");
+  // Pin mode mirrors the normal-mode list (same filter and view date) so the
+  // two views stay in correspondence; it just renders them compact and capped.
+  const pinStackViews = stackViews;
   const selectedTaskAttachments = selectedTaskId ? (attachmentsByTaskId[selectedTaskId] ?? []) : [];
   const selectedTaskAttachmentsLoading = selectedTaskId ? Boolean(attachmentLoadingTaskIds[selectedTaskId]) : false;
   const selectedTaskApps = selectedTaskId ? (appsByTaskId[selectedTaskId] ?? []) : [];
@@ -414,6 +416,7 @@ export function AppShell() {
         <WindowTitleBar mode={mode} />
         <div className="min-h-0 flex-1">
           <DesktopPinLayout
+            activeFilter={activeFilter}
             modeTransition={modeTransition}
             onAddTask={addTask}
             onSelectTask={selectTask}
@@ -422,6 +425,7 @@ export function AppShell() {
             selectedTaskId={selectedTaskId}
             stackViews={pinStackViews}
             tasks={tasks}
+            viewDateKey={viewDateKey}
           />
         </div>
       </div>
