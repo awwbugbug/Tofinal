@@ -8,7 +8,11 @@ on:
 jobs:
   frontend:
     name: Type-check & test
-    runs-on: ubuntu-latest
+    # Runs on Windows to match the platform this app targets and the platform
+    # the committed package-lock.json is generated on. npm omits other-OS
+    # optional deps from the lockfile (e.g. Tailwind's Linux WASM engine pulls
+    # @emnapi/*), so a Linux runner's `npm ci` fails against a Windows lockfile.
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
