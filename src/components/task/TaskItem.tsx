@@ -151,6 +151,7 @@ export function TaskItem({ compact = false, onSelect, onToggle, selected = false
       overdue: false,
     };
   })();
+  const hasStackCount = typeof stackCount === "number" && stackCount > 1;
   const itemRef = useRef<HTMLElement | null>(null);
   const previousCompletedRef = useRef(task.completed);
   const completionCelebrationHandledRef = useRef(false);
@@ -198,7 +199,9 @@ export function TaskItem({ compact = false, onSelect, onToggle, selected = false
       <div
         className={cn(
           "task-card-grid grid min-w-0 items-start gap-x-3 gap-y-1",
-          compact ? "grid-cols-[auto_minmax(0,1fr)]" : "grid-cols-[auto_minmax(0,1fr)_auto]",
+          compact
+            ? (hasStackCount ? "grid-cols-[auto_minmax(0,1fr)_auto]" : "grid-cols-[auto_minmax(0,1fr)]")
+            : "grid-cols-[auto_minmax(0,1fr)_auto]",
         )}
         data-testid="task-card-grid"
       >
@@ -241,10 +244,15 @@ export function TaskItem({ compact = false, onSelect, onToggle, selected = false
             {plannedLabel.text}
           </span>
         )}
-        {!compact && typeof stackCount === "number" && stackCount > 1 && (
+        {hasStackCount && (
           <span
             aria-hidden="true"
-            className="col-start-3 row-start-2 inline-flex items-center gap-1 self-end justify-self-end text-[11px] leading-none text-[var(--text-faint)]"
+            className={cn(
+              "inline-flex items-center gap-1 justify-self-end leading-none text-[var(--text-faint)]",
+              compact
+                ? "col-start-3 row-start-1 self-center text-[10px]"
+                : "col-start-3 row-start-2 self-end text-[11px]",
+            )}
             data-testid="task-stack-count"
           >
             <Layers3 className="h-3 w-3" />

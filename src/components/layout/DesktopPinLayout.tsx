@@ -51,11 +51,20 @@ export function DesktopPinLayout({
     : t(`filters.${activeFilter}`);
   const [recentlyCompletedTaskIds, setRecentlyCompletedTaskIds] = useState<string[]>([]);
   const celebrationTimeoutsRef = useRef(new Map<string, number>());
+  // Expand/collapse of stacks is kept LOCAL to the pin widget (default
+  // collapsed) so a single tap opens a stack here without mutating the shared
+  // store state or being blown open by whatever the user expanded in normal
+  // mode. `false` means the user opened it in pin.
+  const [pinExpandedById, setPinExpandedById] = useState<Record<string, boolean>>({});
+  const handleToggleStackCollapsed = (stackId: string) => {
+    setPinExpandedById((current) => ({ ...current, [stackId]: !current[stackId] }));
+  };
   const pinStackViews = useMemo(
     () => stackViews
       .filter((view) => view.tasks.some((task) => !task.completed || recentlyCompletedTaskIds.includes(task.id)))
-      .sort((first, second) => Number(stackHasPinnedTask(second)) - Number(stackHasPinnedTask(first))),
-    [recentlyCompletedTaskIds, stackViews],
+      .sort((first, second) => Number(stackHasPinnedTask(second)) - Number(stackHasPinnedTask(first)))
+      .map((view) => ({ ...view, stack: { ...view.stack, collapsed: !pinExpandedById[view.stack.id] } })),
+    [pinExpandedById, recentlyCompletedTaskIds, stackViews],
   );
   const openTaskCount = pinStackViews.reduce(
     (count, view) => count + view.tasks.filter((task) => !task.completed || recentlyCompletedTaskIds.includes(task.id)).length,
@@ -141,6 +150,7 @@ export function DesktopPinLayout({
             limit={5}
             onSelect={onSelectTask}
             onToggle={handleToggleTask}
+            onToggleStackCollapsed={handleToggleStackCollapsed}
             selectedTaskId={selectedTaskId}
             stackViews={pinStackViews}
           />

@@ -1051,6 +1051,12 @@ body {
     z-index: -2;
   }
 
+  /* Compact (pin) cards use a tighter corner radius; match the plates to it. */
+  .task-card-list-safe-area-compact .task-stack-collapsed-multi::before,
+  .task-card-list-safe-area-compact .task-stack-collapsed-multi::after {
+    border-radius: 18px;
+  }
+
   .task-stack-collapsed-multi:hover::before,
   .task-stack-collapsed-multi:focus-visible::before {
     transform: translateY(0.55rem) scaleX(0.972);

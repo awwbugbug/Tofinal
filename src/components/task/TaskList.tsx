@@ -915,11 +915,27 @@ export function TaskList({
 
   const renderStack = (view: TaskStackView) => {
     const isSingleton = view.totalCount === 1;
-    const isCollapsed = view.stack.collapsed || compact;
+    const isCollapsed = view.stack.collapsed;
     const stackDropState = dropPreview?.kind === "merge" && dropPreview.targetStackId === view.stack.id ? "merge" : undefined;
     const topLevelHidden = dragHidesTopLevel(hidingDrag, view.stack.id);
     const stackShift = stackShifts.get(view.stack.id) ?? 0;
-    const collapsedMultiStack = !isSingleton && isCollapsed && !compact;
+    const collapsedMultiStack = !isSingleton && isCollapsed;
+    // The compact (pin) widget has no detail panel, so a single tap expands the
+    // stack in place; normal mode keeps double-click (single click selects).
+    const expandOnClick = collapsedMultiStack && compact
+      ? (event: ReactMouseEvent) => {
+          if (!isInteractiveElement(event.target, event.currentTarget)) {
+            expandStack(view.stack.id);
+          }
+        }
+      : undefined;
+    const expandOnDoubleClick = collapsedMultiStack && !compact
+      ? (event: ReactMouseEvent) => {
+          if (!isInteractiveElement(event.target, event.currentTarget)) {
+            expandStack(view.stack.id);
+          }
+        }
+      : undefined;
 
     if (isSingleton || isCollapsed) {
       return (
@@ -932,12 +948,9 @@ export function TaskList({
           data-stack-size={collapsedMultiStack ? "multi" : "single"}
           data-stack-id={view.stack.id}
           data-testid="task-stack"
+          onClick={expandOnClick}
           onClickCapture={suppressClickAfterDrag}
-          onDoubleClick={collapsedMultiStack ? (event) => {
-            if (!isInteractiveElement(event.target, event.currentTarget)) {
-              expandStack(view.stack.id);
-            }
-          } : undefined}
+          onDoubleClick={expandOnDoubleClick}
           onKeyDown={collapsedMultiStack ? (event) => toggleCollapsedStackFromKey(event, view.stack.id) : undefined}
           onPointerDown={(event) => beginDrag(event, {
             kind: isSingleton ? "task" : "stack",
@@ -995,7 +1008,12 @@ export function TaskList({
           data-dragging={mainTaskHidden ? "true" : undefined}
           data-stack-id={view.stack.id}
           data-task-id={view.mainTask.id}
-          onDoubleClick={(event) => {
+          onClick={compact ? (event) => {
+            if (!isInteractiveElement(event.target, event.currentTarget)) {
+              requestStackCollapse(view);
+            }
+          } : undefined}
+          onDoubleClick={compact ? undefined : (event) => {
             if (!isInteractiveElement(event.target, event.currentTarget)) {
               requestStackCollapse(view);
             }
@@ -1015,6 +1033,7 @@ export function TaskList({
           tabIndex={0}
         >
           <TaskItem
+            compact={compact}
             onSelect={onSelect}
             onToggle={onToggle}
             selected={!compact && view.mainTask.id === selectedTaskId}
@@ -1062,6 +1081,7 @@ export function TaskList({
                     style={{ animationDelay: `${staggerMs}ms` }}
                   >
                     <TaskItem
+                      compact={compact}
                       onSelect={onSelect}
                       onToggle={onToggle}
                       selected={!compact && task.id === selectedTaskId}
