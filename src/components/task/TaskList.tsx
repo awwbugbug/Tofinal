@@ -111,6 +111,10 @@ const FOLD_STAGGER_CAP_MS = 240;
 // Fraction of a card's height near its top/bottom edge that resolves to
 // insertion instead of merge while dragging a task over another stack.
 const MERGE_EDGE_FRACTION = 0.28;
+// Hysteresis around each card's midpoint: once the insertion point has settled
+// on one side, the pointer must travel this far past the mid to flip it. Keeps
+// the push-apart fill-in from twitching up/down when hovering near a boundary.
+const INSERTION_HYSTERESIS = 8;
 
 const noop = () => undefined;
 
@@ -127,10 +131,17 @@ const isInteractiveElement = (target: EventTarget | null, currentTarget?: EventT
   return interactiveElement !== currentTarget;
 };
 
-const getInsertionIndex = (rects: RectSnapshot[], pointerY: number) => {
+const getInsertionIndex = (rects: RectSnapshot[], pointerY: number, previousIndex?: number) => {
   let targetIndex = 0;
   rects.forEach((rect, index) => {
-    if (pointerY > rect.mid) {
+    // Bias each boundary toward the previous result: a card already counted as
+    // "passed" only un-passes once the pointer climbs well above its mid, and
+    // vice versa. Without a previous index (first sample) the plain mid is used.
+    let threshold = rect.mid;
+    if (previousIndex !== undefined) {
+      threshold += previousIndex > index ? -INSERTION_HYSTERESIS : INSERTION_HYSTERESIS;
+    }
+    if (pointerY > threshold) {
       targetIndex = index + 1;
     }
   });
@@ -420,7 +431,10 @@ export function TaskList({
 
     const scrollDelta = (measurements.scrollParent?.scrollTop ?? 0) - measurements.scrollTop;
     const pointerY = clientY + scrollDelta;
-    const targetIndex = getInsertionIndex(measurements.stacks, pointerY);
+    const previous = dropPreviewRef.current;
+    const previousStackIndex =
+      previous?.kind === "stack-reorder" || previous?.kind === "split" ? previous.targetIndex : undefined;
+    const targetIndex = getInsertionIndex(measurements.stacks, pointerY, previousStackIndex);
 
     if (drag.kind === "task") {
       const sourceStackRect = measurements.stacks.find((rect) => rect.id === drag.sourceStackId);
@@ -433,7 +447,11 @@ export function TaskList({
       ) {
         return {
           kind: "task-reorder",
-          targetIndex: getInsertionIndex(measurements.tasks, pointerY),
+          targetIndex: getInsertionIndex(
+            measurements.tasks,
+            pointerY,
+            previous?.kind === "task-reorder" ? previous.targetIndex : undefined,
+          ),
           targetStackId: drag.sourceStackId,
         };
       }
