@@ -231,18 +231,19 @@ export function TaskItem({ compact = false, onSelect, onToggle, selected = false
         >
           {task.title}
         </h3>
-        {/* Right rail: every indicator stacks in ONE column sharing the card's
-            right edge — priority on top, status chips anchored to the bottom.
-            The auto-sized grid column widens with its widest chip, shrinking
-            the title/note column, so new chips always get their own room. */}
+        {/* Right rail: every indicator stacks in ONE column on the card's
+            right side, centered on the column's axis — priority on top,
+            status chips anchored to the bottom. The auto-sized grid column
+            widens with its widest chip, shrinking the title/note column, so
+            new chips always get their own room. */}
         {!compact && (
-          <div className="col-start-3 row-span-2 row-start-1 flex flex-col items-end gap-1.5 justify-self-end">
+          <div className="col-start-3 row-span-2 row-start-1 flex flex-col items-center gap-1.5 justify-self-end">
             <Badge className={cn("shrink-0 gap-1", priorityClassName[task.priority])}>
               <PriorityIcon className="h-3 w-3" />
               {t(`priority.${task.priority}`)}
             </Badge>
             {(showTimeBadge || plannedLabel || hasStackCount) && (
-              <div className="mt-auto flex flex-col items-end gap-1.5 leading-none">
+              <div className="mt-auto flex flex-col items-center gap-1.5 leading-none">
                 {showTimeBadge && <TaskTimeBadge task={task} />}
                 {plannedLabel && (
                   <span
