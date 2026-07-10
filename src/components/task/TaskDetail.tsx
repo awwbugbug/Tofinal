@@ -23,6 +23,7 @@ import { Separator } from "@/components/ui/separator";
 import { AttachmentLightbox } from "@/components/task/AttachmentLightbox";
 import { NotePreviewOverlay } from "@/components/task/NotePreviewOverlay";
 import { CalendarPopover } from "@/components/ui/calendar-popover";
+import { TimeWheelPopover } from "@/components/ui/time-wheel-popover";
 import { ScreenshotEditorOverlay } from "@/components/task/ScreenshotEditorOverlay";
 import { useI18n } from "@/i18n/useI18n";
 import { useExternalImageDrop } from "@/lib/useExternalImageDrop";
@@ -69,7 +70,7 @@ type TaskDetailProps = {
   onDeleteTask: (id: string) => void;
   onUpdateTask: (
     id: string,
-    update: Partial<Pick<Task, "title" | "note" | "priority" | "tags" | "pinned" | "plannedDate">>,
+    update: Partial<Pick<Task, "title" | "note" | "priority" | "tags" | "pinned" | "plannedDate" | "startTime" | "durationMinutes">>,
   ) => boolean;
 };
 
@@ -125,6 +126,38 @@ const dateSegmentText = {
   tomorrow: "var(--urgent-text)",
   custom: "var(--accent-hover)",
 } satisfies Record<DateSegment, string>;
+
+// Two-column time-schedule segmented control: off, or a start time (with an
+// optional duration) edited through the wheel popover.
+type TimeSegment = "none" | "set";
+
+const timeSegmentStyle = {
+  none: {
+    "--priority-left": "var(--priority-padding)",
+    "--segment-bg": "var(--normal-bg)",
+    "--segment-ring": "rgb(86 101 121 / 0.18)",
+  },
+  set: {
+    "--priority-left": "calc(50% + 0.25rem)",
+    "--segment-bg": "var(--accent-surface)",
+    "--segment-ring": "color-mix(in srgb, var(--accent) 26%, transparent)",
+  },
+} satisfies Record<TimeSegment, PrioritySegmentStyle>;
+
+const timeSegmentText = {
+  none: "var(--normal-text)",
+  set: "var(--accent-hover)",
+} satisfies Record<TimeSegment, string>;
+
+/** Compact duration label: 90 → "1h30m", 120 → "2h", 45 → "45m". */
+const formatDurationCompact = (minutes: number) => {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (hours > 0 && mins > 0) {
+    return `${hours}h${mins}m`;
+  }
+  return hours > 0 ? `${hours}h` : `${mins}m`;
+};
 
 const prioritySegmentStyle = {
   normal: {
@@ -214,6 +247,7 @@ export function TaskDetail({
   const [brokenAttachmentIds, setBrokenAttachmentIds] = useState<Record<string, boolean>>({});
   const [lightboxAttachment, setLightboxAttachment] = useState<AttachmentView | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [timeOpen, setTimeOpen] = useState(false);
   // Clicking the custom segment first slides the thumb there, then opens the
   // calendar once the slide has landed; closing without picking slides back.
   const [customPending, setCustomPending] = useState(false);
@@ -305,10 +339,17 @@ export function TaskDetail({
     setError("");
     setBrokenAttachmentIds({});
     setLightboxAttachment(null);
+  }, [task]);
+
+  // Popovers/overlays reset only when switching to a DIFFERENT task — the time
+  // popover live-edits the task, so an object-identity dependency would close
+  // it on its own first change.
+  useEffect(() => {
     setCalendarOpen(false);
     setCustomPending(false);
+    setTimeOpen(false);
     setNoteExpanded(false);
-  }, [task]);
+  }, [task?.id]);
 
   useEffect(() => () => {
     if (customPendingTimeoutRef.current !== null) {
@@ -318,14 +359,18 @@ export function TaskDetail({
 
   const priorityDragActionRef = useRef<(index: number) => void>(() => {});
   const dateDragActionRef = useRef<(index: number) => void>(() => {});
+  const timeDragActionRef = useRef<(index: number) => void>(() => {});
   const priorityDrag = useSegmentDrag({ onSelectIndex: (index) => priorityDragActionRef.current(index) });
   const dateDrag = useSegmentDrag({ onSelectIndex: (index) => dateDragActionRef.current(index) });
+  const timeDrag = useSegmentDrag({ onSelectIndex: (index) => timeDragActionRef.current(index) });
   // Measured thumbs let the segments size to their content (so long labels like
   // "Tomorrow" get the room they need) while the thumb still lands exactly on
   // the active one. The keys just have to change whenever the selection does.
   const { shellRef: priorityShellRef, thumbStyle: priorityThumbStyle } = useSegmentThumb(priority, language);
   const dateThumbKey = customPending ? "custom" : task?.plannedDate ? `d:${task.plannedDate}` : "none";
   const { shellRef: dateShellRef, thumbStyle: dateThumbStyle } = useSegmentThumb(dateThumbKey, language);
+  const timeThumbKey = task?.startTime ? `t:${task.startTime}:${task.durationMinutes ?? 0}` : "none";
+  const { shellRef: timeShellRef, thumbStyle: timeThumbStyle } = useSegmentThumb(timeThumbKey, language);
 
   if (!task) {
     return (
@@ -447,6 +492,29 @@ export function TaskDetail({
     handleCustomSegmentClick,
   ];
   dateDragActionRef.current = (index) => dateSegmentActions[index]?.();
+
+  const timeSegment: TimeSegment = task.startTime ? "set" : "none";
+  const handleTimeNone = () => {
+    setTimeOpen(false);
+    if (task.startTime) {
+      onUpdateTask(task.id, { startTime: null });
+    }
+  };
+  const handleTimeSet = () => {
+    if (!task.startTime) {
+      // First activation defaults to the next full hour; the wheels tune it.
+      const nextHour = (new Date().getHours() + 1) % 24;
+      onUpdateTask(task.id, { startTime: `${String(nextHour).padStart(2, "0")}:00` });
+      setTimeOpen(true);
+      return;
+    }
+    setTimeOpen((current) => !current);
+  };
+  const timeSegmentActions = [handleTimeNone, handleTimeSet];
+  timeDragActionRef.current = (index) => timeSegmentActions[index]?.();
+  const timeChipLabel = task.startTime
+    ? `${task.startTime}${task.durationMinutes ? ` · ${formatDurationCompact(task.durationMinutes)}` : ""}`
+    : t("time.set");
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -630,6 +698,56 @@ export function TaskDetail({
                 applyPlannedDate(dateKey);
               }}
               value={task.plannedDate}
+            />
+          )}
+        </div>
+
+        <div className="block text-xs font-medium uppercase text-[var(--text-faint)]" id="task-time-label">
+          {t("time.title")}
+        </div>
+        <div className="relative">
+          <div
+            aria-labelledby="task-time-label"
+            className="priority-segment-shell time-segment-shell grid grid-cols-2 gap-2 overflow-visible rounded-[24px] border p-2 touch-none"
+            ref={timeShellRef}
+            role="group"
+            style={timeSegmentStyle[timeSegment] as CSSProperties}
+            {...timeDrag}
+          >
+            <span aria-hidden="true" className="priority-segment-thumb date-segment-thumb glass-soft" style={timeThumbStyle} />
+            <button
+              aria-label={`${t("time.title")}: ${t("time.none")}`}
+              aria-pressed={timeSegment === "none"}
+              className="priority-segment text-center font-medium"
+              data-segment-button
+              data-selected={timeSegment === "none"}
+              onClick={handleTimeNone}
+              style={{ "--segment-text": timeSegmentText.none } as CSSProperties}
+              type="button"
+            >
+              {t("time.none")}
+            </button>
+            <button
+              aria-label={t("time.set")}
+              aria-pressed={timeSegment === "set"}
+              className="priority-segment min-w-0 gap-1 text-center font-medium"
+              data-segment-button
+              data-selected={timeSegment === "set"}
+              onClick={handleTimeSet}
+              style={{ "--segment-text": timeSegmentText.set } as CSSProperties}
+              type="button"
+            >
+              <Clock3 className="h-3.5 w-3.5 shrink-0" />
+              {task.startTime && <span className="truncate">{timeChipLabel}</span>}
+            </button>
+          </div>
+          {timeOpen && task.startTime && (
+            <TimeWheelPopover
+              durationMinutes={task.durationMinutes}
+              onChangeDuration={(durationMinutes) => onUpdateTask(task.id, { durationMinutes })}
+              onChangeStartTime={(startTime) => onUpdateTask(task.id, { startTime })}
+              onClose={() => setTimeOpen(false)}
+              startTime={task.startTime}
             />
           )}
         </div>

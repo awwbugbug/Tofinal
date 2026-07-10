@@ -1265,6 +1265,18 @@ body {
     top: calc(50% - 16px);
   }
 
+  .time-wheel-popover {
+    width: 15rem;
+  }
+
+  .wheel-picker-colon,
+  .wheel-picker-unit {
+    color: var(--text-faint);
+    flex: none;
+    font-size: 0.8rem;
+    font-weight: 500;
+  }
+
   .calendar-popover {
     animation: calendar-pop-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
     background: color-mix(in srgb, var(--surface-detail) 96%, transparent);

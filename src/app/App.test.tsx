@@ -777,6 +777,26 @@ describe("App", () => {
     expect(allList.queryByTestId("task-planned-label")).not.toBeInTheDocument();
   });
 
+  it("schedules a start time and duration through the time wheel popover", async () => {
+    await renderApp();
+
+    const detailPanel = within(screen.getByTestId("detail-panel"));
+
+    // Activating the time segment defaults to the next full hour and opens the wheels.
+    await userEvent.click(detailPanel.getByRole("button", { name: /^time$/i }));
+    const popover = within(screen.getByTestId("time-wheel-popover"));
+    expect(detailPanel.getByRole("button", { name: /^time$/i })).toHaveTextContent(/\d{2}:00/);
+
+    // One wheel detent on the duration hours drum allocates an hour.
+    fireEvent.wheel(popover.getByRole("spinbutton", { name: /duration hours/i }), { deltaY: 100 });
+    expect(detailPanel.getByRole("button", { name: /^time$/i })).toHaveTextContent(/1h/);
+
+    // The escape hatch: the time "None" segment clears the whole schedule.
+    fireEvent.keyDown(window, { key: "Escape" });
+    await userEvent.click(detailPanel.getByRole("button", { name: /^time: none$/i }));
+    expect(detailPanel.getByRole("button", { name: /^time$/i })).not.toHaveTextContent(/\d{2}:/);
+  });
+
   it("shows overdue tasks in a Today section and moves them all to today", async () => {
     const seedTasks = createSeedTasks();
     const tasks = [

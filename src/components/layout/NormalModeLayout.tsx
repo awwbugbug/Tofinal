@@ -76,7 +76,7 @@ type NormalModeLayoutProps = {
   onViewDateChange: (dateKey: string) => void;
   onUpdateTask: (
     id: string,
-    update: Partial<Pick<Task, "title" | "note" | "priority" | "tags" | "pinned" | "plannedDate">>,
+    update: Partial<Pick<Task, "title" | "note" | "priority" | "tags" | "pinned" | "plannedDate" | "startTime" | "durationMinutes">>,
   ) => boolean;
   onSwitchToPin: () => void;
   modeTransition?: string | null;
