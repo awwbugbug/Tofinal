@@ -7,6 +7,7 @@ import { WindowTitleBar } from "@/components/layout/WindowTitleBar";
 import { UndoToast } from "@/components/ui/undo-toast";
 import { useI18n } from "@/i18n/useI18n";
 import { useGlobalShortcuts } from "@/lib/useGlobalShortcuts";
+import { useTimeReminders } from "@/lib/useTimeReminders";
 import { applyWindowMode } from "@/lib/windowMode";
 import { useAttachmentStore } from "@/stores/attachmentStore";
 import { usePreferencesStore } from "@/stores/preferencesStore";
@@ -26,6 +27,8 @@ type UndoToastState = {
   id: number;
   message: string;
   onUndo: () => void;
+  /** Overrides the default "Undo" action label (e.g. reminders use "View"). */
+  actionLabel?: string;
 };
 
 /** Keyboard-navigation order within a list: collapsed stacks contribute their
@@ -203,9 +206,9 @@ export function AppShell() {
   const trashedTasks = tasks.filter((task) => task.deletedAt);
   const trashedCount = trashedTasks.length;
 
-  const showUndoToast = useCallback((message: string, onUndo: () => void) => {
+  const showUndoToast = useCallback((message: string, onUndo: () => void, actionLabel?: string) => {
     undoToastIdRef.current += 1;
-    setUndoToast({ id: undoToastIdRef.current, message, onUndo });
+    setUndoToast({ id: undoToastIdRef.current, message, onUndo, actionLabel });
   }, []);
 
   const runUndoToast = useCallback(() => {
@@ -236,6 +239,30 @@ export function AppShell() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [runUndoToast, undoToast]);
+
+  // Wall-clock time reminders: chime + toast when a scheduled task's start
+  // arrives or its allocated duration runs out; reminders that elapsed while
+  // the app was closed are summarized silently on launch.
+  const reminderSoundEnabled = usePreferencesStore((state) => state.reminderSoundEnabled);
+  useTimeReminders({
+    enabled: hydrated,
+    soundEnabled: reminderSoundEnabled,
+    tasks,
+    onRemind: (event) => {
+      const prefix = event.kind === "start" ? t("time.startedToast") : t("time.endedToast");
+      showUndoToast(`${prefix}「${event.task.title}」`, () => {
+        selectTask(event.task.id);
+      }, t("time.view"));
+    },
+    onMissed: (events) => {
+      showUndoToast(`${t("time.missedToast")}${events.length}`, () => {
+        const lastMissed = events[events.length - 1];
+        if (lastMissed) {
+          selectTask(lastMissed.task.id);
+        }
+      }, t("time.view"));
+    },
+  });
 
   // Move to trash instead of hard-deleting; attachments are cleaned up only on purge.
   const handleDeleteTask = (id: string) => {
@@ -532,7 +559,7 @@ export function AppShell() {
       />
       {undoToast && (
         <UndoToast
-          actionLabel={t("common.undo")}
+          actionLabel={undoToast.actionLabel ?? t("common.undo")}
           key={undoToast.id}
           message={undoToast.message}
           onAction={runUndoToast}

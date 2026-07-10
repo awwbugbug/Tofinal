@@ -76,6 +76,8 @@ describe("preferences store", () => {
     expect(store.getState().resolvedTheme).toBe("dark");
     expect(store.getState().language).toBe("en-US");
     expect(store.getState().completionCelebrationsEnabled).toBe(false);
+    // v3 payloads predate the reminder toggle; it defaults on.
+    expect(store.getState().reminderSoundEnabled).toBe(true);
     expect(store.getState().softGlassLevel).toBe("subtle");
     expect(store.getState().highlightGlassLevel).toBe("strong");
     expect(document.documentElement.dataset.theme).toBe("dark");
@@ -153,14 +155,16 @@ describe("preferences store", () => {
     store.getState().setTheme("dark");
     store.getState().setLanguage("en-US");
     store.getState().setCompletionCelebrationsEnabled(false);
+    store.getState().setReminderSoundEnabled(false);
     store.getState().setSoftGlassLevel("subtle");
     store.getState().setHighlightGlassLevel("strong");
 
     expect(JSON.parse(localStorage.getItem(PREFERENCES_STORAGE_KEY) ?? "{}")).toMatchObject({
-      version: 3,
+      version: 4,
       theme: "dark",
       language: "en-US",
       completionCelebrationsEnabled: false,
+      reminderSoundEnabled: false,
       softGlassLevel: "subtle",
       highlightGlassLevel: "strong",
     });
@@ -190,10 +194,11 @@ describe("preferences store", () => {
       highlightGlassLevel: "standard",
     });
     expect(JSON.parse(localStorage.getItem(PREFERENCES_STORAGE_KEY) ?? "{}")).toMatchObject({
-      version: 3,
+      version: 4,
       theme: "system",
       language: "zh-CN",
       completionCelebrationsEnabled: true,
+      reminderSoundEnabled: true,
       softGlassLevel: "standard",
       highlightGlassLevel: "standard",
     });

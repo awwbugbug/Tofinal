@@ -11,16 +11,24 @@ type PreferencesState = {
   resolvedTheme: ResolvedTheme;
   language: LanguagePreference;
   completionCelebrationsEnabled: boolean;
+  reminderSoundEnabled: boolean;
   softGlassLevel: GlassLevelPreference;
   highlightGlassLevel: GlassLevelPreference;
   initialized: boolean;
 };
+
+/** The slice of preferences that round-trips through localStorage. */
+type PersistedPreferences = Pick<
+  PreferencesState,
+  "theme" | "language" | "completionCelebrationsEnabled" | "reminderSoundEnabled" | "softGlassLevel" | "highlightGlassLevel"
+>;
 
 type PreferencesActions = {
   loadPreferences: () => void;
   setTheme: (theme: ThemePreference) => void;
   setLanguage: (language: LanguagePreference) => void;
   setCompletionCelebrationsEnabled: (enabled: boolean) => void;
+  setReminderSoundEnabled: (enabled: boolean) => void;
   setSoftGlassLevel: (level: GlassLevelPreference) => void;
   setHighlightGlassLevel: (level: GlassLevelPreference) => void;
   resetPreferences: () => void;
@@ -44,11 +52,14 @@ const isLanguagePreference = (value: unknown): value is LanguagePreference =>
 const isGlassLevelPreference = (value: unknown): value is GlassLevelPreference =>
   value === "subtle" || value === "standard" || value === "strong";
 
+const DEFAULT_REMINDER_SOUND_ENABLED = true;
+
 const initialState = (): PreferencesState => ({
   theme: DEFAULT_THEME,
   resolvedTheme: "light",
   language: DEFAULT_LANGUAGE,
   completionCelebrationsEnabled: DEFAULT_COMPLETION_CELEBRATIONS_ENABLED,
+  reminderSoundEnabled: DEFAULT_REMINDER_SOUND_ENABLED,
   softGlassLevel: DEFAULT_GLASS_LEVEL,
   highlightGlassLevel: DEFAULT_GLASS_LEVEL,
   initialized: false,
@@ -66,21 +77,16 @@ const getStorage = () => {
   }
 };
 
-const defaultPersistedPreferences = (): Pick<
-  PreferencesState,
-  "theme" | "language" | "completionCelebrationsEnabled" | "softGlassLevel" | "highlightGlassLevel"
-> => ({
+const defaultPersistedPreferences = (): PersistedPreferences => ({
   theme: DEFAULT_THEME,
   language: DEFAULT_LANGUAGE,
   completionCelebrationsEnabled: DEFAULT_COMPLETION_CELEBRATIONS_ENABLED,
+  reminderSoundEnabled: DEFAULT_REMINDER_SOUND_ENABLED,
   softGlassLevel: DEFAULT_GLASS_LEVEL,
   highlightGlassLevel: DEFAULT_GLASS_LEVEL,
 });
 
-const readPersistedPreferences = (): Pick<
-  PreferencesState,
-  "theme" | "language" | "completionCelebrationsEnabled" | "softGlassLevel" | "highlightGlassLevel"
-> => {
+const readPersistedPreferences = (): PersistedPreferences => {
   try {
     const raw = getStorage()?.getItem(PREFERENCES_STORAGE_KEY);
     if (!raw) {
@@ -92,6 +98,7 @@ const readPersistedPreferences = (): Pick<
       theme?: unknown;
       language?: unknown;
       completionCelebrationsEnabled?: unknown;
+      reminderSoundEnabled?: unknown;
       softGlassLevel?: unknown;
       highlightGlassLevel?: unknown;
     };
@@ -101,26 +108,23 @@ const readPersistedPreferences = (): Pick<
 
     if (parsed.version === 1) {
       return {
+        ...defaultPersistedPreferences(),
         theme: parsed.theme,
         language: parsed.language,
-        completionCelebrationsEnabled: DEFAULT_COMPLETION_CELEBRATIONS_ENABLED,
-        softGlassLevel: DEFAULT_GLASS_LEVEL,
-        highlightGlassLevel: DEFAULT_GLASS_LEVEL,
       };
     }
 
     if (parsed.version === 2 && typeof parsed.completionCelebrationsEnabled === "boolean") {
       return {
+        ...defaultPersistedPreferences(),
         theme: parsed.theme,
         language: parsed.language,
         completionCelebrationsEnabled: parsed.completionCelebrationsEnabled,
-        softGlassLevel: DEFAULT_GLASS_LEVEL,
-        highlightGlassLevel: DEFAULT_GLASS_LEVEL,
       };
     }
 
     if (
-      parsed.version === 3 &&
+      (parsed.version === 3 || parsed.version === 4) &&
       typeof parsed.completionCelebrationsEnabled === "boolean" &&
       isGlassLevelPreference(parsed.softGlassLevel) &&
       isGlassLevelPreference(parsed.highlightGlassLevel)
@@ -129,6 +133,9 @@ const readPersistedPreferences = (): Pick<
         theme: parsed.theme,
         language: parsed.language,
         completionCelebrationsEnabled: parsed.completionCelebrationsEnabled,
+        // v3 payloads predate the reminder toggle; default it on.
+        reminderSoundEnabled:
+          typeof parsed.reminderSoundEnabled === "boolean" ? parsed.reminderSoundEnabled : DEFAULT_REMINDER_SOUND_ENABLED,
         softGlassLevel: parsed.softGlassLevel,
         highlightGlassLevel: parsed.highlightGlassLevel,
       };
@@ -140,25 +147,9 @@ const readPersistedPreferences = (): Pick<
   }
 };
 
-const persistPreferences = (
-  theme: ThemePreference,
-  language: LanguagePreference,
-  completionCelebrationsEnabled: boolean,
-  softGlassLevel: GlassLevelPreference,
-  highlightGlassLevel: GlassLevelPreference,
-) => {
+const persistPreferences = (preferences: PersistedPreferences) => {
   try {
-    getStorage()?.setItem(
-      PREFERENCES_STORAGE_KEY,
-      JSON.stringify({
-        version: 3,
-        theme,
-        language,
-        completionCelebrationsEnabled,
-        softGlassLevel,
-        highlightGlassLevel,
-      }),
-    );
+    getStorage()?.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify({ version: 4, ...preferences }));
   } catch {
     // Preferences are best-effort UI state; failed writes must not block the app.
   }
@@ -239,111 +230,62 @@ const createPreferencesStoreState: StateCreator<PreferencesStore> = (set, get) =
     }
   };
 
-  const commitPreferences = (
-    theme: ThemePreference,
-    language: LanguagePreference,
-    completionCelebrationsEnabled: boolean,
-    softGlassLevel: GlassLevelPreference,
-    highlightGlassLevel: GlassLevelPreference,
-    persist: boolean,
-  ) => {
-    const resolvedTheme = resolveTheme(theme);
+  const currentPersisted = (): PersistedPreferences => ({
+    theme: get().theme,
+    language: get().language,
+    completionCelebrationsEnabled: get().completionCelebrationsEnabled,
+    reminderSoundEnabled: get().reminderSoundEnabled,
+    softGlassLevel: get().softGlassLevel,
+    highlightGlassLevel: get().highlightGlassLevel,
+  });
+
+  const commitPreferences = (preferences: PersistedPreferences, persist: boolean) => {
+    const resolvedTheme = resolveTheme(preferences.theme);
 
     set({
-      theme,
+      ...preferences,
       resolvedTheme,
-      language,
-      completionCelebrationsEnabled,
-      softGlassLevel,
-      highlightGlassLevel,
       initialized: true,
     });
     applyTheme(resolvedTheme);
-    applyGlassLevels(softGlassLevel, highlightGlassLevel);
+    applyGlassLevels(preferences.softGlassLevel, preferences.highlightGlassLevel);
 
-    if (theme === "system") {
+    if (preferences.theme === "system") {
       startSystemThemeListener();
     } else {
       stopSystemThemeListener();
     }
 
     if (persist) {
-      persistPreferences(theme, language, completionCelebrationsEnabled, softGlassLevel, highlightGlassLevel);
+      persistPreferences(preferences);
     }
   };
 
   return {
     ...initialState(),
     loadPreferences: () => {
-      const next = readPersistedPreferences();
-      commitPreferences(
-        next.theme,
-        next.language,
-        next.completionCelebrationsEnabled,
-        next.softGlassLevel,
-        next.highlightGlassLevel,
-        false,
-      );
+      commitPreferences(readPersistedPreferences(), false);
     },
     setTheme: (theme) => {
-      commitPreferences(
-        theme,
-        get().language,
-        get().completionCelebrationsEnabled,
-        get().softGlassLevel,
-        get().highlightGlassLevel,
-        true,
-      );
+      commitPreferences({ ...currentPersisted(), theme }, true);
     },
     setLanguage: (language) => {
-      commitPreferences(
-        get().theme,
-        language,
-        get().completionCelebrationsEnabled,
-        get().softGlassLevel,
-        get().highlightGlassLevel,
-        true,
-      );
+      commitPreferences({ ...currentPersisted(), language }, true);
     },
     setCompletionCelebrationsEnabled: (completionCelebrationsEnabled) => {
-      commitPreferences(
-        get().theme,
-        get().language,
-        completionCelebrationsEnabled,
-        get().softGlassLevel,
-        get().highlightGlassLevel,
-        true,
-      );
+      commitPreferences({ ...currentPersisted(), completionCelebrationsEnabled }, true);
+    },
+    setReminderSoundEnabled: (reminderSoundEnabled) => {
+      commitPreferences({ ...currentPersisted(), reminderSoundEnabled }, true);
     },
     setSoftGlassLevel: (softGlassLevel) => {
-      commitPreferences(
-        get().theme,
-        get().language,
-        get().completionCelebrationsEnabled,
-        softGlassLevel,
-        get().highlightGlassLevel,
-        true,
-      );
+      commitPreferences({ ...currentPersisted(), softGlassLevel }, true);
     },
     setHighlightGlassLevel: (highlightGlassLevel) => {
-      commitPreferences(
-        get().theme,
-        get().language,
-        get().completionCelebrationsEnabled,
-        get().softGlassLevel,
-        highlightGlassLevel,
-        true,
-      );
+      commitPreferences({ ...currentPersisted(), highlightGlassLevel }, true);
     },
     resetPreferences: () => {
-      commitPreferences(
-        DEFAULT_THEME,
-        DEFAULT_LANGUAGE,
-        DEFAULT_COMPLETION_CELEBRATIONS_ENABLED,
-        DEFAULT_GLASS_LEVEL,
-        DEFAULT_GLASS_LEVEL,
-        true,
-      );
+      commitPreferences(defaultPersistedPreferences(), true);
     },
   };
 };

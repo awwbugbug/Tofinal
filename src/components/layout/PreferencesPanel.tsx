@@ -73,6 +73,8 @@ export function PreferencesPanel({ onClose, open }: PreferencesPanelProps) {
   const theme = usePreferencesStore((state) => state.theme);
   const language = usePreferencesStore((state) => state.language);
   const completionCelebrationsEnabled = usePreferencesStore((state) => state.completionCelebrationsEnabled);
+  const reminderSoundEnabled = usePreferencesStore((state) => state.reminderSoundEnabled);
+  const setReminderSoundEnabled = usePreferencesStore((state) => state.setReminderSoundEnabled);
   const softGlassLevel = usePreferencesStore((state) => state.softGlassLevel);
   const highlightGlassLevel = usePreferencesStore((state) => state.highlightGlassLevel);
   const setTheme = usePreferencesStore((state) => state.setTheme);
@@ -248,6 +250,22 @@ export function PreferencesPanel({ onClose, open }: PreferencesPanelProps) {
                 checked={completionCelebrationsEnabled}
                 className="mt-0.5"
                 onChange={(event) => setCompletionCelebrationsEnabled(event.currentTarget.checked)}
+              />
+            </label>
+            <label className="flex cursor-pointer items-start justify-between gap-3 rounded-[18px] border border-[var(--border-soft)] bg-[var(--surface-field)] px-3.5 py-3">
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-[var(--text-primary)]">
+                  {t("settings.reminderSound")}
+                </div>
+                <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
+                  {t("settings.reminderSoundDescription")}
+                </p>
+              </div>
+              <Checkbox
+                aria-label={t("settings.reminderSound")}
+                checked={reminderSoundEnabled}
+                className="mt-0.5"
+                onChange={(event) => setReminderSoundEnabled(event.currentTarget.checked)}
               />
             </label>
           </section>

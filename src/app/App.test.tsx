@@ -923,7 +923,7 @@ describe("App", () => {
     expect(document.documentElement.dataset.softGlass).toBe("subtle");
     expect(document.documentElement.dataset.highlightGlass).toBe("strong");
     expect(JSON.parse(localStorage.getItem("tofinal.preferences.v1") ?? "{}")).toMatchObject({
-      version: 3,
+      version: 4,
       theme: "dark",
       language: "en-US",
       completionCelebrationsEnabled: false,
