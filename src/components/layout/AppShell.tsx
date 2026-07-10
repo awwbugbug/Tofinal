@@ -6,6 +6,7 @@ import { TrashPanel } from "@/components/layout/TrashPanel";
 import { WindowTitleBar } from "@/components/layout/WindowTitleBar";
 import { UndoToast } from "@/components/ui/undo-toast";
 import { useI18n } from "@/i18n/useI18n";
+import { sendSystemNotification } from "@/lib/systemNotification";
 import { useGlobalShortcuts } from "@/lib/useGlobalShortcuts";
 import { useTimeReminders } from "@/lib/useTimeReminders";
 import { applyWindowMode } from "@/lib/windowMode";
@@ -253,6 +254,11 @@ export function AppShell() {
       showUndoToast(`${prefix}「${event.task.title}」`, () => {
         selectTask(event.task.id);
       }, t("time.view"));
+      // The in-app toast is invisible when the window is unfocused or
+      // minimized; hand the reminder to the OS notification center instead.
+      if (!document.hasFocus()) {
+        void sendSystemNotification(prefix, event.task.title);
+      }
     },
     onMissed: (events) => {
       showUndoToast(`${t("time.missedToast")}${events.length}`, () => {

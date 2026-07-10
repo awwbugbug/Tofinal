@@ -35,6 +35,7 @@
         { "path": "$APPDATA/backups/**" }
       ]
     },
+    "notification:default",
     "opener:default",
     "sql:default",
     "sql:allow-execute",
