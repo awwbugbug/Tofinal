@@ -4,6 +4,7 @@ import { AlertCircle, CircleDot, Flag, Layers3 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { TaskTimeBadge } from "@/components/task/TaskTimeBadge";
 import { useI18n } from "@/i18n/useI18n";
 import { cn } from "@/lib/utils";
 import { getLocalDateKey } from "@/stores/taskStore";
@@ -153,6 +154,9 @@ export function TaskItem({ compact = false, onSelect, onToggle, selected = false
   })();
   const hasStackCount = typeof stackCount === "number" && stackCount > 1;
   const itemRef = useRef<HTMLElement | null>(null);
+  // The corner slot fits one chip; stack count and date labels outrank the
+  // time badge (a future-dated task shows its date until the day arrives).
+  const showTimeBadge = Boolean(task.startTime) && !task.completed && !hasStackCount && !plannedLabel;
   const previousCompletedRef = useRef(task.completed);
   const completionCelebrationHandledRef = useRef(false);
   // The store toggle may be delayed to let the exit animation play, so the
@@ -259,7 +263,17 @@ export function TaskItem({ compact = false, onSelect, onToggle, selected = false
             {stackCount}
           </span>
         )}
-        {compact && task.tags[0] && <p className="col-start-2 min-w-0 truncate text-[11px] text-[var(--text-faint)]">{task.tags[0]}</p>}
+        {!compact && showTimeBadge && (
+          <span className="col-start-3 row-start-2 self-end justify-self-end">
+            <TaskTimeBadge task={task} />
+          </span>
+        )}
+        {compact && showTimeBadge && (
+          <span className="col-start-2 min-w-0">
+            <TaskTimeBadge compact task={task} />
+          </span>
+        )}
+        {compact && !showTimeBadge && task.tags[0] && <p className="col-start-2 min-w-0 truncate text-[11px] text-[var(--text-faint)]">{task.tags[0]}</p>}
       </div>
     </article>
   );
