@@ -154,9 +154,10 @@ export function TaskItem({ compact = false, onSelect, onToggle, selected = false
   })();
   const hasStackCount = typeof stackCount === "number" && stackCount > 1;
   const itemRef = useRef<HTMLElement | null>(null);
-  // The corner slot fits one chip; stack count and date labels outrank the
-  // time badge (a future-dated task shows its date until the day arrives).
-  const showTimeBadge = Boolean(task.startTime) && !task.completed && !hasStackCount && !plannedLabel;
+  // The corner row holds time, date, and stack chips side by side; only a
+  // date label suppresses the time badge (a future-dated task shows its date
+  // until the day arrives).
+  const showTimeBadge = Boolean(task.startTime) && !task.completed && !plannedLabel;
   const previousCompletedRef = useRef(task.completed);
   const completionCelebrationHandledRef = useRef(false);
   // The store toggle may be delayed to let the exit animation play, so the
@@ -237,35 +238,42 @@ export function TaskItem({ compact = false, onSelect, onToggle, selected = false
           </Badge>
         )}
         {!compact && <p className="col-start-2 min-w-0 line-clamp-2 text-xs leading-5 text-[var(--text-muted)]">{task.note}</p>}
-        {plannedLabel && (
-          <span
-            className={cn(
-              "col-start-3 row-start-2 self-end justify-self-end text-[11px] font-medium leading-none",
-              plannedLabel.overdue ? "task-overdue-label" : "text-[var(--text-faint)]",
+        {/* Single corner container so every chip (time, date, stack count)
+            shares one baseline and one right edge — and so they can coexist. */}
+        {!compact && (showTimeBadge || plannedLabel || hasStackCount) && (
+          <span className="col-start-3 row-start-2 flex items-center gap-2 self-end justify-self-end leading-none">
+            {showTimeBadge && <TaskTimeBadge task={task} />}
+            {plannedLabel && (
+              <span
+                className={cn(
+                  "text-[11px] font-medium leading-none",
+                  plannedLabel.overdue ? "task-overdue-label" : "text-[var(--text-faint)]",
+                )}
+                data-testid={plannedLabel.overdue ? "task-overdue-label" : "task-planned-label"}
+              >
+                {plannedLabel.text}
+              </span>
             )}
-            data-testid={plannedLabel.overdue ? "task-overdue-label" : "task-planned-label"}
-          >
-            {plannedLabel.text}
+            {hasStackCount && (
+              <span
+                aria-hidden="true"
+                className="inline-flex items-center gap-1 text-[11px] leading-none text-[var(--text-faint)]"
+                data-testid="task-stack-count"
+              >
+                <Layers3 className="h-3 w-3" />
+                {stackCount}
+              </span>
+            )}
           </span>
         )}
-        {hasStackCount && (
+        {compact && hasStackCount && (
           <span
             aria-hidden="true"
-            className={cn(
-              "inline-flex items-center gap-1 justify-self-end leading-none text-[var(--text-faint)]",
-              compact
-                ? "col-start-3 row-start-1 self-center text-[10px]"
-                : "col-start-3 row-start-2 self-end text-[11px]",
-            )}
+            className="col-start-3 row-start-1 inline-flex items-center gap-1 self-center justify-self-end text-[10px] leading-none text-[var(--text-faint)]"
             data-testid="task-stack-count"
           >
             <Layers3 className="h-3 w-3" />
             {stackCount}
-          </span>
-        )}
-        {!compact && showTimeBadge && (
-          <span className="col-start-3 row-start-2 self-end justify-self-end">
-            <TaskTimeBadge task={task} />
           </span>
         )}
         {compact && showTimeBadge && (
