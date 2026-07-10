@@ -7,7 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { TaskTimeBadge } from "@/components/task/TaskTimeBadge";
 import { useI18n } from "@/i18n/useI18n";
 import { cn } from "@/lib/utils";
-import { getLocalDateKey } from "@/stores/taskStore";
+import { getLocalDateKey, useTaskStore } from "@/stores/taskStore";
 import { usePreferencesStore } from "@/stores/preferencesStore";
 import type { Task } from "@/types/task";
 
@@ -158,6 +158,34 @@ export function TaskItem({ compact = false, onSelect, onToggle, selected = false
   // date label suppresses the time badge (a future-dated task shows its date
   // until the day arrives).
   const showTimeBadge = Boolean(task.startTime) && !task.completed && !plannedLabel;
+  // Reminder spotlight: the jumped-to card breathes until clicked, then the
+  // glow eases out before the store flag clears.
+  const spotlighted = useTaskStore((state) => state.spotlightTaskId === task.id);
+  const [spotlightFading, setSpotlightFading] = useState(false);
+  const spotlightFadeTimeoutRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!spotlighted) {
+      setSpotlightFading(false);
+    }
+    return () => {
+      if (spotlightFadeTimeoutRef.current !== null) {
+        window.clearTimeout(spotlightFadeTimeoutRef.current);
+        spotlightFadeTimeoutRef.current = null;
+      }
+    };
+  }, [spotlighted]);
+
+  const dismissSpotlight = () => {
+    if (!spotlighted || spotlightFading) {
+      return;
+    }
+    setSpotlightFading(true);
+    spotlightFadeTimeoutRef.current = window.setTimeout(() => {
+      spotlightFadeTimeoutRef.current = null;
+      useTaskStore.getState().setSpotlightTask(null);
+    }, 1250);
+  };
   const previousCompletedRef = useRef(task.completed);
   const completionCelebrationHandledRef = useRef(false);
   // The store toggle may be delayed to let the exit animation play, so the
@@ -194,11 +222,15 @@ export function TaskItem({ compact = false, onSelect, onToggle, selected = false
         displayCompleted && "opacity-70",
         compact && "rounded-[18px] p-2.5 hover:bg-[var(--surface-card-hover)]",
         subtask && "rounded-[18px] bg-[color-mix(in_srgb,var(--surface-card)_44%,transparent)] p-3 shadow-none hover:scale-[1.002]",
+        spotlighted && (spotlightFading ? "task-card-spotlight-fade" : "task-card-spotlight"),
       )}
       data-selected={selected ? "true" : "false"}
       data-task-card-id={task.id}
       data-testid="task-card"
-      onClick={() => onSelect(task.id)}
+      onClick={() => {
+        dismissSpotlight();
+        onSelect(task.id);
+      }}
       ref={itemRef}
     >
       <div
@@ -237,36 +269,32 @@ export function TaskItem({ compact = false, onSelect, onToggle, selected = false
             widens with its widest chip, shrinking the title/note column, so
             new chips always get their own room. */}
         {!compact && (
-          <div className="col-start-3 row-span-2 row-start-1 flex flex-col items-center gap-1.5 justify-self-end">
+          <div className="col-start-3 row-span-2 row-start-1 flex flex-col items-center justify-between gap-1.5 self-stretch justify-self-end">
             <Badge className={cn("shrink-0 gap-1", priorityClassName[task.priority])}>
               <PriorityIcon className="h-3 w-3" />
               {t(`priority.${task.priority}`)}
             </Badge>
-            {(showTimeBadge || plannedLabel || hasStackCount) && (
-              <div className="mt-auto flex flex-col items-center gap-1.5 leading-none">
-                {showTimeBadge && <TaskTimeBadge task={task} />}
-                {plannedLabel && (
-                  <span
-                    className={cn(
-                      "text-[11px] font-medium leading-none",
-                      plannedLabel.overdue ? "task-overdue-label" : "text-[var(--text-faint)]",
-                    )}
-                    data-testid={plannedLabel.overdue ? "task-overdue-label" : "task-planned-label"}
-                  >
-                    {plannedLabel.text}
-                  </span>
+            {showTimeBadge && <TaskTimeBadge task={task} />}
+            {plannedLabel && (
+              <span
+                className={cn(
+                  "text-[11px] font-medium leading-none",
+                  plannedLabel.overdue ? "task-overdue-label" : "text-[var(--text-faint)]",
                 )}
-                {hasStackCount && (
-                  <span
-                    aria-hidden="true"
-                    className="inline-flex items-center gap-1 text-[11px] leading-none text-[var(--text-faint)]"
-                    data-testid="task-stack-count"
-                  >
-                    <Layers3 className="h-3 w-3" />
-                    {stackCount}
-                  </span>
-                )}
-              </div>
+                data-testid={plannedLabel.overdue ? "task-overdue-label" : "task-planned-label"}
+              >
+                {plannedLabel.text}
+              </span>
+            )}
+            {hasStackCount && (
+              <span
+                aria-hidden="true"
+                className="inline-flex items-center gap-1 text-[11px] leading-none text-[var(--text-faint)]"
+                data-testid="task-stack-count"
+              >
+                <Layers3 className="h-3 w-3" />
+                {stackCount}
+              </span>
             )}
           </div>
         )}

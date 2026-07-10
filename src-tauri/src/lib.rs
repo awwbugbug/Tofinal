@@ -20,6 +20,92 @@ struct CapturedMonitor {
     image: RgbaImage,
 }
 
+/// Reminder toasts through WinRT directly (not the notification plugin): the
+/// plugin cannot report clicks on Windows desktop, and click-to-focus is the
+/// whole point of an OS reminder. The toast's Activated handler refocuses the
+/// main window and forwards the task id to the frontend.
+#[cfg(target_os = "windows")]
+mod reminder_toast {
+    use tauri::{AppHandle, Emitter, Manager};
+    use windows::core::HSTRING;
+    use windows::Data::Xml::Dom::XmlDocument;
+    use windows::Foundation::TypedEventHandler;
+    use windows::UI::Notifications::{ToastNotification, ToastNotificationManager};
+
+    // Dev builds have no installed shortcut, so toasts are attributed to
+    // PowerShell's AppUserModelID (the same trick the official plugin uses).
+    // Installed builds use the bundle identifier that the NSIS shortcut carries.
+    const DEBUG_AUMID: &str =
+        "{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe";
+    const RELEASE_AUMID: &str = "com.tofinal.tasks";
+
+    fn xml_escape(value: &str) -> String {
+        value
+            .replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+            .replace('"', "&quot;")
+    }
+
+    pub fn show(app: &AppHandle, title: &str, body: &str, task_id: &str) -> Result<(), String> {
+        let xml = format!(
+            concat!(
+                r#"<toast activationType="foreground"><visual><binding template="ToastGeneric">"#,
+                "<text>{}</text><text>{}</text></binding></visual></toast>"
+            ),
+            xml_escape(title),
+            xml_escape(body),
+        );
+
+        let document = XmlDocument::new().map_err(|error| format!("Toast XML init failed: {error}"))?;
+        document
+            .LoadXml(&HSTRING::from(xml))
+            .map_err(|error| format!("Toast XML parse failed: {error}"))?;
+        let toast = ToastNotification::CreateToastNotification(&document)
+            .map_err(|error| format!("Toast creation failed: {error}"))?;
+
+        let app_handle = app.clone();
+        let task = task_id.to_string();
+        toast
+            .Activated(&TypedEventHandler::new(move |_, _| {
+                if let Some(window) = app_handle.get_webview_window("main") {
+                    let _ = window.unminimize();
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+                let _ = app_handle.emit("reminder-notification-activated", task.clone());
+                Ok(())
+            }))
+            .map_err(|error| format!("Toast activation hook failed: {error}"))?;
+
+        let aumid = if cfg!(debug_assertions) { DEBUG_AUMID } else { RELEASE_AUMID };
+        let notifier = ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from(aumid))
+            .map_err(|error| format!("Toast notifier failed: {error}"))?;
+        notifier
+            .Show(&toast)
+            .map_err(|error| format!("Toast show failed: {error}"))?;
+
+        // Keep the COM object (and its Activated handler) alive for the toast's
+        // lifetime; a few leaked notification handles per day are negligible.
+        std::mem::forget(toast);
+        Ok(())
+    }
+}
+
+#[tauri::command]
+fn notify_reminder(app: tauri::AppHandle, title: String, body: String, task_id: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        return reminder_toast::show(&app, &title, &body, &task_id);
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (app, title, body, task_id);
+        Err("System reminder notifications are only supported on Windows.".to_string())
+    }
+}
+
 #[tauri::command]
 fn launch_task_app(app_path: String, app_kind: String) -> Result<(), String> {
     let path = Path::new(&app_path);
@@ -202,12 +288,12 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             launch_task_app,
             capture_fullscreen_screenshot,
+            notify_reminder,
             read_dropped_image
         ])
         .run(tauri::generate_context!())

@@ -1,32 +1,28 @@
 /**
- * Best-effort OS toast notifications via the Tauri notification plugin.
- * Degrades to a no-op outside Tauri (browser preview, tests) or when the user
- * denies permission — notifications must never break the reminder loop.
+ * OS reminder toasts via the app's own Rust command (WinRT), which — unlike
+ * the notification plugin — reports clicks: activating a toast refocuses the
+ * window and emits "reminder-notification-activated" with the task id.
+ * Degrades to a no-op outside Tauri; failures must never break reminders.
  */
-
-let permissionChecked = false;
-let permissionGranted = false;
-
-export const sendSystemNotification = async (title: string, body: string) => {
+export const sendSystemNotification = async (title: string, body: string, taskId: string) => {
   try {
-    const notification = await import("@tauri-apps/plugin-notification");
-
-    if (!permissionChecked) {
-      permissionChecked = true;
-      permissionGranted = await notification.isPermissionGranted();
-      if (!permissionGranted) {
-        permissionGranted = (await notification.requestPermission()) === "granted";
-      }
-    }
-    if (!permissionGranted) {
-      console.warn("System notification skipped: permission not granted.");
-      return;
-    }
-
-    notification.sendNotification({ title, body });
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("notify_reminder", { title, body, taskId });
   } catch (error) {
-    // Not running under Tauri, or the plugin is unavailable. Log for
-    // diagnosis; notifications must never break the reminder loop.
     console.warn("System notification unavailable:", error);
+  }
+};
+
+/** Subscribe to OS toast clicks; resolves to an unlisten function. */
+export const listenForNotificationActivation = async (onActivate: (taskId: string) => void) => {
+  try {
+    const { listen } = await import("@tauri-apps/api/event");
+    return await listen<string>("reminder-notification-activated", (event) => {
+      if (typeof event.payload === "string") {
+        onActivate(event.payload);
+      }
+    });
+  } catch {
+    return () => {};
   }
 };

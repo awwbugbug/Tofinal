@@ -6,7 +6,7 @@ import { TrashPanel } from "@/components/layout/TrashPanel";
 import { WindowTitleBar } from "@/components/layout/WindowTitleBar";
 import { UndoToast } from "@/components/ui/undo-toast";
 import { useI18n } from "@/i18n/useI18n";
-import { sendSystemNotification } from "@/lib/systemNotification";
+import { listenForNotificationActivation, sendSystemNotification } from "@/lib/systemNotification";
 import { useGlobalShortcuts } from "@/lib/useGlobalShortcuts";
 import { useTimeReminders } from "@/lib/useTimeReminders";
 import { applyWindowMode } from "@/lib/windowMode";
@@ -241,6 +241,58 @@ export function AppShell() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [runUndoToast, undoToast]);
 
+  // Jump from a reminder (toast "View" or an OS toast click) to the task:
+  // normal mode, the task's date view, stack expanded, selected, and lit with
+  // a breathing spotlight until the user clicks the card.
+  const focusTaskFromReminder = useCallback((taskId: string) => {
+    const state = useTaskStore.getState();
+    const targetTask = state.tasks.find((candidate) => candidate.id === taskId && !candidate.deletedAt);
+    if (!targetTask) {
+      return;
+    }
+
+    if (state.mode === "pin") {
+      switchModeWithTransition("normal");
+    }
+    if (targetTask.plannedDate) {
+      state.setActiveFilter("today");
+      state.setViewDate(targetTask.plannedDate);
+    } else {
+      state.setActiveFilter("all");
+    }
+
+    const stack = state.stacks.find((candidate) => candidate.id === targetTask.stackId);
+    const stackSize = state.tasks.filter(
+      (candidate) => candidate.stackId === targetTask.stackId && !candidate.deletedAt,
+    ).length;
+    if (stack?.collapsed && stackSize > 1) {
+      state.toggleStackCollapsed(stack.id);
+    }
+
+    state.selectTask(taskId);
+    state.setSpotlightTask(taskId);
+    window.requestAnimationFrame(() => {
+      document.querySelector(`[data-task-card-id="${taskId}"]`)?.scrollIntoView?.({ block: "center" });
+    });
+  }, [switchModeWithTransition]);
+
+  // OS toast clicks arrive as a Tauri event after Rust refocuses the window.
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    let disposed = false;
+    void listenForNotificationActivation(focusTaskFromReminder).then((dispose) => {
+      if (disposed) {
+        dispose();
+      } else {
+        unlisten = dispose;
+      }
+    });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [focusTaskFromReminder]);
+
   // Wall-clock time reminders: chime + toast when a scheduled task's start
   // arrives or its allocated duration runs out; reminders that elapsed while
   // the app was closed are summarized silently on launch.
@@ -252,18 +304,18 @@ export function AppShell() {
     onRemind: (event) => {
       const prefix = event.kind === "start" ? t("time.startedToast") : t("time.endedToast");
       showUndoToast(`${prefix}「${event.task.title}」`, () => {
-        selectTask(event.task.id);
+        focusTaskFromReminder(event.task.id);
       }, t("time.view"));
       // Always mirror the reminder to the OS notification center — focus
       // detection is unreliable in WebView2 (a minimized window can still
       // report focus), and a missed reminder is worse than a redundant toast.
-      void sendSystemNotification(prefix, event.task.title);
+      void sendSystemNotification(prefix, event.task.title, event.task.id);
     },
     onMissed: (events) => {
       showUndoToast(`${t("time.missedToast")}${events.length}`, () => {
         const lastMissed = events[events.length - 1];
         if (lastMissed) {
-          selectTask(lastMissed.task.id);
+          focusTaskFromReminder(lastMissed.task.id);
         }
       }, t("time.view"));
     },

@@ -13,6 +13,8 @@ type TaskState = {
   activeFilter: TaskFilter;
   /** Local date key shown by the date view; defaults to today, session-only. */
   viewDateKey: string;
+  /** Task briefly highlighted with a breathing glow (reminder jump target). */
+  spotlightTaskId: string | null;
   searchQuery: string;
   hydrated: boolean;
   loading: boolean;
@@ -45,6 +47,7 @@ type TaskActions = {
   setMode: (mode: AppMode) => void;
   setActiveFilter: (filter: TaskFilter) => void;
   setViewDate: (dateKey: string) => void;
+  setSpotlightTask: (taskId: string | null) => void;
   setSearchQuery: (query: string) => void;
   getFilteredTasks: (filter?: TaskFilter, query?: string) => Task[];
   getTodayCompletedTasks: (query?: string) => Task[];
@@ -120,6 +123,7 @@ const initialState = (): TaskState => ({
   mode: "normal",
   activeFilter: "today",
   viewDateKey: getLocalDateKey(),
+  spotlightTaskId: null,
   searchQuery: "",
   hydrated: false,
   loading: false,
@@ -889,6 +893,9 @@ const createTaskStoreState: StateCreator<TaskStore> = (set, get) => {
     setViewDate: (viewDateKey) => {
       const selectedTaskId = selectVisibleTask(get().tasks, get().stacks, get().selectedTaskId, get().activeFilter, get().searchQuery, viewDateKey);
       set({ viewDateKey, selectedTaskId });
+    },
+    setSpotlightTask: (spotlightTaskId) => {
+      set({ spotlightTaskId });
     },
     getFilteredTasks: (filter, query) => {
       const state = get();

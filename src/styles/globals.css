@@ -1128,6 +1128,16 @@ body {
     animation: task-enter 260ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
   }
 
+  /* Reminder spotlight: a gentle breathing accent halo on the jumped-to card;
+     clicking the card eases it out (see TaskItem). */
+  .task-card-spotlight {
+    animation: task-spotlight-breathe 2.4s ease-in-out infinite;
+  }
+
+  .task-card-spotlight-fade {
+    animation: task-spotlight-fade 1.2s ease forwards;
+  }
+
   .task-stack-drag-frame,
   .stack-task-drag-frame {
     position: relative;
@@ -2131,6 +2141,35 @@ body {
   }
 }
 
+@keyframes task-spotlight-breathe {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 2px color-mix(in srgb, var(--accent) 26%, transparent),
+      0 0 14px color-mix(in srgb, var(--accent) 18%, transparent);
+  }
+
+  50% {
+    box-shadow:
+      0 0 0 3px color-mix(in srgb, var(--accent) 42%, transparent),
+      0 0 24px color-mix(in srgb, var(--accent) 32%, transparent);
+  }
+}
+
+@keyframes task-spotlight-fade {
+  from {
+    box-shadow:
+      0 0 0 2px color-mix(in srgb, var(--accent) 26%, transparent),
+      0 0 14px color-mix(in srgb, var(--accent) 18%, transparent);
+  }
+
+  to {
+    box-shadow:
+      0 0 0 0 transparent,
+      0 0 0 transparent;
+  }
+}
+
 @keyframes stack-child-fold {
   to {
     opacity: 0;
@@ -2164,7 +2203,9 @@ body {
     animation-duration: 1ms;
   }
 
-  .task-stack-unfolding .stack-task-drag-frame {
+  .task-stack-unfolding .stack-task-drag-frame,
+  .task-card-spotlight,
+  .task-card-spotlight-fade {
     animation-duration: 1ms;
   }
 
