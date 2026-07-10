@@ -51,11 +51,14 @@ export function CalendarPopover({ align = "start", onClose, onSelect, todayShort
   const [viewMonth, setViewMonth] = useState(initial.getMonth());
   const todayKey = getLocalDateKey();
   const popoverRef = useRef<HTMLDivElement | null>(null);
-  const [placement, setPlacement] = useState<{ top: number; left: number; flipped: boolean } | null>(null);
+  const [placement, setPlacement] = useState<{ top?: number; bottom?: number; left: number; flipped: boolean } | null>(null);
 
   // Fixed positioning escapes the detail panel's scroll clipping: anchor to
   // the trigger row, flip above when there is no room below, and clamp to
-  // the viewport.
+  // the viewport. The edge NEAREST the trigger is the anchored one (top when
+  // below, bottom when flipped above) so height changes — e.g. 5- vs 6-week
+  // months — grow away from the trigger and the gap stays identical in both
+  // directions.
   useLayoutEffect(() => {
     const popover = popoverRef.current;
     const anchor = popover?.parentElement;
@@ -68,20 +71,16 @@ export function CalendarPopover({ align = "start", onClose, onSelect, todayShort
     const margin = 12;
     const gap = 8;
 
-    let top = anchorRect.bottom + gap;
-    let flipped = false;
-    if (top + popoverRect.height > window.innerHeight - margin) {
-      top = anchorRect.top - popoverRect.height - gap;
-      flipped = true;
-    }
-    top = Math.max(margin, Math.min(top, window.innerHeight - popoverRect.height - margin));
-
     let left = align === "center"
       ? anchorRect.left + anchorRect.width / 2 - popoverRect.width / 2
       : anchorRect.left;
     left = Math.max(margin, Math.min(left, window.innerWidth - popoverRect.width - margin));
 
-    setPlacement({ top, left, flipped });
+    if (anchorRect.bottom + gap + popoverRect.height <= window.innerHeight - margin) {
+      setPlacement({ top: anchorRect.bottom + gap, left, flipped: false });
+      return;
+    }
+    setPlacement({ bottom: Math.max(margin, window.innerHeight - anchorRect.top + gap), left, flipped: true });
   }, [align, viewYear, viewMonth]);
 
   useEffect(() => {
@@ -120,7 +119,7 @@ export function CalendarPopover({ align = "start", onClose, onSelect, todayShort
         data-testid="calendar-popover"
         ref={popoverRef}
         role="dialog"
-        style={placement ? ({ top: placement.top, left: placement.left, visibility: "visible" } as CSSProperties) : { visibility: "hidden" }}
+        style={placement ? ({ top: placement.top, bottom: placement.bottom, left: placement.left, visibility: "visible" } as CSSProperties) : { visibility: "hidden" }}
       >
         <div className="flex items-center justify-between gap-2">
           <button aria-label="previous month" className="calendar-nav-button" onClick={() => shiftMonth(-1)} type="button">

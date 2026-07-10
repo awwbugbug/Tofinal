@@ -38,7 +38,7 @@ export function TimeWheelPopover({
 }: TimeWheelPopoverProps) {
   const { t } = useI18n();
   const popoverRef = useRef<HTMLDivElement | null>(null);
-  const [placement, setPlacement] = useState<{ top: number; left: number; flipped: boolean } | null>(null);
+  const [placement, setPlacement] = useState<{ top?: number; bottom?: number; left: number; flipped: boolean } | null>(null);
   const start = parseStartTime(startTime);
   const duration = Math.max(0, Math.min(MAX_DURATION_MINUTES, durationMinutes ?? 0));
   const durationHours = Math.floor(duration / 60);
@@ -58,18 +58,17 @@ export function TimeWheelPopover({
     const margin = 12;
     const gap = 8;
 
-    let top = anchorRect.bottom + gap;
-    let flipped = false;
-    if (top + popoverRect.height > window.innerHeight - margin) {
-      top = anchorRect.top - popoverRect.height - gap;
-      flipped = true;
-    }
-    top = Math.max(margin, Math.min(top, window.innerHeight - popoverRect.height - margin));
-
     let left = anchorRect.left + anchorRect.width / 2 - popoverRect.width / 2;
     left = Math.max(margin, Math.min(left, window.innerWidth - popoverRect.width - margin));
 
-    setPlacement({ top, left, flipped });
+    // Anchor the edge NEAREST the trigger (top when below, bottom when
+    // flipped above) so later content-height changes grow away from the
+    // trigger and the gap stays identical in both directions.
+    if (anchorRect.bottom + gap + popoverRect.height <= window.innerHeight - margin) {
+      setPlacement({ top: anchorRect.bottom + gap, left, flipped: false });
+      return;
+    }
+    setPlacement({ bottom: Math.max(margin, window.innerHeight - anchorRect.top + gap), left, flipped: true });
   }, []);
 
   useEffect(() => {
@@ -103,7 +102,7 @@ export function TimeWheelPopover({
         data-testid="time-wheel-popover"
         ref={popoverRef}
         role="dialog"
-        style={placement ? ({ top: placement.top, left: placement.left, visibility: "visible" } as CSSProperties) : { visibility: "hidden" }}
+        style={placement ? ({ top: placement.top, bottom: placement.bottom, left: placement.left, visibility: "visible" } as CSSProperties) : { visibility: "hidden" }}
       >
         <div className="text-xs font-medium uppercase text-[var(--text-faint)]">{t("time.start")}</div>
         <div className="mt-1 flex items-center gap-1">
@@ -141,7 +140,7 @@ export function TimeWheelPopover({
           />
           <span className="wheel-picker-unit">{t("time.minutesUnit")}</span>
         </div>
-        <p className="mt-2 text-center text-[11px] leading-4 text-[var(--text-faint)]">
+        <p className="mt-2 min-h-4 text-center text-[11px] leading-4 text-[var(--text-faint)]">
           {duration === 0 ? t("time.durationNoneHint") : ""}
         </p>
       </div>
