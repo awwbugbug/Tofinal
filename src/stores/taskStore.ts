@@ -21,7 +21,7 @@ type TaskState = {
   error: string | null;
 };
 
-type TaskUpdate = Partial<Pick<Task, "title" | "note" | "priority" | "tags" | "pinned" | "plannedDate">>;
+type TaskUpdate = Partial<Pick<Task, "title" | "note" | "priority" | "tags" | "pinned" | "plannedDate" | "startTime" | "durationMinutes">>;
 
 type TaskActions = {
   hydrateTasks: () => Promise<void>;
@@ -105,6 +105,8 @@ const createTask = (
   createdAt,
   updatedAt: createdAt,
   plannedDate,
+  startTime: null,
+  durationMinutes: null,
   stackId: `stack-${id}`,
   stackOrder: 0,
   completedAt: null,
@@ -477,16 +479,32 @@ const createTaskStoreState: StateCreator<TaskStore> = (set, get) => {
       }
 
       const timestamp = nowIso();
-      const tasks = get().tasks.map((task) => task.id === id
-        ? {
-            ...task,
-            ...update,
-            title: nextTitle,
-            tags: update.tags ? normalizeTags(update.tags) : task.tags,
-            updatedAt: timestamp,
-          }
-        : task,
-      );
+      const tasks = get().tasks.map((task) => {
+        if (task.id !== id) {
+          return task;
+        }
+
+        const next = {
+          ...task,
+          ...update,
+          title: nextTitle,
+          tags: update.tags ? normalizeTags(update.tags) : task.tags,
+          updatedAt: timestamp,
+        };
+        // Time-scheduling invariants: a start time needs a date to anchor to
+        // (default today); clearing the date clears the start time; and a
+        // duration is meaningless without a start time.
+        if (update.startTime && !next.plannedDate) {
+          next.plannedDate = getLocalDateKey();
+        }
+        if (update.plannedDate === null) {
+          next.startTime = null;
+        }
+        if (next.startTime === null) {
+          next.durationMinutes = null;
+        }
+        return next;
+      });
       const selectedTaskId = selectVisibleTask(tasks, get().stacks, get().selectedTaskId, get().activeFilter, get().searchQuery, get().viewDateKey);
 
       set({ tasks, selectedTaskId });

@@ -8,6 +8,7 @@ import {
 import {
   createSqliteTaskRepository,
   SQLITE_DATABASE_PATH,
+  SQLITE_SCHEMA_VERSION,
   type SqlDatabaseClient,
 } from "@/repositories/sqliteTaskRepository";
 import type { TaskApp } from "@/types/taskApp";
@@ -204,7 +205,7 @@ describe("sqlite task app repository", () => {
 
     expect(db.taskAppsTableExists).toBe(true);
     expect(db.foreignKeysEnabled).toBe(true);
-    expect(db.meta.get("schema_version")).toBe("6");
+    expect(db.meta.get("schema_version")).toBe(SQLITE_SCHEMA_VERSION);
     expect(db.tasks.map((row) => row.title)).toEqual(["Task with apps"]);
     expect(db.taskAttachments).toHaveLength(1);
   });

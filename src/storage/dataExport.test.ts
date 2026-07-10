@@ -18,6 +18,8 @@ const task = (overrides: Partial<Task> = {}): Task => {
     updatedAt: "2026-07-01T08:00:00.000Z",
     completedAt: null,
     plannedDate: null,
+    startTime: null,
+    durationMinutes: null,
     stackId: `stack-${id}`,
     stackOrder: 0,
     deletedAt: null,

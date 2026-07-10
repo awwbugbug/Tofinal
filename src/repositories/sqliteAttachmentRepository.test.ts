@@ -8,6 +8,7 @@ import {
 import {
   createSqliteTaskRepository,
   SQLITE_DATABASE_PATH,
+  SQLITE_SCHEMA_VERSION,
   type SqlDatabaseClient,
 } from "@/repositories/sqliteTaskRepository";
 import type { TaskAttachment } from "@/types/attachment";
@@ -207,7 +208,7 @@ describe("sqlite attachment repository", () => {
 
     expect(db.attachmentTableExists).toBe(true);
     expect(db.foreignKeysEnabled).toBe(true);
-    expect(db.meta.get("schema_version")).toBe("6");
+    expect(db.meta.get("schema_version")).toBe(SQLITE_SCHEMA_VERSION);
     expect(db.tasks.map((row) => row.title)).toEqual(["Task with attachments"]);
   });
 
@@ -227,7 +228,7 @@ describe("sqlite attachment repository", () => {
 
     await repository.listByTaskId("task-1");
 
-    expect(db.meta.get("schema_version")).toBe("6");
+    expect(db.meta.get("schema_version")).toBe(SQLITE_SCHEMA_VERSION);
     expect(db.executed.some((sql) => sql.includes("INSERT INTO schema_meta (key, value)\n"))).toBe(true);
   });
 

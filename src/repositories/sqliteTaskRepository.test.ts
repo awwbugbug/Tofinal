@@ -3,6 +3,7 @@
 import {
   createSqliteTaskRepository,
   SQLITE_DATABASE_PATH,
+  SQLITE_SCHEMA_VERSION,
   taskFromSqlRow,
   taskToSqlParams,
   type SqlDatabaseClient,
@@ -30,6 +31,8 @@ type TaskRow = {
   updated_at: string;
   completed_at: string | null;
   planned_date: string | null;
+  start_time?: string | null;
+  duration_minutes?: number | null;
   stack_id: string;
   stack_order: number;
   sort_order: number;
@@ -50,6 +53,8 @@ const task = (overrides: Partial<Task> = {}): Task => {
     updatedAt: "2026-06-10T08:00:00.000Z",
     completedAt: null,
     plannedDate: null,
+    startTime: null,
+    durationMinutes: null,
     stackId: `stack-${id}`,
     stackOrder: 0,
     deletedAt: null,
@@ -184,6 +189,8 @@ class FakeSqlDatabase implements SqlDatabaseClient {
         updatedAt,
         completedAt,
         plannedDate,
+        startTime,
+        durationMinutes,
         stackId,
         stackOrder,
         sortOrder,
@@ -199,6 +206,8 @@ class FakeSqlDatabase implements SqlDatabaseClient {
         string,
         string | null,
         string | null,
+        string | null,
+        number | null,
         string,
         number,
         number,
@@ -216,6 +225,8 @@ class FakeSqlDatabase implements SqlDatabaseClient {
         updated_at: updatedAt,
         completed_at: completedAt,
         planned_date: plannedDate,
+        start_time: startTime,
+        duration_minutes: durationMinutes,
         stack_id: stackId,
         stack_order: stackOrder,
         sort_order: sortOrder,
@@ -287,6 +298,8 @@ describe("sqlite task repository", () => {
       openTask.updatedAt,
       null,
       "2026-06-20",
+      null,
+      null,
       openTask.stackId,
       openTask.stackOrder,
       2,
@@ -310,7 +323,7 @@ describe("sqlite task repository", () => {
     });
   });
 
-  it("adds stack columns during schema migration and writes schema version 6", async () => {
+  it("adds stack columns during schema migration and writes the current schema version", async () => {
     const db = new FakeSqlDatabase();
     db.taskColumns.delete("planned_date");
     db.taskColumns.delete("stack_id");
@@ -328,7 +341,7 @@ describe("sqlite task repository", () => {
     const stackIndexPosition = db.executed.findIndex((sql) => sql.includes("idx_tasks_stack_order"));
     const stackOrderColumnPosition = db.executed.findIndex((sql) => sql.includes("ALTER TABLE tasks ADD COLUMN stack_order"));
     expect(stackIndexPosition).toBeGreaterThan(stackOrderColumnPosition);
-    expect(db.meta.get("schema_version")).toBe("6");
+    expect(db.meta.get("schema_version")).toBe(SQLITE_SCHEMA_VERSION);
   });
 
   it("migrates existing v4 tasks into singleton stacks", async () => {
@@ -356,7 +369,7 @@ describe("sqlite task repository", () => {
 
     expect(snapshot.tasks).toEqual([localTask]);
     expect(snapshot.stacks).toEqual([expect.objectContaining({ id: "stack-task-local" })]);
-    expect(db.meta.get("schema_version")).toBe("6");
+    expect(db.meta.get("schema_version")).toBe(SQLITE_SCHEMA_VERSION);
     expect(db.meta.get("localstorage_v1_migrated")).toBe("true");
     expect(localStorage.getItem(TASK_STORAGE_KEY)).toContain("Migrated from localStorage");
   });
@@ -371,7 +384,7 @@ describe("sqlite task repository", () => {
     expect(snapshot.tasks).toHaveLength(createSeedTasks().length);
     expect(snapshot.stacks).toHaveLength(createSeedTasks().length);
     expect(snapshot.tasks[0].title).toBe("Finalize the first-stage desktop shell");
-    expect(db.meta.get("schema_version")).toBe("6");
+    expect(db.meta.get("schema_version")).toBe(SQLITE_SCHEMA_VERSION);
     expect(db.meta.get("seed_initialized")).toBe("true");
   });
 

@@ -98,6 +98,8 @@ const createSeedTask = (
   createdAt,
   updatedAt: createdAt,
   plannedDate,
+  startTime: null,
+  durationMinutes: null,
   stackId: singletonStackIdForTask(id),
   stackOrder: 0,
   completedAt: null,
@@ -182,6 +184,11 @@ export const normalizeStoredTask = (value: unknown): Task | null => {
     createdAt: candidate.createdAt,
     updatedAt: candidate.updatedAt,
     plannedDate: typeof candidate.plannedDate === "string" ? candidate.plannedDate : null,
+    startTime: typeof candidate.startTime === "string" ? candidate.startTime : null,
+    durationMinutes:
+      typeof candidate.durationMinutes === "number" && Number.isFinite(candidate.durationMinutes)
+        ? candidate.durationMinutes
+        : null,
     stackId: typeof candidate.stackId === "string" ? candidate.stackId : singletonStackIdForTask(candidate.id),
     stackOrder: typeof candidate.stackOrder === "number" && Number.isFinite(candidate.stackOrder) ? candidate.stackOrder : 0,
     completedAt: typeof candidate.completedAt === "string" ? candidate.completedAt : null,

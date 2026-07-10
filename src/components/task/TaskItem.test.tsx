@@ -22,6 +22,8 @@ const baseTask: Task = {
   createdAt: "2026-06-16T10:00:00.000Z",
   updatedAt: "2026-06-16T10:00:00.000Z",
   plannedDate: "2026-06-16",
+  startTime: null,
+  durationMinutes: null,
   stackId: "stack-task-1",
   stackOrder: 0,
   completedAt: null,

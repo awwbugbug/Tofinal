@@ -2,7 +2,7 @@
 import type { Task, TaskPriority, TaskStack } from "@/types/task";
 
 export const SQLITE_DATABASE_PATH = "sqlite:tofinal.db";
-export const SQLITE_SCHEMA_VERSION = "6";
+export const SQLITE_SCHEMA_VERSION = "7";
 
 export type SqlValue = string | number | null;
 
@@ -31,6 +31,8 @@ type SqlTaskRow = {
   updated_at: unknown;
   completed_at: unknown;
   planned_date?: unknown;
+  start_time?: unknown;
+  duration_minutes?: unknown;
   stack_id?: unknown;
   stack_order?: unknown;
   sort_order?: unknown;
@@ -63,6 +65,8 @@ const SCHEMA_SQL = [
     updated_at TEXT NOT NULL,
     completed_at TEXT NULL,
     planned_date TEXT NULL,
+    start_time TEXT NULL,
+    duration_minutes INTEGER NULL,
     stack_id TEXT NULL,
     stack_order INTEGER NULL,
     sort_order INTEGER NOT NULL,
@@ -125,6 +129,8 @@ const SELECT_TASKS_SQL = `SELECT
   updated_at,
   completed_at,
   planned_date,
+  start_time,
+  duration_minutes,
   stack_id,
   stack_order,
   sort_order,
@@ -169,11 +175,13 @@ const UPSERT_TASK_SQL = `INSERT INTO tasks (
   updated_at,
   completed_at,
   planned_date,
+  start_time,
+  duration_minutes,
   stack_id,
   stack_order,
   sort_order,
   deleted_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
   title = excluded.title,
   note = excluded.note,
@@ -185,6 +193,8 @@ ON CONFLICT(id) DO UPDATE SET
   updated_at = excluded.updated_at,
   completed_at = excluded.completed_at,
   planned_date = excluded.planned_date,
+  start_time = excluded.start_time,
+  duration_minutes = excluded.duration_minutes,
   stack_id = excluded.stack_id,
   stack_order = excluded.stack_order,
   sort_order = excluded.sort_order,
@@ -256,6 +266,16 @@ export const taskFromSqlRow = (row: SqlTaskRow): Task => {
     throw new Error("Invalid SQLite deleted_at field.");
   }
 
+  const startTime = row.start_time ?? null;
+  if (startTime !== null && typeof startTime !== "string") {
+    throw new Error("Invalid SQLite start_time field.");
+  }
+
+  const durationMinutes = row.duration_minutes ?? null;
+  if (durationMinutes !== null && (typeof durationMinutes !== "number" || !Number.isFinite(durationMinutes))) {
+    throw new Error("Invalid SQLite duration_minutes field.");
+  }
+
   const id = stringField(row.id, "id");
   const stackId = typeof row.stack_id === "string" ? row.stack_id : singletonStackIdForTask(id);
   const stackOrder = typeof row.stack_order === "number" && Number.isFinite(row.stack_order) ? row.stack_order : 0;
@@ -271,6 +291,8 @@ export const taskFromSqlRow = (row: SqlTaskRow): Task => {
     createdAt: stringField(row.created_at, "created_at"),
     updatedAt: stringField(row.updated_at, "updated_at"),
     plannedDate,
+    startTime,
+    durationMinutes,
     stackId,
     stackOrder,
     completedAt,
@@ -298,6 +320,8 @@ export const taskToSqlParams = (task: Task, sortOrder: number): SqlValue[] => [
   task.updatedAt,
   task.completedAt,
   task.plannedDate,
+  task.startTime,
+  task.durationMinutes,
   task.stackId,
   task.stackOrder,
   sortOrder,
@@ -431,6 +455,12 @@ export const ensureSqliteSchema = async (db: SqlDatabaseClient) => {
   }
   if (!(await tableHasColumn(db, "tasks", "deleted_at"))) {
     await db.execute("ALTER TABLE tasks ADD COLUMN deleted_at TEXT NULL");
+  }
+  if (!(await tableHasColumn(db, "tasks", "start_time"))) {
+    await db.execute("ALTER TABLE tasks ADD COLUMN start_time TEXT NULL");
+  }
+  if (!(await tableHasColumn(db, "tasks", "duration_minutes"))) {
+    await db.execute("ALTER TABLE tasks ADD COLUMN duration_minutes INTEGER NULL");
   }
   await db.execute("CREATE INDEX IF NOT EXISTS idx_tasks_stack_order ON tasks(stack_id, stack_order)");
   await migrateExistingTasksToSingletonStacks(db);

@@ -194,6 +194,33 @@ describe("task store", () => {
     expect(task.pinned).toBe(true);
   });
 
+  it("keeps time-scheduling invariants: start time anchors to a date, duration needs a start time", async () => {
+    const { store } = await createHydratedStore();
+    const taskId = store.getState().tasks[0].id;
+
+    // Setting a start time on an unplanned task auto-plans it for today.
+    store.getState().updateTask(taskId, { plannedDate: null });
+    store.getState().updateTask(taskId, { startTime: "14:30", durationMinutes: 90 });
+    expect(store.getState().tasks[0]).toMatchObject({
+      plannedDate: getLocalDateKey(),
+      startTime: "14:30",
+      durationMinutes: 90,
+    });
+
+    // Clearing the start time drops the dependent duration.
+    store.getState().updateTask(taskId, { startTime: null });
+    expect(store.getState().tasks[0]).toMatchObject({ startTime: null, durationMinutes: null });
+
+    // Clearing the planned date clears the whole time schedule.
+    store.getState().updateTask(taskId, { startTime: "09:00", durationMinutes: 60 });
+    store.getState().updateTask(taskId, { plannedDate: null });
+    expect(store.getState().tasks[0]).toMatchObject({
+      plannedDate: null,
+      startTime: null,
+      durationMinutes: null,
+    });
+  });
+
   it("selects a task by id and switches mode without losing task state", async () => {
     const { store } = await createHydratedStore();
     const secondTaskId = store.getState().tasks[1].id;

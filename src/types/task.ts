@@ -11,6 +11,10 @@ export type Task = {
   createdAt: string;
   updatedAt: string;
   plannedDate: string | null;
+  /** Optional start-of-task time on the planned date, "HH:MM" 24h local. */
+  startTime: string | null;
+  /** Optional allocated duration in minutes (1..1440), consumed from startTime. */
+  durationMinutes: number | null;
   stackId: string;
   stackOrder: number;
   completedAt: string | null;
