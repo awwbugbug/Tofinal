@@ -19,11 +19,14 @@ export const sendSystemNotification = async (title: string, body: string) => {
       }
     }
     if (!permissionGranted) {
+      console.warn("System notification skipped: permission not granted.");
       return;
     }
 
     notification.sendNotification({ title, body });
-  } catch {
-    // Not running under Tauri, or the plugin is unavailable — skip silently.
+  } catch (error) {
+    // Not running under Tauri, or the plugin is unavailable. Log for
+    // diagnosis; notifications must never break the reminder loop.
+    console.warn("System notification unavailable:", error);
   }
 };

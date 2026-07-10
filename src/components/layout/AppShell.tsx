@@ -254,11 +254,10 @@ export function AppShell() {
       showUndoToast(`${prefix}「${event.task.title}」`, () => {
         selectTask(event.task.id);
       }, t("time.view"));
-      // The in-app toast is invisible when the window is unfocused or
-      // minimized; hand the reminder to the OS notification center instead.
-      if (!document.hasFocus()) {
-        void sendSystemNotification(prefix, event.task.title);
-      }
+      // Always mirror the reminder to the OS notification center — focus
+      // detection is unreliable in WebView2 (a minimized window can still
+      // report focus), and a missed reminder is worse than a redundant toast.
+      void sendSystemNotification(prefix, event.task.title);
     },
     onMissed: (events) => {
       showUndoToast(`${t("time.missedToast")}${events.length}`, () => {
