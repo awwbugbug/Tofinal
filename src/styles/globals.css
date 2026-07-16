@@ -225,17 +225,37 @@
   --priority-important-text: var(--important-text);
   --priority-urgent-bg: var(--urgent-bg);
   --priority-urgent-text: var(--urgent-text);
-  --shadow-soft: 0 24px 54px rgb(0 0 0 / 0.5);
-  --shadow-card: 0 16px 36px rgb(0 0 0 / 0.42);
+  /* Layered penumbra rather than one big blob. Real shadows fall off sharply
+     near the object and softly further out, so stacking several shadows with
+     rising blur and falling alpha reads as light instead of a grey smear — and
+     on a near-black background the overlapping layers dither each other instead
+     of banding, which a single wide low-alpha shadow always does here.
+     Deliberately no light-grey glow: a card does not emit light, and faking one
+     was what made these look pasted on. */
+  --shadow-soft:
+    0 2px 4px rgb(0 0 0 / 0.3),
+    0 6px 12px rgb(0 0 0 / 0.24),
+    0 14px 28px rgb(0 0 0 / 0.18),
+    0 28px 56px rgb(0 0 0 / 0.13);
+  --shadow-card:
+    0 1px 3px rgb(0 0 0 / 0.28),
+    0 4px 8px rgb(0 0 0 / 0.2),
+    0 10px 20px rgb(0 0 0 / 0.15),
+    0 20px 38px rgb(0 0 0 / 0.11);
   --shadow-card-around:
-    0 0 0 1px rgb(212 216 228 / 0.08),
-    0 0 24px rgb(180 186 200 / 0.10),
-    0 14px 30px rgb(0 0 0 / 0.46);
+    0 0 0 1px rgb(212 216 228 / 0.1),
+    0 1px 3px rgb(0 0 0 / 0.28),
+    0 6px 14px rgb(0 0 0 / 0.2),
+    0 16px 32px rgb(0 0 0 / 0.14);
   --shadow-card-hover:
-    0 0 0 1px rgb(212 216 228 / 0.09),
-    0 0 18px rgb(180 186 200 / 0.08),
-    0 10px 22px rgb(0 0 0 / 0.4);
-  --shadow-subtle: 0 8px 20px rgb(0 0 0 / 0.36);
+    0 0 0 1px rgb(212 216 228 / 0.13),
+    0 2px 5px rgb(0 0 0 / 0.3),
+    0 8px 18px rgb(0 0 0 / 0.22),
+    0 20px 40px rgb(0 0 0 / 0.15);
+  --shadow-subtle:
+    0 1px 2px rgb(0 0 0 / 0.26),
+    0 3px 6px rgb(0 0 0 / 0.17),
+    0 8px 16px rgb(0 0 0 / 0.12);
   /* Liquid Glass: smoked glass over the silver starfield. Tint stays fairly
      transparent so the field actually reads through it. */
   --glass-tint: rgb(26 26 30 / 0.44);
@@ -243,7 +263,11 @@
   --glass-fresnel: rgb(255 255 255 / 0.14);
   --glass-accent-light: rgb(220 224 235 / 0.10);
   --glass-underglow: rgb(150 156 172 / 0.09);
-  --glass-drop-shadow: 0 24px 54px rgb(0 0 0 / 0.5);
+  --glass-drop-shadow:
+    0 2px 6px rgb(0 0 0 / 0.28),
+    0 8px 18px rgb(0 0 0 / 0.22),
+    0 20px 40px rgb(0 0 0 / 0.16),
+    0 40px 72px rgb(0 0 0 / 0.11);
 }
 
 /* ============================================================
@@ -1156,7 +1180,14 @@ body {
   .task-card-shell {
     overflow: visible;
     transform-origin: center;
-    will-change: transform;
+    /* Explicitly NOT transition-all. z-index is animatable, so pairing it with
+       hover:z-10 made the card interpolate 0 -> 10 in integer steps and re-stack
+       repeatedly mid-hover — each re-stack changed which shadows overlapped its
+       neighbours, which is what made the shadows jitter. Listing the properties
+       also keeps expensive ones (box-shadow) explicit rather than accidental. */
+    transition-property: transform, background-color, border-color, box-shadow, opacity;
+    transition-duration: 200ms;
+    transition-timing-function: ease-out;
   }
 
   .task-card-grid {

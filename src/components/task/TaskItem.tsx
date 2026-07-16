@@ -215,7 +215,7 @@ export function TaskItem({ compact = false, onSelect, onToggle, selected = false
   return (
     <article
       className={cn(
-        "task-card-shell group relative cursor-pointer rounded-[22px] border p-3.5 transition-all duration-200 ease-out hover:z-10 active:scale-[1.004]",
+        "task-card-shell group relative cursor-pointer rounded-[22px] border p-3.5 hover:z-10 active:scale-[1.004]",
         selected
           ? "z-10 scale-[1.012] border-[color-mix(in_srgb,var(--accent)_38%,var(--border-medium))] bg-[color-mix(in_srgb,var(--accent-surface)_82%,var(--surface-elevated))] shadow-[var(--shadow-card-around)]"
           : "scale-100 border-[var(--border-soft)] bg-[color-mix(in_srgb,var(--surface-card)_64%,transparent)] hover:scale-[1.004] hover:border-[var(--border-medium)] hover:bg-[var(--surface-card-hover)] hover:shadow-[var(--shadow-card-hover)]",
