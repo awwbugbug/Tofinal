@@ -45,13 +45,15 @@ const NEBULA_SPRITE_SIZE = 192;
 const SUN_SPRITE_SIZE = 256;
 const SUN_ANCHOR_X = 0.94;
 const SUN_ANCHOR_Y = 0.04;
-const SUN_RADIUS_RATIO = 0.46;
-// Radians/second. ~0.7 gives a ~9s cycle: a slow, deep breath you can actually
-// perceive. Much slower than this and the pulse is imperceptible rather than
-// calm — the first pass ran a 39s cycle, which read as "not breathing at all".
+// The core is FIXED — a real star's core is a constant blaze. Only the corona
+// around it breathes. Scaling and dimming the whole thing together (as the
+// first pass did) is what made it look fake.
+const SUN_CORE_RATIO = 0.085;
+const SUN_GLOW_RATIO = 0.46;
+// Radians/second; ~0.7 gives a ~9s cycle — a slow, deep breath.
 const SUN_BREATH_SPEED = 0.7;
 
-const makeSunSprite = () => {
+const makeSunSprite = (stops: Array<[number, string]>) => {
   const sprite = document.createElement("canvas");
   sprite.width = SUN_SPRITE_SIZE;
   sprite.height = SUN_SPRITE_SIZE;
@@ -61,18 +63,32 @@ const makeSunSprite = () => {
   }
   const mid = SUN_SPRITE_SIZE / 2;
   const gradient = sctx.createRadialGradient(mid, mid, 0, mid, mid, mid);
-  // White-hot core → yellow → amber → a long warm falloff that fades to
-  // nothing, so it reads as light rather than a pasted-on disc.
-  gradient.addColorStop(0, "rgba(255, 252, 232, 1)");
-  gradient.addColorStop(0.05, "rgba(255, 243, 184, 0.94)");
-  gradient.addColorStop(0.14, "rgba(255, 215, 118, 0.6)");
-  gradient.addColorStop(0.34, "rgba(255, 170, 74, 0.24)");
-  gradient.addColorStop(0.62, "rgba(255, 142, 56, 0.08)");
-  gradient.addColorStop(1, "rgba(255, 130, 50, 0)");
+  for (const [offset, color] of stops) {
+    gradient.addColorStop(offset, color);
+  }
   sctx.fillStyle = gradient;
   sctx.fillRect(0, 0, SUN_SPRITE_SIZE, SUN_SPRITE_SIZE);
   return sprite;
 };
+
+// The star itself: small, white-hot, and constant.
+const makeSunCoreSprite = () =>
+  makeSunSprite([
+    [0, "rgba(255, 253, 242, 1)"],
+    [0.3, "rgba(255, 246, 198, 0.92)"],
+    [0.6, "rgba(255, 226, 146, 0.4)"],
+    [1, "rgba(255, 208, 112, 0)"],
+  ]);
+
+// The corona: broad, soft, and the only part that breathes.
+const makeSunGlowSprite = () =>
+  makeSunSprite([
+    [0, "rgba(255, 236, 176, 0.55)"],
+    [0.16, "rgba(255, 212, 120, 0.32)"],
+    [0.4, "rgba(255, 172, 76, 0.15)"],
+    [0.68, "rgba(255, 144, 58, 0.05)"],
+    [1, "rgba(255, 132, 52, 0)"],
+  ]);
 
 const makeNebulaSprite = (color: string) => {
   const sprite = document.createElement("canvas");
@@ -119,7 +135,8 @@ export function Starfield() {
 
     const reduced = prefersReducedMotion();
     const sprites = NEBULA_COLORS.map(makeNebulaSprite);
-    const sunSprite = makeSunSprite();
+    const sunCoreSprite = makeSunCoreSprite();
+    const sunGlowSprite = makeSunGlowSprite();
     let width = 0;
     let height = 0;
     let stars: Star[] = [];
@@ -165,22 +182,23 @@ export function Starfield() {
       // than paint — and so it blooms through the panels' blur.
       ctx.globalCompositeOperation = "lighter";
 
-      // The sun, breathing in the corner. BRIGHTNESS is what actually reads as
-      // breathing — swelling a huge soft gradient a few percent is invisible on
-      // its own — so the halo dims and flares roughly 2x while it also swells.
+      // The sun. Only the CORONA breathes — the core is a fixed blaze, the way a
+      // real star reads. Swelling and dimming the two together looked fake.
       if (animate) {
         sunPhase += SUN_BREATH_SPEED * deltaMs * 0.001;
       }
       const breath = Math.sin(sunPhase) * 0.5 + 0.5; // 0..1
-      const sunRadius = Math.max(width, height) * SUN_RADIUS_RATIO * (0.8 + breath * 0.3);
-      ctx.globalAlpha = 0.5 + breath * 0.5;
-      ctx.drawImage(
-        sunSprite,
-        width * SUN_ANCHOR_X - sunRadius,
-        height * SUN_ANCHOR_Y - sunRadius,
-        sunRadius * 2,
-        sunRadius * 2,
-      );
+      const sunX = width * SUN_ANCHOR_X;
+      const sunY = height * SUN_ANCHOR_Y;
+      const span = Math.max(width, height);
+
+      const glowRadius = span * SUN_GLOW_RATIO * (0.9 + breath * 0.2);
+      ctx.globalAlpha = 0.48 + breath * 0.34;
+      ctx.drawImage(sunGlowSprite, sunX - glowRadius, sunY - glowRadius, glowRadius * 2, glowRadius * 2);
+
+      const coreRadius = span * SUN_CORE_RATIO;
+      ctx.globalAlpha = 0.95;
+      ctx.drawImage(sunCoreSprite, sunX - coreRadius, sunY - coreRadius, coreRadius * 2, coreRadius * 2);
 
       for (const nebula of nebulae) {
         if (animate) {
