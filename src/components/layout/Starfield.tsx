@@ -46,6 +46,10 @@ const SUN_SPRITE_SIZE = 256;
 const SUN_ANCHOR_X = 0.94;
 const SUN_ANCHOR_Y = 0.04;
 const SUN_RADIUS_RATIO = 0.46;
+// Radians/second. ~0.7 gives a ~9s cycle: a slow, deep breath you can actually
+// perceive. Much slower than this and the pulse is imperceptible rather than
+// calm — the first pass ran a 39s cycle, which read as "not breathing at all".
+const SUN_BREATH_SPEED = 0.7;
 
 const makeSunSprite = () => {
   const sprite = document.createElement("canvas");
@@ -161,13 +165,15 @@ export function Starfield() {
       // than paint — and so it blooms through the panels' blur.
       ctx.globalCompositeOperation = "lighter";
 
-      // The sun, breathing slowly in the corner.
+      // The sun, breathing in the corner. BRIGHTNESS is what actually reads as
+      // breathing — swelling a huge soft gradient a few percent is invisible on
+      // its own — so the halo dims and flares roughly 2x while it also swells.
       if (animate) {
-        sunPhase += 0.16 * deltaMs * 0.001;
+        sunPhase += SUN_BREATH_SPEED * deltaMs * 0.001;
       }
-      const sunBreath = 0.88 + Math.sin(sunPhase) * 0.12;
-      const sunRadius = Math.max(width, height) * SUN_RADIUS_RATIO * sunBreath;
-      ctx.globalAlpha = 0.94;
+      const breath = Math.sin(sunPhase) * 0.5 + 0.5; // 0..1
+      const sunRadius = Math.max(width, height) * SUN_RADIUS_RATIO * (0.8 + breath * 0.3);
+      ctx.globalAlpha = 0.5 + breath * 0.5;
       ctx.drawImage(
         sunSprite,
         width * SUN_ANCHOR_X - sunRadius,
