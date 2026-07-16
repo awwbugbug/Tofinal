@@ -9,8 +9,6 @@ const prefersReducedMotion = () =>
 
 type Star = { x: number; y: number; layer: number; r: number; phase: number; twinkleSpeed: number };
 type Nebula = { x: number; y: number; radius: number; driftX: number; driftY: number; phase: number; sprite: HTMLCanvasElement; alpha: number };
-/** A fixed star: it does not drift with the field, it just breathes in place. */
-type Beacon = { x: number; y: number; radius: number; phase: number; speed: number };
 
 // Three parallax depths: distant stars are dim, slow, and small; near stars are
 // brighter, faster, and larger. Counts kept modest (~214 total) so the always-
@@ -40,29 +38,35 @@ const FRAME_MS = 1000 / 30;
 // Rebuilding real radial gradients every frame was the expensive part.
 const NEBULA_SPRITE_SIZE = 192;
 
-// A handful of bright fixed stars that slowly breathe. Unlike the drifting
-// pinpoints they carry a soft halo, so they survive the panels' blur and read as
-// a gentle pulse of light behind the glass. Also sprite-cached — the halo is a
-// gradient, and rebuilding those per frame is what costs.
-const BEACON_COUNT = 8;
-const BEACON_SPRITE_SIZE = 128;
+// The sun: one warm star burning in the top-right corner. It is the single
+// colour in an otherwise black/grey/silver sky, and it is what the frosted
+// panels bloom — a big soft gradient is exactly what survives a 24px blur.
+// Anchored proportionally so it stays in the corner at any window size.
+const SUN_SPRITE_SIZE = 256;
+const SUN_ANCHOR_X = 0.94;
+const SUN_ANCHOR_Y = 0.04;
+const SUN_RADIUS_RATIO = 0.46;
 
-const makeBeaconSprite = () => {
+const makeSunSprite = () => {
   const sprite = document.createElement("canvas");
-  sprite.width = BEACON_SPRITE_SIZE;
-  sprite.height = BEACON_SPRITE_SIZE;
+  sprite.width = SUN_SPRITE_SIZE;
+  sprite.height = SUN_SPRITE_SIZE;
   const sctx = sprite.getContext("2d");
   if (!sctx) {
     return sprite;
   }
-  const mid = BEACON_SPRITE_SIZE / 2;
+  const mid = SUN_SPRITE_SIZE / 2;
   const gradient = sctx.createRadialGradient(mid, mid, 0, mid, mid, mid);
-  gradient.addColorStop(0, "rgba(255, 255, 255, 1)");
-  gradient.addColorStop(0.1, "rgba(238, 242, 255, 0.82)");
-  gradient.addColorStop(0.3, "rgba(206, 216, 242, 0.24)");
-  gradient.addColorStop(1, "rgba(196, 206, 236, 0)");
+  // White-hot core → yellow → amber → a long warm falloff that fades to
+  // nothing, so it reads as light rather than a pasted-on disc.
+  gradient.addColorStop(0, "rgba(255, 252, 232, 1)");
+  gradient.addColorStop(0.05, "rgba(255, 243, 184, 0.94)");
+  gradient.addColorStop(0.14, "rgba(255, 215, 118, 0.6)");
+  gradient.addColorStop(0.34, "rgba(255, 170, 74, 0.24)");
+  gradient.addColorStop(0.62, "rgba(255, 142, 56, 0.08)");
+  gradient.addColorStop(1, "rgba(255, 130, 50, 0)");
   sctx.fillStyle = gradient;
-  sctx.fillRect(0, 0, BEACON_SPRITE_SIZE, BEACON_SPRITE_SIZE);
+  sctx.fillRect(0, 0, SUN_SPRITE_SIZE, SUN_SPRITE_SIZE);
   return sprite;
 };
 
@@ -111,12 +115,12 @@ export function Starfield() {
 
     const reduced = prefersReducedMotion();
     const sprites = NEBULA_COLORS.map(makeNebulaSprite);
-    const beaconSprite = makeBeaconSprite();
+    const sunSprite = makeSunSprite();
     let width = 0;
     let height = 0;
     let stars: Star[] = [];
     let nebulae: Nebula[] = [];
-    let beacons: Beacon[] = [];
+    let sunPhase = Math.random() * Math.PI * 2;
     let rafId = 0;
     let resizeRaf = 0;
     let running = false;
@@ -148,23 +152,30 @@ export function Starfield() {
         sprite,
         alpha: index === 0 ? 0.22 : 0.15,
       }));
-
-      beacons = Array.from({ length: BEACON_COUNT }, () => ({
-        x: Math.random() * width,
-        y: Math.random() * height,
-        radius: 26 + Math.random() * 30,
-        phase: Math.random() * Math.PI * 2,
-        // Slow enough to read as breathing rather than blinking.
-        speed: 0.22 + Math.random() * 0.3,
-      }));
     };
 
     const draw = (deltaMs: number, animate: boolean) => {
       ctx.clearRect(0, 0, width, height);
 
-      // Nebula clouds first, blended additively for a glow that survives the
-      // frosted-panel blur.
+      // Everything luminous is blended additively so it reads as light rather
+      // than paint — and so it blooms through the panels' blur.
       ctx.globalCompositeOperation = "lighter";
+
+      // The sun, breathing slowly in the corner.
+      if (animate) {
+        sunPhase += 0.16 * deltaMs * 0.001;
+      }
+      const sunBreath = 0.88 + Math.sin(sunPhase) * 0.12;
+      const sunRadius = Math.max(width, height) * SUN_RADIUS_RATIO * sunBreath;
+      ctx.globalAlpha = 0.94;
+      ctx.drawImage(
+        sunSprite,
+        width * SUN_ANCHOR_X - sunRadius,
+        height * SUN_ANCHOR_Y - sunRadius,
+        sunRadius * 2,
+        sunRadius * 2,
+      );
+
       for (const nebula of nebulae) {
         if (animate) {
           nebula.x += nebula.driftX * deltaMs * 0.001;
@@ -206,19 +217,6 @@ export function Starfield() {
         ctx.fill();
       }
 
-      // Fixed stars last, blended additively so their halos glow over the field.
-      ctx.globalCompositeOperation = "lighter";
-      for (const beacon of beacons) {
-        if (animate) {
-          beacon.phase += beacon.speed * deltaMs * 0.001;
-        }
-        // 0..1 breath, eased by the sine itself — swells and settles.
-        const breath = 0.42 + (Math.sin(beacon.phase) * 0.5 + 0.5) * 0.58;
-        const size = beacon.radius * 2 * (0.86 + breath * 0.14);
-        ctx.globalAlpha = 0.5 * breath;
-        ctx.drawImage(beaconSprite, beacon.x - size / 2, beacon.y - size / 2, size, size);
-      }
-      ctx.globalCompositeOperation = "source-over";
       ctx.globalAlpha = 1;
     };
 
@@ -273,10 +271,11 @@ export function Starfield() {
         // window edge scrambled the whole sky dozens of times a second.
         //
         // Only the stars are rescaled: they are sub-pixel points, so nudging
-        // them is invisible. The nebulae and beacons are LIGHT SOURCES — moving
-        // or resizing those on every resize event made the glow visibly jump,
-        // which read as strobing. They drift and wrap on their own, so leaving
-        // them alone costs nothing.
+        // them is invisible. The nebulae are LIGHT SOURCES — moving or resizing
+        // those on every resize event made the glow visibly jump, which read as
+        // strobing. They drift and wrap on their own, so leaving them alone
+        // costs nothing. (The sun is anchored proportionally at draw time, so it
+        // tracks the corner smoothly rather than being repositioned here.)
         const scaleX = width / previousWidth;
         const scaleY = height / previousHeight;
         for (const star of stars) {
