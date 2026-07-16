@@ -497,6 +497,42 @@ describe("App", () => {
     expect(screen.getByRole("checkbox", { name: /mark checkbox main task incomplete/i })).toBeInTheDocument();
   });
 
+  it("reopens a completed stacked child in place without playing the leaving animation", async () => {
+    const today = getLocalDateKey();
+    const seedTasks = createSeedTasks();
+    const stack = {
+      id: "stack-reopen",
+      sortOrder: 0,
+      collapsed: false,
+      createdAt: seedTasks[0].createdAt,
+      updatedAt: seedTasks[0].updatedAt,
+    };
+    const tasks = [
+      { ...seedTasks[0], id: "reopen-main", title: "Reopen main task", plannedDate: today, completed: false, completedAt: null, stackId: stack.id, stackOrder: 0 },
+      { ...seedTasks[1], id: "reopen-child", title: "Reopen child task", plannedDate: today, completed: false, completedAt: null, stackId: stack.id, stackOrder: 1 },
+    ];
+    setTaskRepositoryForTest(createMemoryTaskRepository({ tasks, stacks: [stack] }));
+    resetTaskStore();
+
+    await renderApp();
+
+    // Complete the child. Its sibling stays open, so the whole stack remains in
+    // the open list and the child shows completed IN PLACE (not the completed
+    // section).
+    await userEvent.click(screen.getByRole("checkbox", { name: /mark reopen child task complete/i }));
+    const reopenCheckbox = await screen.findByRole("checkbox", { name: /mark reopen child task incomplete/i });
+    expect(within(screen.getByTestId("task-list")).getByText("Reopen child task")).toBeInTheDocument();
+    expect(screen.queryByTestId("today-completed-task-list")).not.toBeInTheDocument();
+
+    // Reopen it: because no view leaves the list, the card must flip back in
+    // place — its row wrapper must never be marked leaving (the stacked-card
+    // "vanish then reappear" flicker).
+    await userEvent.click(reopenCheckbox);
+    const childCard = within(screen.getByTestId("task-list")).getByText("Reopen child task").closest('[data-testid="task-card"]');
+    expect(childCard?.closest(".task-exit-wrap")).not.toHaveClass("task-exit-wrap-leaving");
+    expect(screen.getByRole("checkbox", { name: /mark reopen child task complete/i })).toBeInTheDocument();
+  });
+
   it("keeps completed non-today tasks in All while Today only shows them while completed today", async () => {
     const today = getLocalDateKey();
     const tasks = createSeedTasks().map((task, index) => {

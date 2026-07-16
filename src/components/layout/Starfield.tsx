@@ -9,6 +9,8 @@ const prefersReducedMotion = () =>
 
 type Star = { x: number; y: number; layer: number; r: number; phase: number; twinkleSpeed: number };
 type Nebula = { x: number; y: number; radius: number; driftX: number; driftY: number; phase: number; sprite: HTMLCanvasElement; alpha: number };
+/** A fixed star: it does not drift with the field, it just breathes in place. */
+type Beacon = { x: number; y: number; radius: number; phase: number; speed: number };
 
 // Three parallax depths: distant stars are dim, slow, and small; near stars are
 // brighter, faster, and larger. Counts kept modest (~214 total) so the always-
@@ -37,6 +39,32 @@ const FRAME_MS = 1000 / 30;
 // scale it up at draw time (upscaling is invisible on something this blurry).
 // Rebuilding real radial gradients every frame was the expensive part.
 const NEBULA_SPRITE_SIZE = 192;
+
+// A handful of bright fixed stars that slowly breathe. Unlike the drifting
+// pinpoints they carry a soft halo, so they survive the panels' blur and read as
+// a gentle pulse of light behind the glass. Also sprite-cached — the halo is a
+// gradient, and rebuilding those per frame is what costs.
+const BEACON_COUNT = 8;
+const BEACON_SPRITE_SIZE = 128;
+
+const makeBeaconSprite = () => {
+  const sprite = document.createElement("canvas");
+  sprite.width = BEACON_SPRITE_SIZE;
+  sprite.height = BEACON_SPRITE_SIZE;
+  const sctx = sprite.getContext("2d");
+  if (!sctx) {
+    return sprite;
+  }
+  const mid = BEACON_SPRITE_SIZE / 2;
+  const gradient = sctx.createRadialGradient(mid, mid, 0, mid, mid, mid);
+  gradient.addColorStop(0, "rgba(255, 255, 255, 1)");
+  gradient.addColorStop(0.1, "rgba(238, 242, 255, 0.82)");
+  gradient.addColorStop(0.3, "rgba(206, 216, 242, 0.24)");
+  gradient.addColorStop(1, "rgba(196, 206, 236, 0)");
+  sctx.fillStyle = gradient;
+  sctx.fillRect(0, 0, BEACON_SPRITE_SIZE, BEACON_SPRITE_SIZE);
+  return sprite;
+};
 
 const makeNebulaSprite = (color: string) => {
   const sprite = document.createElement("canvas");
@@ -83,10 +111,12 @@ export function Starfield() {
 
     const reduced = prefersReducedMotion();
     const sprites = NEBULA_COLORS.map(makeNebulaSprite);
+    const beaconSprite = makeBeaconSprite();
     let width = 0;
     let height = 0;
     let stars: Star[] = [];
     let nebulae: Nebula[] = [];
+    let beacons: Beacon[] = [];
     let rafId = 0;
     let resizeRaf = 0;
     let running = false;
@@ -117,6 +147,15 @@ export function Starfield() {
         phase: Math.random() * Math.PI * 2,
         sprite,
         alpha: index === 0 ? 0.22 : 0.15,
+      }));
+
+      beacons = Array.from({ length: BEACON_COUNT }, () => ({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        radius: 26 + Math.random() * 30,
+        phase: Math.random() * Math.PI * 2,
+        // Slow enough to read as breathing rather than blinking.
+        speed: 0.22 + Math.random() * 0.3,
       }));
     };
 
@@ -166,6 +205,20 @@ export function Starfield() {
         ctx.fillStyle = STAR_COLOR;
         ctx.fill();
       }
+
+      // Fixed stars last, blended additively so their halos glow over the field.
+      ctx.globalCompositeOperation = "lighter";
+      for (const beacon of beacons) {
+        if (animate) {
+          beacon.phase += beacon.speed * deltaMs * 0.001;
+        }
+        // 0..1 breath, eased by the sine itself — swells and settles.
+        const breath = 0.42 + (Math.sin(beacon.phase) * 0.5 + 0.5) * 0.58;
+        const size = beacon.radius * 2 * (0.86 + breath * 0.14);
+        ctx.globalAlpha = 0.5 * breath;
+        ctx.drawImage(beaconSprite, beacon.x - size / 2, beacon.y - size / 2, size, size);
+      }
+      ctx.globalCompositeOperation = "source-over";
       ctx.globalAlpha = 1;
     };
 
@@ -218,23 +271,24 @@ export function Starfield() {
         // Rescale the EXISTING field instead of rebuilding it. Regenerating on
         // every resize event re-randomised every star and cloud, so dragging the
         // window edge scrambled the whole sky dozens of times a second.
+        //
+        // Only the stars are rescaled: they are sub-pixel points, so nudging
+        // them is invisible. The nebulae and beacons are LIGHT SOURCES — moving
+        // or resizing those on every resize event made the glow visibly jump,
+        // which read as strobing. They drift and wrap on their own, so leaving
+        // them alone costs nothing.
         const scaleX = width / previousWidth;
         const scaleY = height / previousHeight;
         for (const star of stars) {
           star.x *= scaleX;
           star.y *= scaleY;
         }
-        const span = Math.max(width, height);
-        for (const nebula of nebulae) {
-          nebula.x *= scaleX;
-          nebula.y *= scaleY;
-          nebula.radius = Math.min(nebula.radius, span * 0.54);
-        }
       }
 
-      if (reduced) {
-        draw(0, false);
-      }
+      // Setting canvas.width above CLEARS the bitmap. Repaint NOW rather than
+      // waiting up to a frame interval for the throttled loop — otherwise every
+      // resize event left a blank canvas on screen and the backdrop strobed.
+      draw(0, false);
     };
 
     // Coalesce resize bursts into one measurement per frame.

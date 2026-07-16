@@ -350,19 +350,24 @@ export function AppShell() {
     }
 
     const viewKey = state.viewDateKey;
-    const viewLeavesList = state.activeFilter === "today" && (
+    // Another open task of the viewed date in the same stack keeps that stack
+    // anchored in the open list, so this card renders INSIDE the expanded stack
+    // (never the completed section). Toggling it then removes no view — playing
+    // the collapse-exit would just make it vanish and snap back, which is the
+    // "reopen flickers" bug on stacked cards.
+    const hasOpenSiblingOnDate = state.tasks.some((candidate) =>
+      candidate.id !== id &&
+      candidate.stackId === task.stackId &&
+      !candidate.deletedAt &&
+      !candidate.completed &&
+      candidate.plannedDate === viewKey,
+    );
+    const viewLeavesList = state.activeFilter === "today" && !hasOpenSiblingOnDate && (
       task.completed
-        ? // Reopening from the completed section removes it from that list.
-          Boolean(task.completedAt && isoToLocalDateKey(task.completedAt) === viewKey)
-        : // Completing removes the view when no other open task of the viewed
-          // date shares the stack.
-          !state.tasks.some((candidate) =>
-            candidate.id !== id &&
-            candidate.stackId === task.stackId &&
-            !candidate.deletedAt &&
-            !candidate.completed &&
-            candidate.plannedDate === viewKey,
-          )
+        // Reopening from the completed section removes it from that list.
+        ? Boolean(task.completedAt && isoToLocalDateKey(task.completedAt) === viewKey)
+        // Completing the last open card of the date collapses the view out.
+        : true
     );
 
     if (viewLeavesList && mode === "normal") {
