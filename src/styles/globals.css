@@ -9,9 +9,10 @@
     -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   color: #172033;
   background: transparent;
-  --bg-base: #e5ebf2;
-  --bg-warm: #f2eadc;
-  --bg-canvas: linear-gradient(135deg, #dfe8f2 0%, #edf2f5 46%, #f3eadc 100%);
+  /* Soft pastel base; the AuroraBackdrop layers drifting colour on top of it. */
+  --bg-base: #f2eef7;
+  --bg-warm: #ffe8f3;
+  --bg-canvas: linear-gradient(135deg, #ffe8f3 0%, #d9f3ff 100%);
   --surface-sidebar: #dce7f1;
   --surface-main: #eef3f7;
   --surface-detail: #fdfefe;
@@ -110,6 +111,13 @@
     0 0 18px rgb(39 58 78 / 0.07),
     0 8px 18px rgb(39 58 78 / 0.06);
   --shadow-subtle: 0 6px 18px rgb(39 58 78 / 0.07);
+  /* Liquid Glass: frosted white over the drifting aurora. */
+  --glass-tint: rgb(255 255 255 / 0.5);
+  --glass-edge: rgb(255 255 255 / 0.72);
+  --glass-fresnel: rgb(255 255 255 / 0.85);
+  --glass-accent-light: rgb(178 205 255 / 0.16);
+  --glass-underglow: rgb(190 160 230 / 0.10);
+  --glass-drop-shadow: 0 22px 48px rgb(80 70 110 / 0.14);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -117,38 +125,41 @@
   -webkit-text-size-adjust: 100%;
 }
 
+/* Dark: a monochrome black / grey / silver palette (never pure black, so the
+   surfaces can still step apart by lightness) with a silver accent. The
+   Starfield canvas drifts behind the glass. */
 :root[data-theme="dark"] {
   color-scheme: dark;
-  color: #e7edf5;
+  color: #f5f5f7;
   background: transparent;
-  --bg-base: #101722;
-  --bg-warm: #1c2430;
-  --bg-canvas: linear-gradient(135deg, #0e1621 0%, #151f2b 48%, #202631 100%);
-  --surface-sidebar: #131d28;
-  --surface-main: #172230;
-  --surface-detail: #1b2735;
-  --surface-detail-end: #141f2b;
-  --surface-card: rgb(30 42 56 / 0.78);
-  --surface-card-hover: #263445;
-  --surface-elevated: #223040;
-  --surface-input: #1d2a38;
-  --surface-input-focus: #263645;
-  --surface-field: #202d3b;
-  --surface-field-focus: #293847;
-  --surface-segment: #1d2a38;
-  --surface-muted: #263445;
+  --bg-base: #0e0e11;
+  --bg-warm: #17171b;
+  --bg-canvas: linear-gradient(135deg, #0b0b0d 0%, #121215 52%, #0e0e11 100%);
+  --surface-sidebar: #121214;
+  --surface-main: #171719;
+  --surface-detail: #1a1a1e;
+  --surface-detail-end: #141416;
+  --surface-card: rgb(32 32 36 / 0.72);
+  --surface-card-hover: #26262b;
+  --surface-elevated: #232328;
+  --surface-input: #1b1b1f;
+  --surface-input-focus: #24242a;
+  --surface-field: #1e1e22;
+  --surface-field-focus: #27272d;
+  --surface-segment: #1b1b1f;
+  --surface-muted: #26262b;
   --glass-highlight: rgb(255 255 255 / 0.12);
   --glass-shadow:
-    0 1px 0 rgb(255 255 255 / 0.12) inset,
-    0 12px 24px rgb(0 0 0 / 0.26),
-    0 0 14px rgb(75 127 164 / 0.10);
-  --selected-glass-bg: rgb(76 115 145 / 0.28);
-  --selected-glass-border: rgb(150 184 213 / 0.22);
+    0 1px 0 rgb(255 255 255 / 0.10) inset,
+    0 12px 24px rgb(0 0 0 / 0.48),
+    0 0 14px rgb(205 210 222 / 0.06);
+  --selected-glass-bg: rgb(148 152 166 / 0.22);
+  --selected-glass-border: rgb(212 216 228 / 0.22);
   --selected-glass-highlight: rgb(255 255 255 / 0.16);
   --selected-glass-shadow:
     0 1px 0 rgb(255 255 255 / 0.14) inset,
-    0 12px 24px rgb(0 0 0 / 0.24),
-    0 0 0 1px rgb(150 184 213 / 0.06);
+    0 12px 24px rgb(0 0 0 / 0.44),
+    0 0 0 1px rgb(212 216 228 / 0.06);
   --glass-soft-bg:
     linear-gradient(180deg, var(--selected-glass-highlight), rgb(255 255 255 / 0.06)),
     var(--selected-glass-bg);
@@ -172,27 +183,32 @@
   --detail-panel-highlight:
     0 1px 0 rgb(255 255 255 / 0.08) inset,
     0 10px 18px rgb(255 255 255 / 0.015) inset;
-  --text-primary: #edf4fb;
-  --text-secondary: #c3ceda;
-  --text-muted: #98a8ba;
-  --text-faint: #6f8093;
-  --border-soft: rgb(164 185 206 / 0.16);
-  --border-medium: rgb(164 185 206 / 0.28);
-  --ring-soft: rgb(111 164 207 / 0.26);
-  --accent: #79aed4;
-  --accent-hover: #a9d4f1;
-  --accent-soft: #2c4e66;
-  --accent-surface: #21384b;
-  --normal-bg: #253544;
-  --normal-text: #b8c6d4;
-  --important-bg: #2d4b72;
-  --important-text: #c9ddfb;
-  --urgent-bg: #643728;
-  --urgent-text: #ffd0bd;
-  --pinned-bg: #3c3154;
-  --pinned-text: #d9c8ff;
-  --danger: #ff9a84;
-  --danger-soft: #4a2b28;
+  --text-primary: #f5f5f7;
+  --text-secondary: #d1d1d6;
+  --text-muted: #9b9ba2;
+  --text-faint: #6e6e76;
+  --border-soft: rgb(255 255 255 / 0.09);
+  --border-medium: rgb(255 255 255 / 0.17);
+  --ring-soft: rgb(216 220 232 / 0.28);
+  /* Silver accent — the one "colour" in the palette. */
+  --accent: #c9ccd6;
+  --accent-hover: #eaecf2;
+  --accent-soft: #34343c;
+  --accent-surface: #26262c;
+  /* Priority chips read by LIGHTNESS rather than hue: the brighter the chip,
+     the more urgent. Keeps the monochrome palette intact. */
+  --normal-bg: #26262b;
+  --normal-text: #a8a8b0;
+  --important-bg: #3a3a43;
+  --important-text: #d8d8e2;
+  --urgent-bg: #55555f;
+  --urgent-text: #f7f7fb;
+  --pinned-bg: #32323a;
+  --pinned-text: #dededf;
+  /* Danger keeps a trace of warmth on purpose: destructive actions should not
+     look identical to everything else. */
+  --danger: #dba79d;
+  --danger-soft: #3a2c29;
   --app-bg: var(--bg-base);
   --app-chrome: var(--surface-main);
   --surface-panel: var(--surface-main);
@@ -208,17 +224,118 @@
   --priority-important-text: var(--important-text);
   --priority-urgent-bg: var(--urgent-bg);
   --priority-urgent-text: var(--urgent-text);
-  --shadow-soft: 0 24px 54px rgb(0 0 0 / 0.32);
-  --shadow-card: 0 16px 36px rgb(0 0 0 / 0.26);
+  --shadow-soft: 0 24px 54px rgb(0 0 0 / 0.5);
+  --shadow-card: 0 16px 36px rgb(0 0 0 / 0.42);
   --shadow-card-around:
-    0 0 0 1px rgb(150 184 213 / 0.08),
-    0 0 24px rgb(75 127 164 / 0.12),
-    0 14px 30px rgb(0 0 0 / 0.26);
+    0 0 0 1px rgb(212 216 228 / 0.08),
+    0 0 24px rgb(180 186 200 / 0.10),
+    0 14px 30px rgb(0 0 0 / 0.46);
   --shadow-card-hover:
-    0 0 0 1px rgb(150 184 213 / 0.09),
-    0 0 18px rgb(75 127 164 / 0.10),
-    0 10px 22px rgb(0 0 0 / 0.20);
-  --shadow-subtle: 0 8px 20px rgb(0 0 0 / 0.22);
+    0 0 0 1px rgb(212 216 228 / 0.09),
+    0 0 18px rgb(180 186 200 / 0.08),
+    0 10px 22px rgb(0 0 0 / 0.4);
+  --shadow-subtle: 0 8px 20px rgb(0 0 0 / 0.36);
+  /* Liquid Glass: smoked glass over the silver starfield. Tint stays fairly
+     transparent so the field actually reads through it. */
+  --glass-tint: rgb(26 26 30 / 0.44);
+  --glass-edge: rgb(255 255 255 / 0.11);
+  --glass-fresnel: rgb(255 255 255 / 0.14);
+  --glass-accent-light: rgb(220 224 235 / 0.10);
+  --glass-underglow: rgb(150 156 172 / 0.09);
+  --glass-drop-shadow: 0 24px 54px rgb(0 0 0 / 0.5);
+}
+
+/* ============================================================
+   Liquid Glass — the reusable frosted surface (every theme).
+   Consumed via the <GlassSurface> component. Three layers:
+   shell (clip + edge + shadow), __pane (backdrop blur + soft
+   light), __sheen (a slowly drifting highlight).
+   ============================================================ */
+
+.liquid-glass {
+  position: relative;
+  /* Rounded clip for the glass layers lives HERE, not on the blurred pane, so
+     blur and overflow:hidden never share a layer (that combo aliases corners
+     in WebView2). box-shadow is not clipped by overflow, so the drop shadow
+     still shows. */
+  overflow: hidden;
+  border: 1px solid var(--glass-edge);
+  box-shadow:
+    inset 0 1px 0 0 var(--glass-fresnel),
+    inset 0 -1px 1px 0 rgb(0 0 0 / 0.16),
+    var(--glass-drop-shadow);
+}
+
+.liquid-glass__pane,
+.liquid-glass__sheen {
+  position: absolute;
+  pointer-events: none;
+}
+
+.liquid-glass__pane {
+  /* Extend the blurred layer well past the shell so backdrop-filter's edge
+     bleed (a washed band where the blur samples beyond the panel) falls OUTSIDE
+     the shell's overflow:hidden clip. The visible area then only ever shows the
+     clean interior of the blur — no unnatural boundary at the top or edges. */
+  inset: -56px;
+  backdrop-filter: blur(30px) saturate(180%) brightness(1.06);
+  -webkit-backdrop-filter: blur(30px) saturate(180%) brightness(1.06);
+  /* Several overlapping soft light sources — never a single flat gradient. */
+  background:
+    radial-gradient(120% 100% at 18% 6%, rgb(255 255 255 / 0.16), transparent 56%),
+    radial-gradient(110% 85% at 96% 14%, var(--glass-accent-light), transparent 52%),
+    radial-gradient(140% 140% at 50% 116%, var(--glass-underglow), transparent 60%),
+    var(--glass-tint);
+}
+
+.liquid-glass__sheen {
+  /* No backdrop-filter here, so it needs no oversize; a fixed off-centre
+     highlight that only drifts slowly. */
+  inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(48% 42% at 30% 16%, rgb(255 255 255 / 0.10), transparent 72%);
+  mix-blend-mode: screen;
+  animation: liquid-glass-drift 26s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+/* Content rides above the glass by DOM order (it follows the panes). It is
+   position:relative WITHOUT a z-index, so it is NOT a stacking context — a
+   position:fixed modal/popover inside still escapes to the viewport instead of
+   being trapped in the column. */
+.liquid-glass__content {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  border-radius: inherit;
+}
+
+@keyframes liquid-glass-drift {
+  from {
+    transform: translate3d(-2.4%, -1.6%, 0);
+  }
+  to {
+    transform: translate3d(2.4%, 1.8%, 0);
+  }
+}
+
+@keyframes aurora-rotate {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+@keyframes aurora-rotate-reverse {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(-360deg);
+  }
 }
 
 :root[data-soft-glass="subtle"] {
@@ -314,6 +431,70 @@ body {
 @layer utilities {
   .app-shell-bg {
     background: var(--bg-canvas);
+    /* Own stacking context so the theme backdrops (z-index:-1) sit between this
+       gradient and the content above. isolation is what actually scopes the
+       negative z-index — position:relative with z-index:auto does NOT form a
+       stacking context, which once made the starfield completely invisible. */
+    position: relative;
+    isolation: isolate;
+  }
+
+  /* Dark theme backdrop: the drifting silver starfield canvas. */
+  .app-starfield {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  /* Light theme backdrop: two counter-rotating blurred conic gradients. The
+     clip lives here; the blur lives on the children, so blur and
+     overflow:hidden never share a layer. */
+  .aurora-backdrop {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .aurora-backdrop::before,
+  .aurora-backdrop::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 200%;
+    height: 200%;
+    background: conic-gradient(
+      from 0deg,
+      #ff9aa2,
+      #ffb7b2,
+      #ffdac1,
+      #e2f0cb,
+      #a2e4ff,
+      #c9afff,
+      #ffb7b2,
+      #ff9aa2
+    );
+    /* Only the transform animates — the gradient itself never changes, so the
+       blurred layer rasterises once and the compositor just spins the cached
+       texture. That is what keeps a 50px blur on a 200% box affordable. */
+    filter: blur(50px);
+    opacity: 0.8;
+    transform: translate(-50%, -50%);
+    animation: aurora-rotate 8s linear infinite;
+    will-change: transform;
+  }
+
+  .aurora-backdrop::after {
+    width: 180%;
+    height: 180%;
+    opacity: 0.6;
+    animation: aurora-rotate-reverse 10s linear infinite;
   }
 
   .app-chrome {
@@ -1215,6 +1396,13 @@ body {
   .date-segment-shell .priority-segment {
     font-size: 0.8rem;
     padding: 0 0.3rem;
+  }
+
+  /* Time-schedule segmented control: the same track geometry, two columns.
+     Without this it inherited the three-column fallback and the thumb came up
+     a third too narrow before/without the measured width. */
+  .time-segment-shell {
+    --priority-thumb-width: calc(50% - 0.75rem);
   }
 
   /* iOS-style drum picker: rows curve away from the center lens on a virtual
@@ -2207,6 +2395,14 @@ body {
   .task-card-spotlight,
   .task-card-spotlight-fade {
     animation-duration: 1ms;
+  }
+
+  /* Freeze the theme backdrops and the glass sheen: they are ambient drift, so
+     a single static frame is the right reduced-motion answer. */
+  .liquid-glass__sheen,
+  .aurora-backdrop::before,
+  .aurora-backdrop::after {
+    animation: none;
   }
 
   .task-stack-drag-frame,

@@ -4,6 +4,7 @@ import { CalendarDays, Inbox, ListTodo, Pin, Settings, Star } from "lucide-react
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PreferencesPanel } from "@/components/layout/PreferencesPanel";
+import { GlassSurface } from "@/components/ui/glass-surface";
 import { Separator } from "@/components/ui/separator";
 import { TrashBinIcon } from "@/components/ui/trash-bin-icon";
 import { useI18n } from "@/i18n/useI18n";
@@ -66,7 +67,7 @@ export function Sidebar({ activeFilter, onFilterChange, onOpenTrash, tasks, tras
   });
 
   return (
-    <aside className="surface-sidebar flex h-full flex-col rounded-[var(--radius-panel)] border p-4">
+    <GlassSurface as="aside" className="h-full rounded-[var(--radius-panel)]" contentClassName="flex flex-col p-4">
       <div className="px-2">
         <div className="text-xs font-medium uppercase text-[var(--text-faint)]">ToFinal</div>
         <h1 className="mt-2 text-2xl font-semibold tracking-normal text-[var(--text-primary)]">{t("sidebar.tasks")}</h1>
@@ -160,6 +161,6 @@ export function Sidebar({ activeFilter, onFilterChange, onOpenTrash, tasks, tras
         </div>
       </div>
       <PreferencesPanel open={preferencesOpen} onClose={() => setPreferencesOpen(false)} />
-    </aside>
+    </GlassSurface>
   );
 }

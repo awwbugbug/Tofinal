@@ -1,4 +1,5 @@
 import { TaskDetail } from "@/components/task/TaskDetail";
+import { GlassSurface } from "@/components/ui/glass-surface";
 import type { AttachmentView, FinalScreenshot, PendingScreenshot } from "@/stores/attachmentStore";
 import type { TaskAppView } from "@/stores/taskAppStore";
 import type { Task } from "@/types/task";
@@ -76,8 +77,10 @@ export function DetailPanel({
   task,
 }: DetailPanelProps) {
   return (
-    <aside
-      className="surface-detail flex h-full min-h-0 flex-col overflow-hidden rounded-[var(--radius-panel)] border p-6"
+    <GlassSurface
+      as="aside"
+      className="h-full min-h-0 rounded-[var(--radius-panel)]"
+      contentClassName="flex flex-col p-6"
       data-testid="detail-panel"
     >
       <TaskDetail
@@ -114,6 +117,6 @@ export function DetailPanel({
         saving={saving}
         task={task}
       />
-    </aside>
+    </GlassSurface>
   );
 }

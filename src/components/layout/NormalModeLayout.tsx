@@ -1,7 +1,10 @@
 ﻿import { type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
 import { PanelTopOpen, Plus, Search } from "lucide-react";
 
+import { AuroraBackdrop } from "@/components/layout/AuroraBackdrop";
+import { Starfield } from "@/components/layout/Starfield";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { GlassSurface } from "@/components/ui/glass-surface";
 import { DetailPanel } from "@/components/layout/DetailPanel";
 import { QuickInput } from "@/components/task/QuickInput";
 import { TaskList } from "@/components/task/TaskList";
@@ -349,6 +352,8 @@ export function NormalModeLayout({
       data-testid="normal-mode-layout"
       style={{ gridTemplateColumns }}
     >
+      <AuroraBackdrop />
+      <Starfield />
       <Sidebar
         activeFilter={activeFilter}
         onFilterChange={onFilterChange}
@@ -372,7 +377,7 @@ export function NormalModeLayout({
         tabIndex={0}
       />
 
-      <section className="surface-panel flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-[var(--radius-panel)] border px-5 pb-5 pt-8" data-undo-anchor="true">
+      <GlassSurface as="section" className="h-full min-h-0 min-w-0 rounded-[var(--radius-panel)]" contentClassName="flex flex-col px-5 pb-5 pt-8" data-undo-anchor="true">
         <header className="mb-5 flex min-h-11 shrink-0 items-center justify-between gap-4">
           <div className="min-w-0 pl-2">
             {isDateView ? (
@@ -535,7 +540,7 @@ export function NormalModeLayout({
             {emptyStateContent}
           </div>
         )}
-      </section>
+      </GlassSurface>
 
       <div
         aria-label="Resize task list and detail panel"

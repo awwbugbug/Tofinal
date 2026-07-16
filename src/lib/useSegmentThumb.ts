@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useLayoutEffect, useState, type CSSProperties } from "react";
 
 /**
  * Positions a segmented-control thumb by MEASURING the currently-selected
@@ -13,12 +13,21 @@ import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
  * panel resizing.
  */
 export function useSegmentThumb(activeKey: string, depsKey: string) {
-  const shellRef = useRef<HTMLDivElement | null>(null);
+  // The track lives in STATE, not a plain ref, so the effect re-runs whenever it
+  // mounts or remounts. TaskDetail renders an empty state when no task is
+  // selected (switching the viewed date can deselect), which unmounts the track;
+  // with a plain ref the effect would not re-run, leaving the thumb on stale
+  // pixels and its observer bound to the detached node — so the thumb kept a
+  // width measured at a different panel size and spilled out of the track.
+  const [shell, setShell] = useState<HTMLDivElement | null>(null);
   const [thumb, setThumb] = useState<{ left: number; width: number } | null>(null);
+  const shellRef = useCallback((node: HTMLDivElement | null) => setShell(node), []);
 
   useLayoutEffect(() => {
-    const shell = shellRef.current;
     if (!shell) {
+      // Track is gone: drop the stale pixels so a remount starts from the CSS
+      // column geometry instead of the previous measurement.
+      setThumb(null);
       return undefined;
     }
 
@@ -27,12 +36,17 @@ export function useSegmentThumb(activeKey: string, depsKey: string) {
       if (!selected) {
         return;
       }
-      const shellRect = shell.getBoundingClientRect();
-      const borderLeft = parseFloat(window.getComputedStyle(shell).borderLeftWidth) || 0;
-      const buttonRect = selected.getBoundingClientRect();
-      // `left` resolves against the shell's padding box (its positioned
-      // ancestor), so subtract the shell border to align with the button's box.
-      setThumb({ left: buttonRect.left - shellRect.left - borderLeft, width: buttonRect.width });
+      // offsetLeft/offsetWidth are LAYOUT values measured against the shell (the
+      // thumb's positioned ancestor), so they line up with the thumb's `left`
+      // with no border correction, and — unlike getBoundingClientRect — they are
+      // immune to ancestor transforms and mid-animation reads.
+      const width = selected.offsetWidth;
+      if (width === 0) {
+        // Hidden or not laid out yet; keep the CSS geometry rather than pinning
+        // a bogus zero.
+        return;
+      }
+      setThumb({ left: selected.offsetLeft, width });
     };
 
     measure();
@@ -41,7 +55,7 @@ export function useSegmentThumb(activeKey: string, depsKey: string) {
     const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
     observer?.observe(shell);
     return () => observer?.disconnect();
-  }, [activeKey, depsKey]);
+  }, [shell, activeKey, depsKey]);
 
   const thumbStyle: CSSProperties | undefined = thumb ? { left: thumb.left, width: thumb.width } : undefined;
   return { shellRef, thumbStyle };

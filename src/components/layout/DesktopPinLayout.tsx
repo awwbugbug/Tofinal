@@ -1,8 +1,11 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { Maximize2 } from "lucide-react";
 
+import { AuroraBackdrop } from "@/components/layout/AuroraBackdrop";
+import { Starfield } from "@/components/layout/Starfield";
 import { QuickInput } from "@/components/task/QuickInput";
 import { TaskList } from "@/components/task/TaskList";
+import { GlassSurface } from "@/components/ui/glass-surface";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n/useI18n";
 import { usePreferencesStore } from "@/stores/preferencesStore";
@@ -120,8 +123,12 @@ export function DesktopPinLayout({
       data-mode-transition={modeTransition ?? undefined}
       data-testid="desktop-pin-layout"
     >
-      <section
-        className="surface-detail flex h-full min-h-0 w-full flex-col overflow-hidden rounded-[1.75rem] border p-4"
+      <AuroraBackdrop />
+      <Starfield />
+      <GlassSurface
+        as="section"
+        className="h-full min-h-0 w-full rounded-[1.75rem]"
+        contentClassName="flex flex-col p-4"
         data-testid="desktop-pin-shell"
       >
         <header className="mb-4 flex items-center justify-between">
@@ -155,7 +162,7 @@ export function DesktopPinLayout({
             stackViews={pinStackViews}
           />
         </div>
-      </section>
+      </GlassSurface>
     </main>
   );
 }
