@@ -282,7 +282,9 @@ describe("App", () => {
     expect(screen.queryByTestId("detail-panel")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /add image attachment/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /start task/i })).not.toBeInTheDocument();
-    expect(screen.getByText("3 open tasks")).toBeInTheDocument();
+    // The completion commit is held for the strike sweep, so the count settles
+    // to 3 shortly after (eventually-consistent by design).
+    await waitFor(() => expect(screen.getByText("3 open tasks")).toBeInTheDocument());
     await waitFor(() => expect(windowModeMocks.applyWindowMode).toHaveBeenCalledWith("pin"));
 
     const normalModeButton = within(pinLayoutElement).getByRole("button", { name: /normal window mode/i });

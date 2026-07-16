@@ -1227,12 +1227,50 @@ body {
        neighbours, which is what made the shadows jitter. Listing the properties
        also keeps expensive ones (box-shadow) explicit rather than accidental. */
     transition-property: transform, background-color, border-color, box-shadow, opacity;
-    transition-duration: 200ms;
+    /* Hover/selection stay snappy at 200ms, but the completed dim eases over the
+       same 360ms as the title strike, so the two settle together rather than the
+       card flipping grey before the line has finished sweeping. */
+    transition-duration: 200ms, 200ms, 200ms, 200ms, 360ms;
     transition-timing-function: ease-out;
   }
 
   .task-card-grid {
     width: 100%;
+  }
+
+  /* Completed title: a strike that sweeps in left→right (scaleX from the left
+     edge) instead of snapping on. The inner span hugs the text so the line spans
+     exactly the title, and the h3 keeps truncation/ellipsis. */
+  .task-title-line {
+    overflow: hidden;
+  }
+
+  .task-title-strike {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
+  }
+
+  .task-title-strike::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 100%;
+    height: 1.5px;
+    background: currentColor;
+    transform: translateY(-50%) scaleX(0);
+    transform-origin: left center;
+    transition: transform 360ms cubic-bezier(0.33, 0, 0.2, 1);
+    pointer-events: none;
+  }
+
+  .task-title-strike.is-completed::after {
+    transform: translateY(-50%) scaleX(1);
   }
 
   .task-card-list-safe-area {
@@ -2461,7 +2499,10 @@ body {
   .task-stack-drag-frame,
   .stack-task-drag-frame,
   .task-exit-wrap,
-  .task-exit-inner {
+  .task-exit-inner,
+  .task-card-shell,
+  .task-title-line,
+  .task-title-strike::after {
     transition-duration: 1ms;
   }
 

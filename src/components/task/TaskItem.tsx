@@ -257,11 +257,11 @@ export function TaskItem({ compact = false, onSelect, onToggle, selected = false
         />
         <h3
           className={cn(
-            "min-w-0 truncate text-sm font-medium leading-5",
-            displayCompleted ? "text-[var(--text-faint)] line-through" : "text-[var(--text-secondary)]",
+            "task-title-line min-w-0 text-sm font-medium leading-5 transition-colors duration-[360ms] ease-out",
+            displayCompleted ? "text-[var(--text-faint)]" : "text-[var(--text-secondary)]",
           )}
         >
-          {task.title}
+          <span className={cn("task-title-strike max-w-full truncate", displayCompleted && "is-completed")}>{task.title}</span>
         </h3>
         {/* Right rail: every indicator stacks in ONE column on the card's
             right side, centered on the column's axis — priority on top,

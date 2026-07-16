@@ -21,6 +21,10 @@ const MODE_ENTER_MS = 220;
 const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 // Slightly longer than the 200ms CSS exit transition so it finishes cleanly.
 const LIST_EXIT_MS = 230;
+// Matches the completion strike sweep (.task-title-strike in globals.css): on
+// completion the card is held in place this long so the line finishes sweeping
+// before the collapse-exit carries it to the completed section.
+const COMPLETION_STRIKE_MS = 360;
 
 type ModeTransition = "normal-exit" | "normal-enter" | "pin-exit" | "pin-enter" | null;
 
@@ -184,17 +188,34 @@ export function AppShell() {
   // store mutation and clear the mark. Pending commits are flushed on unmount
   // so a mode switch (or teardown) never loses a queued mutation.
   const pendingExitCommitsRef = useRef<Map<number, () => void>>(new Map());
-  const commitAfterExit = useCallback((taskId: string, commit: () => void) => {
-    setLeavingTaskIds((current) => (current.includes(taskId) ? current : [...current, taskId]));
-    const run = () => {
-      commit();
-      setLeavingTaskIds((current) => current.filter((id) => id !== taskId));
+  const commitAfterExit = useCallback((taskId: string, commit: () => void, holdMs = 0) => {
+    // Phase 2: mark leaving (collapse-exit plays), then commit the mutation.
+    const startExit = () => {
+      setLeavingTaskIds((current) => (current.includes(taskId) ? current : [...current, taskId]));
+      const run = () => {
+        commit();
+        setLeavingTaskIds((current) => current.filter((id) => id !== taskId));
+      };
+      const exitTimer = window.setTimeout(() => {
+        pendingExitCommitsRef.current.delete(exitTimer);
+        run();
+      }, LIST_EXIT_MS);
+      pendingExitCommitsRef.current.set(exitTimer, run);
     };
-    const timeoutId = window.setTimeout(() => {
-      pendingExitCommitsRef.current.delete(timeoutId);
-      run();
-    }, LIST_EXIT_MS);
-    pendingExitCommitsRef.current.set(timeoutId, run);
+
+    if (holdMs <= 0) {
+      startExit();
+      return;
+    }
+
+    // Phase 1: hold the card in place so the completion strike finishes sweeping
+    // before the collapse begins. A mid-hold teardown skips the animation and
+    // just commits, so a queued mutation is never lost.
+    const holdTimer = window.setTimeout(() => {
+      pendingExitCommitsRef.current.delete(holdTimer);
+      startExit();
+    }, holdMs);
+    pendingExitCommitsRef.current.set(holdTimer, commit);
   }, []);
 
   useEffect(() => () => {
@@ -371,7 +392,10 @@ export function AppShell() {
     );
 
     if (viewLeavesList && mode === "normal") {
-      commitAfterExit(id, () => toggleTask(id));
+      // Completing: hold so the strike finishes before the card is moved to the
+      // completed section. Reopening has no strike-in, so it leaves at once.
+      const holdForStrike = task.completed ? 0 : COMPLETION_STRIKE_MS;
+      commitAfterExit(id, () => toggleTask(id), holdForStrike);
       return;
     }
 
