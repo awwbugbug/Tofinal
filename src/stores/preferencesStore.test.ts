@@ -121,6 +121,60 @@ describe("preferences store", () => {
     });
   });
 
+  it("migrates version 4 preferences by defaulting the shadow strength", () => {
+    localStorage.setItem(
+      PREFERENCES_STORAGE_KEY,
+      JSON.stringify({
+        version: 4,
+        theme: "dark",
+        language: "en-US",
+        completionCelebrationsEnabled: false,
+        reminderSoundEnabled: false,
+        softGlassLevel: "subtle",
+        highlightGlassLevel: "strong",
+      }),
+    );
+    const store = createPreferencesStore();
+
+    store.getState().loadPreferences();
+
+    // Everything the user had chosen survives; only the new knob is defaulted.
+    expect(store.getState()).toMatchObject({
+      theme: "dark",
+      language: "en-US",
+      completionCelebrationsEnabled: false,
+      reminderSoundEnabled: false,
+      softGlassLevel: "subtle",
+      highlightGlassLevel: "strong",
+      shadowStrength: 100,
+    });
+  });
+
+  it("clamps out-of-range shadow strength and ignores a corrupt persisted value", () => {
+    localStorage.setItem(
+      PREFERENCES_STORAGE_KEY,
+      JSON.stringify({
+        version: 5,
+        theme: "dark",
+        language: "en-US",
+        completionCelebrationsEnabled: true,
+        reminderSoundEnabled: true,
+        softGlassLevel: "standard",
+        highlightGlassLevel: "standard",
+        shadowStrength: "not-a-number",
+      }),
+    );
+    const store = createPreferencesStore();
+    store.getState().loadPreferences();
+    expect(store.getState().shadowStrength).toBe(100);
+
+    store.getState().setShadowStrength(9999);
+    expect(store.getState().shadowStrength).toBe(200);
+
+    store.getState().setShadowStrength(-40);
+    expect(store.getState().shadowStrength).toBe(0);
+  });
+
   it("falls back to defaults for invalid localStorage JSON and invalid values", () => {
     localStorage.setItem(PREFERENCES_STORAGE_KEY, "{broken");
     const brokenJsonStore = createPreferencesStore();
@@ -158,16 +212,19 @@ describe("preferences store", () => {
     store.getState().setReminderSoundEnabled(false);
     store.getState().setSoftGlassLevel("subtle");
     store.getState().setHighlightGlassLevel("strong");
+    store.getState().setShadowStrength(140);
 
     expect(JSON.parse(localStorage.getItem(PREFERENCES_STORAGE_KEY) ?? "{}")).toMatchObject({
-      version: 4,
+      version: 5,
       theme: "dark",
       language: "en-US",
       completionCelebrationsEnabled: false,
       reminderSoundEnabled: false,
       softGlassLevel: "subtle",
       highlightGlassLevel: "strong",
+      shadowStrength: 140,
     });
+    expect(document.documentElement.style.getPropertyValue("--shadow-strength")).toBe("1.4");
     expect(store.getState().resolvedTheme).toBe("dark");
     expect(document.documentElement.dataset.theme).toBe("dark");
     expect(document.documentElement.dataset.softGlass).toBe("subtle");
@@ -192,15 +249,17 @@ describe("preferences store", () => {
       completionCelebrationsEnabled: true,
       softGlassLevel: "standard",
       highlightGlassLevel: "standard",
+      shadowStrength: 100,
     });
     expect(JSON.parse(localStorage.getItem(PREFERENCES_STORAGE_KEY) ?? "{}")).toMatchObject({
-      version: 4,
+      version: 5,
       theme: "system",
       language: "zh-CN",
       completionCelebrationsEnabled: true,
       reminderSoundEnabled: true,
       softGlassLevel: "standard",
       highlightGlassLevel: "standard",
+      shadowStrength: 100,
     });
 
     systemTheme.setMatches(false);

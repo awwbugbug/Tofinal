@@ -14,13 +14,21 @@ type PreferencesState = {
   reminderSoundEnabled: boolean;
   softGlassLevel: GlassLevelPreference;
   highlightGlassLevel: GlassLevelPreference;
+  /** Global shadow depth as a percentage; 100 = the designed value. */
+  shadowStrength: number;
   initialized: boolean;
 };
 
 /** The slice of preferences that round-trips through localStorage. */
 type PersistedPreferences = Pick<
   PreferencesState,
-  "theme" | "language" | "completionCelebrationsEnabled" | "reminderSoundEnabled" | "softGlassLevel" | "highlightGlassLevel"
+  | "theme"
+  | "language"
+  | "completionCelebrationsEnabled"
+  | "reminderSoundEnabled"
+  | "softGlassLevel"
+  | "highlightGlassLevel"
+  | "shadowStrength"
 >;
 
 type PreferencesActions = {
@@ -31,6 +39,7 @@ type PreferencesActions = {
   setReminderSoundEnabled: (enabled: boolean) => void;
   setSoftGlassLevel: (level: GlassLevelPreference) => void;
   setHighlightGlassLevel: (level: GlassLevelPreference) => void;
+  setShadowStrength: (strength: number) => void;
   resetPreferences: () => void;
 };
 
@@ -52,6 +61,19 @@ const isLanguagePreference = (value: unknown): value is LanguagePreference =>
 const isGlassLevelPreference = (value: unknown): value is GlassLevelPreference =>
   value === "subtle" || value === "standard" || value === "strong";
 
+export const SHADOW_STRENGTH_MIN = 0;
+export const SHADOW_STRENGTH_MAX = 200;
+const DEFAULT_SHADOW_STRENGTH = 100;
+
+const isShadowStrength = (value: unknown): value is number =>
+  typeof value === "number" &&
+  Number.isFinite(value) &&
+  value >= SHADOW_STRENGTH_MIN &&
+  value <= SHADOW_STRENGTH_MAX;
+
+const clampShadowStrength = (value: number) =>
+  Math.round(Math.min(Math.max(value, SHADOW_STRENGTH_MIN), SHADOW_STRENGTH_MAX));
+
 const DEFAULT_REMINDER_SOUND_ENABLED = true;
 
 const initialState = (): PreferencesState => ({
@@ -62,6 +84,7 @@ const initialState = (): PreferencesState => ({
   reminderSoundEnabled: DEFAULT_REMINDER_SOUND_ENABLED,
   softGlassLevel: DEFAULT_GLASS_LEVEL,
   highlightGlassLevel: DEFAULT_GLASS_LEVEL,
+  shadowStrength: DEFAULT_SHADOW_STRENGTH,
   initialized: false,
 });
 
@@ -84,6 +107,7 @@ const defaultPersistedPreferences = (): PersistedPreferences => ({
   reminderSoundEnabled: DEFAULT_REMINDER_SOUND_ENABLED,
   softGlassLevel: DEFAULT_GLASS_LEVEL,
   highlightGlassLevel: DEFAULT_GLASS_LEVEL,
+  shadowStrength: DEFAULT_SHADOW_STRENGTH,
 });
 
 const readPersistedPreferences = (): PersistedPreferences => {
@@ -101,6 +125,7 @@ const readPersistedPreferences = (): PersistedPreferences => {
       reminderSoundEnabled?: unknown;
       softGlassLevel?: unknown;
       highlightGlassLevel?: unknown;
+      shadowStrength?: unknown;
     };
     if (!isThemePreference(parsed.theme) || !isLanguagePreference(parsed.language)) {
       return defaultPersistedPreferences();
@@ -124,7 +149,7 @@ const readPersistedPreferences = (): PersistedPreferences => {
     }
 
     if (
-      (parsed.version === 3 || parsed.version === 4) &&
+      (parsed.version === 3 || parsed.version === 4 || parsed.version === 5) &&
       typeof parsed.completionCelebrationsEnabled === "boolean" &&
       isGlassLevelPreference(parsed.softGlassLevel) &&
       isGlassLevelPreference(parsed.highlightGlassLevel)
@@ -138,6 +163,8 @@ const readPersistedPreferences = (): PersistedPreferences => {
           typeof parsed.reminderSoundEnabled === "boolean" ? parsed.reminderSoundEnabled : DEFAULT_REMINDER_SOUND_ENABLED,
         softGlassLevel: parsed.softGlassLevel,
         highlightGlassLevel: parsed.highlightGlassLevel,
+        // v3/v4 payloads predate the shadow slider; default it.
+        shadowStrength: isShadowStrength(parsed.shadowStrength) ? parsed.shadowStrength : DEFAULT_SHADOW_STRENGTH,
       };
     }
 
@@ -149,7 +176,7 @@ const readPersistedPreferences = (): PersistedPreferences => {
 
 const persistPreferences = (preferences: PersistedPreferences) => {
   try {
-    getStorage()?.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify({ version: 4, ...preferences }));
+    getStorage()?.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify({ version: 5, ...preferences }));
   } catch {
     // Preferences are best-effort UI state; failed writes must not block the app.
   }
@@ -178,6 +205,14 @@ const resolveTheme = (theme: ThemePreference): ResolvedTheme => {
 const applyTheme = (resolvedTheme: ResolvedTheme) => {
   if (typeof document !== "undefined") {
     document.documentElement.dataset.theme = resolvedTheme;
+  }
+};
+
+const applyShadowStrength = (shadowStrength: number) => {
+  if (typeof document !== "undefined") {
+    // Every shadow token multiplies its alpha by this, so one property dials the
+    // whole app's depth.
+    document.documentElement.style.setProperty("--shadow-strength", String(shadowStrength / 100));
   }
 };
 
@@ -237,6 +272,7 @@ const createPreferencesStoreState: StateCreator<PreferencesStore> = (set, get) =
     reminderSoundEnabled: get().reminderSoundEnabled,
     softGlassLevel: get().softGlassLevel,
     highlightGlassLevel: get().highlightGlassLevel,
+    shadowStrength: get().shadowStrength,
   });
 
   const commitPreferences = (preferences: PersistedPreferences, persist: boolean) => {
@@ -249,6 +285,7 @@ const createPreferencesStoreState: StateCreator<PreferencesStore> = (set, get) =
     });
     applyTheme(resolvedTheme);
     applyGlassLevels(preferences.softGlassLevel, preferences.highlightGlassLevel);
+    applyShadowStrength(preferences.shadowStrength);
 
     if (preferences.theme === "system") {
       startSystemThemeListener();
@@ -277,6 +314,9 @@ const createPreferencesStoreState: StateCreator<PreferencesStore> = (set, get) =
     },
     setReminderSoundEnabled: (reminderSoundEnabled) => {
       commitPreferences({ ...currentPersisted(), reminderSoundEnabled }, true);
+    },
+    setShadowStrength: (shadowStrength) => {
+      commitPreferences({ ...currentPersisted(), shadowStrength: clampShadowStrength(shadowStrength) }, true);
     },
     setSoftGlassLevel: (softGlassLevel) => {
       commitPreferences({ ...currentPersisted(), softGlassLevel }, true);

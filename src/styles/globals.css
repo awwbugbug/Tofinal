@@ -100,24 +100,29 @@
   --priority-urgent-text: var(--urgent-text);
   --radius-panel: 2rem;
   --radius-card: 1.5rem;
-  --shadow-soft: 0 22px 48px rgb(39 58 78 / 0.12);
-  --shadow-card: 0 14px 30px rgb(39 58 78 / 0.11);
+  /* Every shadow alpha is scaled by --shadow-strength so the preferences slider
+     can dial the whole app's depth at once. Rings (the 1px rim on a selected
+     card) are rim light, not shadow, so they stay put. */
+  --shadow-soft: 0 22px 48px rgb(39 58 78 / calc(0.12 * var(--shadow-strength)));
+  --shadow-card: 0 14px 30px rgb(39 58 78 / calc(0.11 * var(--shadow-strength)));
   --shadow-card-around:
     0 0 0 1px rgb(52 95 123 / 0.08),
-    0 0 22px rgb(52 95 123 / 0.10),
-    0 10px 24px rgb(39 58 78 / 0.08);
+    0 0 22px rgb(52 95 123 / calc(0.1 * var(--shadow-strength))),
+    0 10px 24px rgb(39 58 78 / calc(0.08 * var(--shadow-strength)));
   --shadow-card-hover:
     0 0 0 1px rgb(86 108 132 / 0.08),
-    0 0 18px rgb(39 58 78 / 0.07),
-    0 8px 18px rgb(39 58 78 / 0.06);
-  --shadow-subtle: 0 6px 18px rgb(39 58 78 / 0.07);
+    0 0 18px rgb(39 58 78 / calc(0.07 * var(--shadow-strength))),
+    0 8px 18px rgb(39 58 78 / calc(0.06 * var(--shadow-strength)));
+  --shadow-subtle: 0 6px 18px rgb(39 58 78 / calc(0.07 * var(--shadow-strength)));
   /* Liquid Glass: frosted white over the drifting aurora. */
   --glass-tint: rgb(255 255 255 / 0.5);
   --glass-edge: rgb(255 255 255 / 0.72);
   --glass-fresnel: rgb(255 255 255 / 0.85);
   --glass-accent-light: rgb(178 205 255 / 0.16);
   --glass-underglow: rgb(190 160 230 / 0.10);
-  --glass-drop-shadow: 0 22px 48px rgb(80 70 110 / 0.14);
+  --glass-drop-shadow: 0 22px 48px rgb(80 70 110 / calc(0.14 * var(--shadow-strength)));
+  /** Global shadow depth, driven by the preferences slider. 1 = designed value. */
+  --shadow-strength: 1;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -233,29 +238,29 @@
      Deliberately no light-grey glow: a card does not emit light, and faking one
      was what made these look pasted on. */
   --shadow-soft:
-    0 2px 4px rgb(0 0 0 / 0.3),
-    0 6px 12px rgb(0 0 0 / 0.24),
-    0 14px 28px rgb(0 0 0 / 0.18),
-    0 28px 56px rgb(0 0 0 / 0.13);
+    0 2px 4px rgb(0 0 0 / calc(0.3 * var(--shadow-strength))),
+    0 6px 12px rgb(0 0 0 / calc(0.24 * var(--shadow-strength))),
+    0 14px 28px rgb(0 0 0 / calc(0.18 * var(--shadow-strength))),
+    0 28px 56px rgb(0 0 0 / calc(0.13 * var(--shadow-strength)));
   --shadow-card:
-    0 1px 3px rgb(0 0 0 / 0.28),
-    0 4px 8px rgb(0 0 0 / 0.2),
-    0 10px 20px rgb(0 0 0 / 0.15),
-    0 20px 38px rgb(0 0 0 / 0.11);
+    0 1px 3px rgb(0 0 0 / calc(0.28 * var(--shadow-strength))),
+    0 4px 8px rgb(0 0 0 / calc(0.2 * var(--shadow-strength))),
+    0 10px 20px rgb(0 0 0 / calc(0.15 * var(--shadow-strength))),
+    0 20px 38px rgb(0 0 0 / calc(0.11 * var(--shadow-strength)));
   --shadow-card-around:
     0 0 0 1px rgb(212 216 228 / 0.1),
-    0 1px 3px rgb(0 0 0 / 0.28),
-    0 6px 14px rgb(0 0 0 / 0.2),
-    0 16px 32px rgb(0 0 0 / 0.14);
+    0 1px 3px rgb(0 0 0 / calc(0.28 * var(--shadow-strength))),
+    0 6px 14px rgb(0 0 0 / calc(0.2 * var(--shadow-strength))),
+    0 16px 32px rgb(0 0 0 / calc(0.14 * var(--shadow-strength)));
   --shadow-card-hover:
     0 0 0 1px rgb(212 216 228 / 0.13),
-    0 2px 5px rgb(0 0 0 / 0.3),
-    0 8px 18px rgb(0 0 0 / 0.22),
-    0 20px 40px rgb(0 0 0 / 0.15);
+    0 2px 5px rgb(0 0 0 / calc(0.3 * var(--shadow-strength))),
+    0 8px 18px rgb(0 0 0 / calc(0.22 * var(--shadow-strength))),
+    0 20px 40px rgb(0 0 0 / calc(0.15 * var(--shadow-strength)));
   --shadow-subtle:
-    0 1px 2px rgb(0 0 0 / 0.26),
-    0 3px 6px rgb(0 0 0 / 0.17),
-    0 8px 16px rgb(0 0 0 / 0.12);
+    0 1px 2px rgb(0 0 0 / calc(0.26 * var(--shadow-strength))),
+    0 3px 6px rgb(0 0 0 / calc(0.17 * var(--shadow-strength))),
+    0 8px 16px rgb(0 0 0 / calc(0.12 * var(--shadow-strength)));
   /* Liquid Glass: smoked glass over the silver starfield. Tint stays fairly
      transparent so the field actually reads through it. */
   --glass-tint: rgb(26 26 30 / 0.44);
@@ -264,10 +269,10 @@
   --glass-accent-light: rgb(220 224 235 / 0.10);
   --glass-underglow: rgb(150 156 172 / 0.09);
   --glass-drop-shadow:
-    0 2px 6px rgb(0 0 0 / 0.28),
-    0 8px 18px rgb(0 0 0 / 0.22),
-    0 20px 40px rgb(0 0 0 / 0.16),
-    0 40px 72px rgb(0 0 0 / 0.11);
+    0 2px 6px rgb(0 0 0 / calc(0.28 * var(--shadow-strength))),
+    0 8px 18px rgb(0 0 0 / calc(0.22 * var(--shadow-strength))),
+    0 20px 40px rgb(0 0 0 / calc(0.16 * var(--shadow-strength))),
+    0 40px 72px rgb(0 0 0 / calc(0.11 * var(--shadow-strength)));
 }
 
 /* ============================================================
@@ -344,16 +349,23 @@
   }
 }
 
+/* Glass LEVEL controls frostiness only: blur, saturation, tint. It used to
+   override the shadows too, with the light theme's slate hardcoded into them —
+   so in dark, "strong" landed a near-invisible slate shadow while "standard"
+   (which had no block at all, and so fell through to the theme's heavy 0.44
+   black) came out looking stronger than "strong". Shadow intensity is its own
+   control now; these only frost.
+
+   The blur spread is also deliberately wide. It used to run 8 -> 10 -> 14px,
+   which on a small button over a near-uniform backdrop is imperceptible — the
+   levels felt identical because, shadows aside, they nearly were. */
 :root[data-soft-glass="subtle"] {
   --glass-soft-bg:
     linear-gradient(180deg, rgb(255 255 255 / 0.12), rgb(255 255 255 / 0.03)),
     color-mix(in srgb, var(--selected-glass-bg) 58%, transparent);
   --glass-soft-border: color-mix(in srgb, var(--selected-glass-border) 46%, transparent);
-  --glass-soft-shadow:
-    0 1px 0 rgb(255 255 255 / 0.12) inset,
-    0 3px 8px rgb(39 58 78 / 0.04);
-  --glass-soft-blur: 8px;
-  --glass-soft-saturate: 112%;
+  --glass-soft-blur: 4px;
+  --glass-soft-saturate: 104%;
 }
 
 :root[data-soft-glass="strong"] {
@@ -361,12 +373,8 @@
     linear-gradient(180deg, rgb(255 255 255 / 0.36), rgb(255 255 255 / 0.10)),
     color-mix(in srgb, var(--selected-glass-bg) 86%, var(--accent-surface));
   --glass-soft-border: color-mix(in srgb, var(--selected-glass-border) 82%, var(--border-medium));
-  --glass-soft-shadow:
-    0 1px 0 rgb(255 255 255 / 0.34) inset,
-    0 7px 16px rgb(39 58 78 / 0.08),
-    0 0 0 1px rgb(86 108 132 / 0.05);
-  --glass-soft-blur: 14px;
-  --glass-soft-saturate: 150%;
+  --glass-soft-blur: 26px;
+  --glass-soft-saturate: 178%;
 }
 
 :root[data-highlight-glass="subtle"] {
@@ -374,14 +382,8 @@
     linear-gradient(180deg, rgb(255 255 255 / 0.12), rgb(255 255 255 / 0.025)),
     rgb(255 255 255 / 0.035);
   --glass-highlight-border: color-mix(in srgb, var(--border-soft) 72%, transparent);
-  --glass-highlight-shadow:
-    0 1px 0 rgb(255 255 255 / 0.14) inset,
-    0 3px 8px rgb(39 58 78 / 0.04);
-  --glass-highlight-hover-shadow:
-    0 1px 0 rgb(255 255 255 / 0.20) inset,
-    0 5px 12px rgb(39 58 78 / 0.06);
-  --glass-highlight-blur: 8px;
-  --glass-highlight-saturate: 112%;
+  --glass-highlight-blur: 3px;
+  --glass-highlight-saturate: 104%;
 }
 
 :root[data-highlight-glass="strong"] {
@@ -389,14 +391,8 @@
     linear-gradient(180deg, rgb(255 255 255 / 0.32), rgb(255 255 255 / 0.08)),
     rgb(255 255 255 / 0.11);
   --glass-highlight-border: color-mix(in srgb, var(--selected-glass-border) 72%, var(--border-soft));
-  --glass-highlight-shadow:
-    0 1px 0 rgb(255 255 255 / 0.36) inset,
-    0 8px 16px rgb(39 58 78 / 0.10);
-  --glass-highlight-hover-shadow:
-    0 1px 0 rgb(255 255 255 / 0.42) inset,
-    0 10px 20px rgb(39 58 78 / 0.13);
-  --glass-highlight-blur: 13px;
-  --glass-highlight-saturate: 145%;
+  --glass-highlight-blur: 22px;
+  --glass-highlight-saturate: 172%;
 }
 
 * {
@@ -840,6 +836,51 @@ body {
     overflow-y: auto;
     padding: 0.3rem 0.6rem 0.4rem;
     scrollbar-width: thin;
+  }
+
+  /* Global shadow-depth slider. Built from the same field/accent tokens as the
+     rest of the panel so it reads as one control set. */
+  .preferences-range {
+    appearance: none;
+    -webkit-appearance: none;
+    background: transparent;
+    cursor: pointer;
+    height: 20px;
+    width: 100%;
+  }
+
+  .preferences-range::-webkit-slider-runnable-track {
+    background: var(--surface-segment);
+    border: 1px solid var(--border-soft);
+    border-radius: 999px;
+    height: 6px;
+  }
+
+  .preferences-range::-webkit-slider-thumb {
+    appearance: none;
+    -webkit-appearance: none;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 70%, white), var(--accent));
+    border: 1px solid color-mix(in srgb, var(--accent-soft) 60%, var(--accent));
+    border-radius: 999px;
+    box-shadow: var(--shadow-subtle);
+    height: 16px;
+    margin-top: -6px;
+    transition: transform 140ms ease-out;
+    width: 16px;
+  }
+
+  .preferences-range:hover::-webkit-slider-thumb {
+    transform: scale(1.1);
+  }
+
+  .preferences-range:active::-webkit-slider-thumb {
+    transform: scale(0.94);
+  }
+
+  .preferences-range:focus-visible {
+    outline: 2px solid var(--ring-soft);
+    outline-offset: 3px;
+    border-radius: 999px;
   }
 
   .preferences-choice {

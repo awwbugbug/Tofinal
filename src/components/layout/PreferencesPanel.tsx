@@ -9,6 +9,8 @@ import { exportTasksToFile, type ExportKind } from "@/storage/dataExport";
 import { runStartupBackup } from "@/storage/databaseBackup";
 import { useTaskStore } from "@/stores/taskStore";
 import {
+  SHADOW_STRENGTH_MAX,
+  SHADOW_STRENGTH_MIN,
   usePreferencesStore,
   type GlassLevelPreference,
   type LanguagePreference,
@@ -77,11 +79,13 @@ export function PreferencesPanel({ onClose, open }: PreferencesPanelProps) {
   const setReminderSoundEnabled = usePreferencesStore((state) => state.setReminderSoundEnabled);
   const softGlassLevel = usePreferencesStore((state) => state.softGlassLevel);
   const highlightGlassLevel = usePreferencesStore((state) => state.highlightGlassLevel);
+  const shadowStrength = usePreferencesStore((state) => state.shadowStrength);
   const setTheme = usePreferencesStore((state) => state.setTheme);
   const setLanguage = usePreferencesStore((state) => state.setLanguage);
   const setCompletionCelebrationsEnabled = usePreferencesStore((state) => state.setCompletionCelebrationsEnabled);
   const setSoftGlassLevel = usePreferencesStore((state) => state.setSoftGlassLevel);
   const setHighlightGlassLevel = usePreferencesStore((state) => state.setHighlightGlassLevel);
+  const setShadowStrength = usePreferencesStore((state) => state.setShadowStrength);
   const resetPreferences = usePreferencesStore((state) => state.resetPreferences);
 
   if (!open) {
@@ -228,6 +232,24 @@ export function PreferencesPanel({ onClose, open }: PreferencesPanelProps) {
                     );
                   })}
                 </div>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-baseline justify-between gap-2">
+                  <label className="text-xs font-medium text-[var(--text-muted)]" htmlFor="preferences-shadow-strength">
+                    {t("settings.shadowStrength")}
+                  </label>
+                  <span className="text-xs tabular-nums text-[var(--text-faint)]">{shadowStrength}%</span>
+                </div>
+                <input
+                  className="preferences-range"
+                  id="preferences-shadow-strength"
+                  max={SHADOW_STRENGTH_MAX}
+                  min={SHADOW_STRENGTH_MIN}
+                  onChange={(event) => setShadowStrength(Number(event.currentTarget.value))}
+                  step={5}
+                  type="range"
+                  value={shadowStrength}
+                />
               </div>
             </div>
           </section>

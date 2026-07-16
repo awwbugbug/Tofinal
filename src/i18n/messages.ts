@@ -207,6 +207,7 @@ export const messages = {
     "settings.glassSubtle": "\u514b\u5236",
     "settings.glassStandard": "\u6807\u51c6",
     "settings.glassStrong": "\u660e\u663e",
+    "settings.shadowStrength": "\u9634\u5f71\u5f3a\u5ea6",
   },
   "en-US": {
     "app.name": "ToFinal",
@@ -411,6 +412,7 @@ export const messages = {
     "settings.glass": "Glass",
     "settings.softGlass": "Soft glass",
     "settings.buttonGlass": "Button glass",
+    "settings.shadowStrength": "Shadow depth",
     "settings.glassSubtle": "Subtle",
     "settings.glassStandard": "Standard",
     "settings.glassStrong": "Strong",
