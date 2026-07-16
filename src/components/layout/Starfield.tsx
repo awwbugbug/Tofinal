@@ -8,7 +8,7 @@ const prefersReducedMotion = () =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 type Star = { x: number; y: number; layer: number; r: number; phase: number; twinkleSpeed: number };
-type Nebula = { x: number; y: number; radius: number; driftX: number; driftY: number; phase: number; color: string; alpha: number };
+type Nebula = { x: number; y: number; radius: number; driftX: number; driftY: number; phase: number; sprite: HTMLCanvasElement; alpha: number };
 
 // Three parallax depths: distant stars are dim, slow, and small; near stars are
 // brighter, faster, and larger. Counts kept modest (~214 total) so the always-
@@ -28,12 +28,44 @@ const STAR_COLOR = "#eef1ff";
 // black/white/grey/silver palette instead of tinting it violet.
 const NEBULA_COLORS = ["226, 230, 240", "170, 176, 190", "244, 246, 252", "138, 144, 158"];
 
+// The backdrop drifts slowly, so it does not need 60fps — and every frame it
+// paints also forces each glass panel to recompute its backdrop blur, so
+// halving the rate roughly halves the whole backdrop cost.
+const FRAME_MS = 1000 / 30;
+
+// Nebulae are huge, soft gradients: rasterise each ONCE into a small sprite and
+// scale it up at draw time (upscaling is invisible on something this blurry).
+// Rebuilding real radial gradients every frame was the expensive part.
+const NEBULA_SPRITE_SIZE = 192;
+
+const makeNebulaSprite = (color: string) => {
+  const sprite = document.createElement("canvas");
+  sprite.width = NEBULA_SPRITE_SIZE;
+  sprite.height = NEBULA_SPRITE_SIZE;
+  const sctx = sprite.getContext("2d");
+  if (!sctx) {
+    return sprite;
+  }
+  const mid = NEBULA_SPRITE_SIZE / 2;
+  const gradient = sctx.createRadialGradient(mid, mid, 0, mid, mid, mid);
+  // A soft multi-stop falloff (not a hard 2-stop) so the large gradient doesn't
+  // band into visible concentric rings through the glass. Baked at full alpha;
+  // the per-frame pulse is applied with globalAlpha.
+  gradient.addColorStop(0, `rgba(${color}, 1)`);
+  gradient.addColorStop(0.35, `rgba(${color}, 0.52)`);
+  gradient.addColorStop(0.65, `rgba(${color}, 0.18)`);
+  gradient.addColorStop(1, `rgba(${color}, 0)`);
+  sctx.fillStyle = gradient;
+  sctx.fillRect(0, 0, NEBULA_SPRITE_SIZE, NEBULA_SPRITE_SIZE);
+  return sprite;
+};
+
 /**
  * A drifting silver starfield rendered behind the app for the dark theme only.
- * Guardrails: mounts (and paints) exclusively while dark is active, pauses on
- * tab-hide / window-blur, and freezes to a single static frame under
+ * Guardrails: mounts (and paints) exclusively while dark is active, runs at
+ * 30fps, pauses on tab-hide, and freezes to a single static frame under
  * prefers-reduced-motion — so it costs nothing for the light theme and little
- * when the window isn't in focus.
+ * when the window isn't visible.
  */
 export function Starfield() {
   const resolvedTheme = usePreferencesStore((state) => state.resolvedTheme);
@@ -50,11 +82,13 @@ export function Starfield() {
     }
 
     const reduced = prefersReducedMotion();
+    const sprites = NEBULA_COLORS.map(makeNebulaSprite);
     let width = 0;
     let height = 0;
     let stars: Star[] = [];
     let nebulae: Nebula[] = [];
     let rafId = 0;
+    let resizeRaf = 0;
     let running = false;
     let last = 0;
 
@@ -74,14 +108,14 @@ export function Starfield() {
       });
 
       const span = Math.max(width, height);
-      nebulae = NEBULA_COLORS.map((color, index) => ({
+      nebulae = sprites.map((sprite, index) => ({
         x: Math.random() * width,
         y: Math.random() * height,
         radius: span * (0.32 + Math.random() * 0.22),
         driftX: (Math.random() - 0.5) * 6,
         driftY: (Math.random() - 0.5) * 6,
         phase: Math.random() * Math.PI * 2,
-        color,
+        sprite,
         alpha: index === 0 ? 0.22 : 0.15,
       }));
     };
@@ -104,16 +138,9 @@ export function Starfield() {
           nebula.phase += deltaMs * 0.0004;
         }
         const pulse = 0.82 + Math.sin(nebula.phase) * 0.18;
-        const peak = nebula.alpha * pulse;
-        const gradient = ctx.createRadialGradient(nebula.x, nebula.y, 0, nebula.x, nebula.y, nebula.radius);
-        // A soft multi-stop falloff (not a hard 2-stop) so the large gradient
-        // doesn't band into visible concentric rings through the glass.
-        gradient.addColorStop(0, `rgba(${nebula.color}, ${peak})`);
-        gradient.addColorStop(0.35, `rgba(${nebula.color}, ${peak * 0.52})`);
-        gradient.addColorStop(0.65, `rgba(${nebula.color}, ${peak * 0.18})`);
-        gradient.addColorStop(1, `rgba(${nebula.color}, 0)`);
-        ctx.fillStyle = gradient;
-        ctx.fillRect(nebula.x - nebula.radius, nebula.y - nebula.radius, nebula.radius * 2, nebula.radius * 2);
+        ctx.globalAlpha = nebula.alpha * pulse;
+        const size = nebula.radius * 2;
+        ctx.drawImage(nebula.sprite, nebula.x - nebula.radius, nebula.y - nebula.radius, size, size);
       }
       ctx.globalCompositeOperation = "source-over";
 
@@ -146,10 +173,13 @@ export function Starfield() {
       if (!running) {
         return;
       }
-      const deltaMs = Math.min(now - last, 60);
-      last = now;
-      draw(deltaMs, true);
       rafId = window.requestAnimationFrame(loop);
+      const elapsed = now - last;
+      if (elapsed < FRAME_MS) {
+        return;
+      }
+      last = now - (elapsed % FRAME_MS);
+      draw(Math.min(elapsed, 60), true);
     };
 
     const start = () => {
@@ -166,17 +196,56 @@ export function Starfield() {
       window.cancelAnimationFrame(rafId);
     };
 
-    const resize = () => {
+    const applySize = () => {
+      const nextWidth = canvas.clientWidth;
+      const nextHeight = canvas.clientHeight;
+      if (nextWidth === 0 || nextHeight === 0 || (nextWidth === width && nextHeight === height)) {
+        return;
+      }
+
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      width = canvas.clientWidth;
-      height = canvas.clientHeight;
+      const previousWidth = width;
+      const previousHeight = height;
+      width = nextWidth;
+      height = nextHeight;
       canvas.width = Math.floor(width * dpr);
       canvas.height = Math.floor(height * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      build();
+
+      if (stars.length === 0) {
+        build();
+      } else {
+        // Rescale the EXISTING field instead of rebuilding it. Regenerating on
+        // every resize event re-randomised every star and cloud, so dragging the
+        // window edge scrambled the whole sky dozens of times a second.
+        const scaleX = width / previousWidth;
+        const scaleY = height / previousHeight;
+        for (const star of stars) {
+          star.x *= scaleX;
+          star.y *= scaleY;
+        }
+        const span = Math.max(width, height);
+        for (const nebula of nebulae) {
+          nebula.x *= scaleX;
+          nebula.y *= scaleY;
+          nebula.radius = Math.min(nebula.radius, span * 0.54);
+        }
+      }
+
       if (reduced) {
         draw(0, false);
       }
+    };
+
+    // Coalesce resize bursts into one measurement per frame.
+    const onResize = () => {
+      if (resizeRaf !== 0) {
+        return;
+      }
+      resizeRaf = window.requestAnimationFrame(() => {
+        resizeRaf = 0;
+        applySize();
+      });
     };
 
     const onVisibility = () => {
@@ -187,7 +256,7 @@ export function Starfield() {
       }
     };
 
-    resize();
+    applySize();
     if (reduced) {
       draw(0, false);
     } else {
@@ -197,12 +266,18 @@ export function Starfield() {
     // Pause only when the page is truly hidden (window minimized / occluded) —
     // NOT merely unfocused. As an ambient backdrop (and in the always-visible
     // pin widget) the field should keep drifting while another window is active.
-    window.addEventListener("resize", resize);
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(onResize) : null;
+    observer?.observe(canvas);
+    window.addEventListener("resize", onResize);
     document.addEventListener("visibilitychange", onVisibility);
 
     return () => {
       stop();
-      window.removeEventListener("resize", resize);
+      if (resizeRaf !== 0) {
+        window.cancelAnimationFrame(resizeRaf);
+      }
+      observer?.disconnect();
+      window.removeEventListener("resize", onResize);
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [resolvedTheme]);
