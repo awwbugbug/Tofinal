@@ -133,7 +133,7 @@ export function DesktopPinLayout({
       >
         <header className="mb-4 flex items-center justify-between">
           <div>
-            <p className="text-xs font-medium uppercase text-[var(--text-faint)]">{t("mode.pin")}</p>
+            <p className="text-xs font-medium uppercase text-[var(--text-label)]">{t("mode.pin")}</p>
             <h1 className="mt-1 text-xl font-semibold tracking-normal text-[var(--text-primary)]">{pinTitle}</h1>
           </div>
           <Button

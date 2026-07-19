@@ -42,7 +42,7 @@ export function NotePreviewOverlay({ note, onClose, title }: NotePreviewOverlayP
       >
         <header className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <div className="flex items-center gap-2 text-xs font-medium uppercase text-[var(--text-faint)]">
+            <div className="flex items-center gap-2 text-xs font-medium uppercase text-[var(--text-label)]">
               <NotebookText className="h-3.5 w-3.5" />
               {t("note.expandedTitle")}
             </div>

@@ -102,7 +102,7 @@ export function PreferencesPanel({ onClose, open }: PreferencesPanelProps) {
       <section className="w-full max-w-sm rounded-[28px] border border-[var(--border-soft)] bg-[color-mix(in_srgb,var(--surface-detail)_94%,transparent)] p-5 shadow-[var(--shadow-soft)]">
         <header className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <div className="flex items-center gap-2 text-xs font-medium uppercase text-[var(--text-faint)]">
+            <div className="flex items-center gap-2 text-xs font-medium uppercase text-[var(--text-label)]">
               <Settings className="h-3.5 w-3.5" />
               {t("settings.title")}
             </div>
@@ -141,7 +141,7 @@ export function PreferencesPanel({ onClose, open }: PreferencesPanelProps) {
         <div className="preferences-panel-body mt-4 space-y-5">
           {activeSection === "appearance" && (<>
           <section aria-labelledby="preferences-theme-label" className="space-y-2">
-            <div className="text-xs font-medium uppercase text-[var(--text-faint)]" id="preferences-theme-label">
+            <div className="text-xs font-medium uppercase text-[var(--text-label)]" id="preferences-theme-label">
               {t("settings.theme")}
             </div>
             <div className="grid grid-cols-3 gap-2">
@@ -164,7 +164,7 @@ export function PreferencesPanel({ onClose, open }: PreferencesPanelProps) {
           </section>
 
           <section aria-labelledby="preferences-language-label" className="space-y-2">
-            <div className="text-xs font-medium uppercase text-[var(--text-faint)]" id="preferences-language-label">
+            <div className="text-xs font-medium uppercase text-[var(--text-label)]" id="preferences-language-label">
               {t("settings.language")}
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -187,7 +187,7 @@ export function PreferencesPanel({ onClose, open }: PreferencesPanelProps) {
           </section>
 
           <section aria-labelledby="preferences-glass-label" className="space-y-3">
-            <div className="text-xs font-medium uppercase text-[var(--text-faint)]" id="preferences-glass-label">
+            <div className="text-xs font-medium uppercase text-[var(--text-label)]" id="preferences-glass-label">
               {t("settings.glass")}
             </div>
             <div className="space-y-3 rounded-[20px] border border-[var(--border-soft)] bg-[var(--surface-field)] p-3">
@@ -255,7 +255,7 @@ export function PreferencesPanel({ onClose, open }: PreferencesPanelProps) {
           </section>
 
           <section aria-labelledby="preferences-completion-effects-label" className="space-y-2">
-            <div className="text-xs font-medium uppercase text-[var(--text-faint)]" id="preferences-completion-effects-label">
+            <div className="text-xs font-medium uppercase text-[var(--text-label)]" id="preferences-completion-effects-label">
               {t("settings.effects")}
             </div>
             <label className="flex cursor-pointer items-start justify-between gap-3 rounded-[18px] border border-[var(--border-soft)] bg-[var(--surface-field)] px-3.5 py-3">
@@ -295,7 +295,7 @@ export function PreferencesPanel({ onClose, open }: PreferencesPanelProps) {
 
           {activeSection === "shortcuts" && (
           <section aria-labelledby="preferences-shortcuts-label" className="space-y-2">
-            <div className="text-xs font-medium uppercase text-[var(--text-faint)]" id="preferences-shortcuts-label">
+            <div className="text-xs font-medium uppercase text-[var(--text-label)]" id="preferences-shortcuts-label">
               {t("settings.shortcuts")}
             </div>
             <div className="space-y-1.5 rounded-[20px] border border-[var(--border-soft)] bg-[var(--surface-field)] p-3 text-xs text-[var(--text-muted)]">
@@ -321,7 +321,7 @@ export function PreferencesPanel({ onClose, open }: PreferencesPanelProps) {
 
           {activeSection === "data" && (
           <section aria-labelledby="preferences-data-label" className="space-y-2">
-            <div className="text-xs font-medium uppercase text-[var(--text-faint)]" id="preferences-data-label">
+            <div className="text-xs font-medium uppercase text-[var(--text-label)]" id="preferences-data-label">
               {t("settings.data")}
             </div>
             <div className="space-y-2 rounded-[20px] border border-[var(--border-soft)] bg-[var(--surface-field)] p-3">

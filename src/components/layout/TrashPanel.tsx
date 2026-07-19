@@ -48,7 +48,7 @@ export function TrashPanel({ onClose, onEmpty, onPurge, onRestore, open, trashed
       <section className="flex max-h-[70vh] w-full max-w-md flex-col rounded-[28px] border border-[var(--border-soft)] bg-[color-mix(in_srgb,var(--surface-detail)_94%,transparent)] p-5 shadow-[var(--shadow-soft)]">
         <header className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <div className="flex items-center gap-2 text-xs font-medium uppercase text-[var(--text-faint)]">
+            <div className="flex items-center gap-2 text-xs font-medium uppercase text-[var(--text-label)]">
               <TrashBinIcon className="h-3.5 w-3.5" />
               {t("trash.title")}
             </div>

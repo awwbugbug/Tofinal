@@ -104,7 +104,7 @@ export function TimeWheelPopover({
         role="dialog"
         style={placement ? ({ top: placement.top, bottom: placement.bottom, left: placement.left, visibility: "visible" } as CSSProperties) : { visibility: "hidden" }}
       >
-        <div className="text-xs font-medium uppercase text-[var(--text-faint)]">{t("time.start")}</div>
+        <div className="text-xs font-medium uppercase text-[var(--text-label)]">{t("time.start")}</div>
         <div className="mt-1 flex items-center gap-1">
           <WheelPicker
             ariaLabel={t("time.startHour")}
@@ -121,7 +121,7 @@ export function TimeWheelPopover({
           />
         </div>
 
-        <div className="mt-3 text-xs font-medium uppercase text-[var(--text-faint)]">{t("time.duration")}</div>
+        <div className="mt-3 text-xs font-medium uppercase text-[var(--text-label)]">{t("time.duration")}</div>
         <div className="mt-1 flex items-center gap-1">
           <WheelPicker
             ariaLabel={t("time.durationHours")}

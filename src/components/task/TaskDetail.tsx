@@ -534,7 +534,7 @@ export function TaskDetail({
           </button>
         </div>
 
-        <label className="block text-xs font-medium uppercase text-[var(--text-faint)]" htmlFor="task-title">
+        <label className="block text-xs font-medium uppercase text-[var(--text-label)]" htmlFor="task-title">
           {t("task.title")}
         </label>
         <textarea
@@ -547,7 +547,7 @@ export function TaskDetail({
         />
         {error && <p className="text-xs text-red-500">{error}</p>}
 
-        <label className="block text-xs font-medium uppercase text-[var(--text-faint)]" htmlFor="task-note">
+        <label className="block text-xs font-medium uppercase text-[var(--text-label)]" htmlFor="task-note">
           {t("task.note")}
         </label>
         <div className="relative">
@@ -598,7 +598,7 @@ export function TaskDetail({
           />
         </div>
 
-        <div className="block text-xs font-medium uppercase text-[var(--text-faint)]" id="task-priority-label">
+        <div className="block text-xs font-medium uppercase text-[var(--text-label)]" id="task-priority-label">
           {t("task.priority")}
         </div>
         <div
@@ -626,7 +626,7 @@ export function TaskDetail({
           ))}
         </div>
 
-        <div className="block text-xs font-medium uppercase text-[var(--text-faint)]" id="task-planned-date-label">
+        <div className="block text-xs font-medium uppercase text-[var(--text-label)]" id="task-planned-date-label">
           {t("date.planned")}
         </div>
         <div className="relative">
@@ -702,7 +702,7 @@ export function TaskDetail({
           )}
         </div>
 
-        <div className="block text-xs font-medium uppercase text-[var(--text-faint)]" id="task-time-label">
+        <div className="block text-xs font-medium uppercase text-[var(--text-label)]" id="task-time-label">
           {t("time.title")}
         </div>
         <div className="relative">
@@ -752,7 +752,7 @@ export function TaskDetail({
           )}
         </div>
 
-        <label className="block text-xs font-medium uppercase text-[var(--text-faint)]" htmlFor="task-tags">
+        <label className="block text-xs font-medium uppercase text-[var(--text-label)]" htmlFor="task-tags">
           {t("task.tags")}
         </label>
         <Input
@@ -778,7 +778,7 @@ export function TaskDetail({
         >
           <div className="detail-action-row">
             <div
-              className="text-xs font-medium uppercase text-[var(--text-faint)]"
+              className="text-xs font-medium uppercase text-[var(--text-label)]"
               id="task-attachments-label"
             >
               {t("attachments.title")}
@@ -898,7 +898,7 @@ export function TaskDetail({
 
         <section className="space-y-3" aria-labelledby="task-apps-label">
           <div className="detail-action-row">
-            <div className="text-xs font-medium uppercase text-[var(--text-faint)]" id="task-apps-label">
+            <div className="text-xs font-medium uppercase text-[var(--text-label)]" id="task-apps-label">
               {t("apps.title")}
             </div>
             <div className="detail-action-buttons detail-action-buttons-grid">

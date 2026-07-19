@@ -511,7 +511,7 @@ export function NormalModeLayout({
               )}
               {showTodayCompletedSection && (
                 <section className="mt-5 space-y-3" aria-label={t(isViewingToday ? "task.completedToday" : "task.completedOnDate")}>
-                  <div className="flex items-center justify-between text-xs font-medium uppercase text-[var(--text-faint)]">
+                  <div className="flex items-center justify-between text-xs font-medium uppercase text-[var(--text-label)]">
                     <span>{t(isViewingToday ? "task.completedToday" : "task.completedOnDate")}</span>
                     <span>{countStackTasks(todayCompletedStackViews)}</span>
                   </div>

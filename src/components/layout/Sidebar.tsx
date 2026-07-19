@@ -69,7 +69,7 @@ export function Sidebar({ activeFilter, onFilterChange, onOpenTrash, tasks, tras
   return (
     <GlassSurface as="aside" className="h-full rounded-[var(--radius-panel)]" contentClassName="flex flex-col p-4">
       <div className="px-2">
-        <div className="text-xs font-medium uppercase text-[var(--text-faint)]">ToFinal</div>
+        <div className="text-xs font-medium uppercase text-[var(--text-label)]">ToFinal</div>
         <h1 className="mt-2 text-2xl font-semibold tracking-normal text-[var(--text-primary)]">{t("sidebar.tasks")}</h1>
       </div>
 
@@ -124,7 +124,7 @@ export function Sidebar({ activeFilter, onFilterChange, onOpenTrash, tasks, tras
       <Separator className="my-6" />
 
       <div className="space-y-2 px-2">
-        <p className="text-xs font-medium uppercase text-[var(--text-faint)]">{t("sidebar.stage")}</p>
+        <p className="text-xs font-medium uppercase text-[var(--text-label)]">{t("sidebar.stage")}</p>
         <Badge>{t("sidebar.foundationPrototype")}</Badge>
       </div>
 
