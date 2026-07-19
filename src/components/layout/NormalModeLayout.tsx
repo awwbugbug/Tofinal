@@ -457,7 +457,7 @@ export function NormalModeLayout({
 
         {stackViews.length > 0 || showTodayCompletedSection || showOverdueSection ? (
           <div className="-mx-5 min-h-0 flex-1 overflow-hidden px-5">
-            <div className="h-full min-h-0 overflow-y-auto px-3 pb-7 pt-3 no-scrollbar">
+            <div className="list-edge-fade h-full min-h-0 overflow-y-auto px-3 pb-7 pt-3 no-scrollbar">
               {showOverdueSection && (
                 <section aria-label={t("task.overdue")} className="mb-5 space-y-3" data-testid="overdue-section">
                   <div className="flex items-center justify-between gap-3 text-xs font-medium uppercase">
