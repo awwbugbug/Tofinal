@@ -121,6 +121,8 @@
   --glass-accent-light: rgb(178 205 255 / 0.16);
   --glass-underglow: rgb(190 160 230 / 0.10);
   --glass-drop-shadow: 0 22px 48px rgb(80 70 110 / calc(0.14 * var(--shadow-strength)));
+  /* White on the light theme's blue accent glass. */
+  --glass-button-primary-text: #ffffff;
   /** Global shadow depth, driven by the preferences slider. 1 = designed value. */
   --shadow-strength: 1;
   font-synthesis: none;
@@ -273,6 +275,8 @@
     0 8px 18px rgb(0 0 0 / calc(0.22 * var(--shadow-strength))),
     0 20px 40px rgb(0 0 0 / calc(0.16 * var(--shadow-strength))),
     0 40px 72px rgb(0 0 0 / calc(0.11 * var(--shadow-strength)));
+  /* Dark ink on the light SILVER accent glass — white would vanish on it. */
+  --glass-button-primary-text: #16161b;
 }
 
 /* ============================================================
@@ -615,17 +619,24 @@ body {
     transform: translateY(0) scale(0.95);
   }
 
+  /* Colored frosted glass, not a flat gradient fill: a translucent accent tint
+     over a soft white top-sheen, so the backdrop blur (from .glass-button)
+     shows through and it reads as tinted glass. Text is themed
+     (--glass-button-primary-text) because a translucent tint is lighter than a
+     solid fill — white text on the dark theme's SILVER accent is unreadable, so
+     that theme puts dark ink on the glass instead. */
   .glass-button-primary {
+    color: var(--glass-button-primary-text);
     --glass-button-bg:
-      linear-gradient(180deg, color-mix(in srgb, var(--accent-soft) 58%, white) 0%, var(--accent) 124%),
-      color-mix(in srgb, var(--accent) 72%, white);
-    --glass-button-border: color-mix(in srgb, var(--accent-soft) 48%, var(--accent));
+      linear-gradient(180deg, rgb(255 255 255 / 0.12), rgb(255 255 255 / 0.03)),
+      color-mix(in srgb, var(--accent) 82%, transparent);
+    --glass-button-border: color-mix(in srgb, var(--accent) 70%, var(--glass-highlight-border));
   }
 
   .glass-button-primary:hover {
     --glass-button-bg:
-      linear-gradient(180deg, color-mix(in srgb, var(--accent-soft) 50%, white) 0%, var(--accent-hover) 124%),
-      color-mix(in srgb, var(--accent-hover) 78%, white);
+      linear-gradient(180deg, rgb(255 255 255 / 0.18), rgb(255 255 255 / 0.05)),
+      color-mix(in srgb, var(--accent-hover) 86%, transparent);
   }
 
   .glass-button-secondary {

@@ -8,7 +8,7 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "glass-button-primary text-white",
+        default: "glass-button-primary",
         secondary: "glass-button-secondary text-[var(--accent-hover)]",
         ghost: "glass-button-ghost text-[var(--text-muted)] hover:text-[var(--accent-hover)]",
       },
