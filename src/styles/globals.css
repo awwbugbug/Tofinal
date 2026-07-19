@@ -1254,12 +1254,15 @@ textarea,
        hover:z-10 made the card interpolate 0 -> 10 in integer steps and re-stack
        repeatedly mid-hover — each re-stack changed which shadows overlapped its
        neighbours, which is what made the shadows jitter. Listing the properties
-       also keeps expensive ones (box-shadow) explicit rather than accidental. */
-    transition-property: transform, background-color, border-color, box-shadow, opacity;
-    /* Hover/selection stay snappy at 200ms, but the completed dim eases over the
-       same 360ms as the title strike, so the two settle together rather than the
-       card flipping grey before the line has finished sweeping. */
-    transition-duration: 200ms, 200ms, 200ms, 200ms, 360ms;
+       also keeps expensive ones (box-shadow) explicit rather than accidental.
+       `scale` MUST be listed: Tailwind v4's scale-* utilities set the standalone
+       `scale:` property (not `transform`), so without it here the hover/press/
+       select scale snapped instantly instead of easing. */
+    transition-property: transform, scale, background-color, border-color, box-shadow, opacity;
+    /* Hover/selection/press scale stay snappy at 200ms, but the completed dim
+       eases over the same 360ms as the title strike, so the two settle together
+       rather than the card flipping grey before the line has finished sweeping. */
+    transition-duration: 200ms, 200ms, 200ms, 200ms, 200ms, 360ms;
     transition-timing-function: ease-out;
   }
 
