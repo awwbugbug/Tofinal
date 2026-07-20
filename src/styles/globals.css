@@ -128,8 +128,8 @@
   --glass-button-primary-text: #ffffff;
   /* Panel frosting, driven by data-panel-glass (the "面板毛玻璃" control).
      Defined once on :root so both themes inherit; the level blocks override. */
-  --panel-glass-blur: 24px;
-  --panel-glass-saturate: 134%;
+  --panel-glass-blur: 28px;
+  --panel-glass-saturate: 138%;
   /* Two independent depth sliders. 1 = the designed value; the preference sets
      each 0..2. Panel = the big glass surfaces + cards; control = buttons/pills. */
   --panel-shadow-strength: 1;
@@ -316,8 +316,9 @@
   /* Extend the blurred layer well past the shell so backdrop-filter's edge
      bleed (a washed band where the blur samples beyond the panel) falls OUTSIDE
      the shell's overflow:hidden clip. The visible area then only ever shows the
-     clean interior of the blur — no unnatural boundary at the top or edges. */
-  inset: -56px;
+     clean interior of the blur. Must exceed the largest --panel-glass-blur
+     (72px at the "strong" level) or the band reappears at high blur. */
+  inset: -88px;
   /* Saturate is deliberately restrained: pushing it hard (180%+) amplifies the
      blur's own dithering into visible speckle and skews the backdrop's hues.
      Blur/saturate come from the panel-glass preference (data-panel-glass). */
@@ -412,13 +413,13 @@
 /* Panel frosting level (the three big glass surfaces). Its own control so it is
    independent of the buttons/pills glass above. */
 :root[data-panel-glass="subtle"] {
-  --panel-glass-blur: 11px;
-  --panel-glass-saturate: 116%;
+  --panel-glass-blur: 8px;
+  --panel-glass-saturate: 112%;
 }
 
 :root[data-panel-glass="strong"] {
-  --panel-glass-blur: 42px;
-  --panel-glass-saturate: 168%;
+  --panel-glass-blur: 72px;
+  --panel-glass-saturate: 190%;
 }
 
 * {
