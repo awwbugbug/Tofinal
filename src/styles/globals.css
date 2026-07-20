@@ -525,9 +525,11 @@ textarea,
     );
     /* Only the transform animates — the gradient itself never changes, so the
        blurred layer rasterises once and the compositor just spins the cached
-       texture. That is what keeps a 50px blur on a 200% box affordable. */
-    filter: blur(50px);
-    opacity: 0.8;
+       texture. Kept moderate (not 50px+) so the aurora retains visible colour
+       structure for the panel-glass blur to actually act on — otherwise, over an
+       already-smooth wash, the frost levels all looked the same in light. */
+    filter: blur(26px);
+    opacity: 0.82;
     transform: translate(-50%, -50%);
     animation: aurora-rotate 8s linear infinite;
     will-change: transform;
