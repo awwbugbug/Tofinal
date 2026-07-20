@@ -12,10 +12,14 @@ type PreferencesState = {
   language: LanguagePreference;
   completionCelebrationsEnabled: boolean;
   reminderSoundEnabled: boolean;
-  softGlassLevel: GlassLevelPreference;
-  highlightGlassLevel: GlassLevelPreference;
-  /** Global shadow depth as a percentage; 100 = the designed value. */
-  shadowStrength: number;
+  /** Frosting of the buttons + sliders/pills. */
+  controlGlassLevel: GlassLevelPreference;
+  /** Frosting of the three big glass panels. */
+  panelGlassLevel: GlassLevelPreference;
+  /** Depth of the panel/card shadows, percent; 100 = designed. */
+  panelShadowStrength: number;
+  /** Depth of the button/slider shadows, percent; 100 = designed. */
+  controlShadowStrength: number;
   initialized: boolean;
 };
 
@@ -26,9 +30,10 @@ type PersistedPreferences = Pick<
   | "language"
   | "completionCelebrationsEnabled"
   | "reminderSoundEnabled"
-  | "softGlassLevel"
-  | "highlightGlassLevel"
-  | "shadowStrength"
+  | "controlGlassLevel"
+  | "panelGlassLevel"
+  | "panelShadowStrength"
+  | "controlShadowStrength"
 >;
 
 type PreferencesActions = {
@@ -37,9 +42,10 @@ type PreferencesActions = {
   setLanguage: (language: LanguagePreference) => void;
   setCompletionCelebrationsEnabled: (enabled: boolean) => void;
   setReminderSoundEnabled: (enabled: boolean) => void;
-  setSoftGlassLevel: (level: GlassLevelPreference) => void;
-  setHighlightGlassLevel: (level: GlassLevelPreference) => void;
-  setShadowStrength: (strength: number) => void;
+  setControlGlassLevel: (level: GlassLevelPreference) => void;
+  setPanelGlassLevel: (level: GlassLevelPreference) => void;
+  setPanelShadowStrength: (strength: number) => void;
+  setControlShadowStrength: (strength: number) => void;
   resetPreferences: () => void;
 };
 
@@ -82,9 +88,10 @@ const initialState = (): PreferencesState => ({
   language: DEFAULT_LANGUAGE,
   completionCelebrationsEnabled: DEFAULT_COMPLETION_CELEBRATIONS_ENABLED,
   reminderSoundEnabled: DEFAULT_REMINDER_SOUND_ENABLED,
-  softGlassLevel: DEFAULT_GLASS_LEVEL,
-  highlightGlassLevel: DEFAULT_GLASS_LEVEL,
-  shadowStrength: DEFAULT_SHADOW_STRENGTH,
+  controlGlassLevel: DEFAULT_GLASS_LEVEL,
+  panelGlassLevel: DEFAULT_GLASS_LEVEL,
+  panelShadowStrength: DEFAULT_SHADOW_STRENGTH,
+  controlShadowStrength: DEFAULT_SHADOW_STRENGTH,
   initialized: false,
 });
 
@@ -105,9 +112,10 @@ const defaultPersistedPreferences = (): PersistedPreferences => ({
   language: DEFAULT_LANGUAGE,
   completionCelebrationsEnabled: DEFAULT_COMPLETION_CELEBRATIONS_ENABLED,
   reminderSoundEnabled: DEFAULT_REMINDER_SOUND_ENABLED,
-  softGlassLevel: DEFAULT_GLASS_LEVEL,
-  highlightGlassLevel: DEFAULT_GLASS_LEVEL,
-  shadowStrength: DEFAULT_SHADOW_STRENGTH,
+  controlGlassLevel: DEFAULT_GLASS_LEVEL,
+  panelGlassLevel: DEFAULT_GLASS_LEVEL,
+  panelShadowStrength: DEFAULT_SHADOW_STRENGTH,
+  controlShadowStrength: DEFAULT_SHADOW_STRENGTH,
 });
 
 const readPersistedPreferences = (): PersistedPreferences => {
@@ -126,6 +134,10 @@ const readPersistedPreferences = (): PersistedPreferences => {
       softGlassLevel?: unknown;
       highlightGlassLevel?: unknown;
       shadowStrength?: unknown;
+      controlGlassLevel?: unknown;
+      panelGlassLevel?: unknown;
+      panelShadowStrength?: unknown;
+      controlShadowStrength?: unknown;
     };
     if (!isThemePreference(parsed.theme) || !isLanguagePreference(parsed.language)) {
       return defaultPersistedPreferences();
@@ -149,22 +161,37 @@ const readPersistedPreferences = (): PersistedPreferences => {
     }
 
     if (
-      (parsed.version === 3 || parsed.version === 4 || parsed.version === 5) &&
-      typeof parsed.completionCelebrationsEnabled === "boolean" &&
-      isGlassLevelPreference(parsed.softGlassLevel) &&
-      isGlassLevelPreference(parsed.highlightGlassLevel)
+      typeof parsed.version === "number" &&
+      parsed.version >= 3 &&
+      parsed.version <= 6 &&
+      typeof parsed.completionCelebrationsEnabled === "boolean"
     ) {
+      // v3-v5 stored soft/highlight glass + a single shadowStrength; v6 renamed
+      // them to control/panel glass + two shadow sliders. Carry old values over:
+      // the merged control glass inherits the old soft-glass level, panel glass
+      // starts at the default, and the old single shadow becomes the panel shadow.
+      const controlGlassLevel = isGlassLevelPreference(parsed.controlGlassLevel)
+        ? parsed.controlGlassLevel
+        : isGlassLevelPreference(parsed.softGlassLevel)
+          ? parsed.softGlassLevel
+          : DEFAULT_GLASS_LEVEL;
+      const panelShadowStrength = isShadowStrength(parsed.panelShadowStrength)
+        ? parsed.panelShadowStrength
+        : isShadowStrength(parsed.shadowStrength)
+          ? parsed.shadowStrength
+          : DEFAULT_SHADOW_STRENGTH;
       return {
         theme: parsed.theme,
         language: parsed.language,
         completionCelebrationsEnabled: parsed.completionCelebrationsEnabled,
-        // v3 payloads predate the reminder toggle; default it on.
         reminderSoundEnabled:
           typeof parsed.reminderSoundEnabled === "boolean" ? parsed.reminderSoundEnabled : DEFAULT_REMINDER_SOUND_ENABLED,
-        softGlassLevel: parsed.softGlassLevel,
-        highlightGlassLevel: parsed.highlightGlassLevel,
-        // v3/v4 payloads predate the shadow slider; default it.
-        shadowStrength: isShadowStrength(parsed.shadowStrength) ? parsed.shadowStrength : DEFAULT_SHADOW_STRENGTH,
+        controlGlassLevel,
+        panelGlassLevel: isGlassLevelPreference(parsed.panelGlassLevel) ? parsed.panelGlassLevel : DEFAULT_GLASS_LEVEL,
+        panelShadowStrength,
+        controlShadowStrength: isShadowStrength(parsed.controlShadowStrength)
+          ? parsed.controlShadowStrength
+          : DEFAULT_SHADOW_STRENGTH,
       };
     }
 
@@ -176,7 +203,7 @@ const readPersistedPreferences = (): PersistedPreferences => {
 
 const persistPreferences = (preferences: PersistedPreferences) => {
   try {
-    getStorage()?.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify({ version: 5, ...preferences }));
+    getStorage()?.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify({ version: 6, ...preferences }));
   } catch {
     // Preferences are best-effort UI state; failed writes must not block the app.
   }
@@ -208,18 +235,25 @@ const applyTheme = (resolvedTheme: ResolvedTheme) => {
   }
 };
 
-const applyShadowStrength = (shadowStrength: number) => {
+const applyPanelShadowStrength = (strength: number) => {
   if (typeof document !== "undefined") {
-    // Every shadow token multiplies its alpha by this, so one property dials the
-    // whole app's depth.
-    document.documentElement.style.setProperty("--shadow-strength", String(shadowStrength / 100));
+    document.documentElement.style.setProperty("--panel-shadow-strength", String(strength / 100));
   }
 };
 
-const applyGlassLevels = (softGlassLevel: GlassLevelPreference, highlightGlassLevel: GlassLevelPreference) => {
+const applyControlShadowStrength = (strength: number) => {
   if (typeof document !== "undefined") {
-    document.documentElement.dataset.softGlass = softGlassLevel;
-    document.documentElement.dataset.highlightGlass = highlightGlassLevel;
+    document.documentElement.style.setProperty("--control-shadow-strength", String(strength / 100));
+  }
+};
+
+const applyGlassLevels = (controlGlassLevel: GlassLevelPreference, panelGlassLevel: GlassLevelPreference) => {
+  if (typeof document !== "undefined") {
+    // One control governs both the pills/sliders (data-soft-glass) and the
+    // buttons (data-highlight-glass) frosting.
+    document.documentElement.dataset.softGlass = controlGlassLevel;
+    document.documentElement.dataset.highlightGlass = controlGlassLevel;
+    document.documentElement.dataset.panelGlass = panelGlassLevel;
   }
 };
 
@@ -270,9 +304,10 @@ const createPreferencesStoreState: StateCreator<PreferencesStore> = (set, get) =
     language: get().language,
     completionCelebrationsEnabled: get().completionCelebrationsEnabled,
     reminderSoundEnabled: get().reminderSoundEnabled,
-    softGlassLevel: get().softGlassLevel,
-    highlightGlassLevel: get().highlightGlassLevel,
-    shadowStrength: get().shadowStrength,
+    controlGlassLevel: get().controlGlassLevel,
+    panelGlassLevel: get().panelGlassLevel,
+    panelShadowStrength: get().panelShadowStrength,
+    controlShadowStrength: get().controlShadowStrength,
   });
 
   const commitPreferences = (preferences: PersistedPreferences, persist: boolean) => {
@@ -284,8 +319,9 @@ const createPreferencesStoreState: StateCreator<PreferencesStore> = (set, get) =
       initialized: true,
     });
     applyTheme(resolvedTheme);
-    applyGlassLevels(preferences.softGlassLevel, preferences.highlightGlassLevel);
-    applyShadowStrength(preferences.shadowStrength);
+    applyGlassLevels(preferences.controlGlassLevel, preferences.panelGlassLevel);
+    applyPanelShadowStrength(preferences.panelShadowStrength);
+    applyControlShadowStrength(preferences.controlShadowStrength);
 
     if (preferences.theme === "system") {
       startSystemThemeListener();
@@ -315,14 +351,17 @@ const createPreferencesStoreState: StateCreator<PreferencesStore> = (set, get) =
     setReminderSoundEnabled: (reminderSoundEnabled) => {
       commitPreferences({ ...currentPersisted(), reminderSoundEnabled }, true);
     },
-    setShadowStrength: (shadowStrength) => {
-      commitPreferences({ ...currentPersisted(), shadowStrength: clampShadowStrength(shadowStrength) }, true);
+    setPanelShadowStrength: (panelShadowStrength) => {
+      commitPreferences({ ...currentPersisted(), panelShadowStrength: clampShadowStrength(panelShadowStrength) }, true);
     },
-    setSoftGlassLevel: (softGlassLevel) => {
-      commitPreferences({ ...currentPersisted(), softGlassLevel }, true);
+    setControlShadowStrength: (controlShadowStrength) => {
+      commitPreferences({ ...currentPersisted(), controlShadowStrength: clampShadowStrength(controlShadowStrength) }, true);
     },
-    setHighlightGlassLevel: (highlightGlassLevel) => {
-      commitPreferences({ ...currentPersisted(), highlightGlassLevel }, true);
+    setControlGlassLevel: (controlGlassLevel) => {
+      commitPreferences({ ...currentPersisted(), controlGlassLevel }, true);
+    },
+    setPanelGlassLevel: (panelGlassLevel) => {
+      commitPreferences({ ...currentPersisted(), panelGlassLevel }, true);
     },
     resetPreferences: () => {
       commitPreferences(defaultPersistedPreferences(), true);

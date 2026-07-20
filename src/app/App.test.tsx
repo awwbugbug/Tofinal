@@ -949,24 +949,24 @@ describe("App", () => {
 
     expect(within(dialog).getByRole("button", { name: /system/i })).toHaveAttribute("aria-pressed", "true");
     expect(within(dialog).getAllByRole("button", { name: /^close$/i })).toHaveLength(1);
-    expect(within(dialog).getByRole("button", { name: /soft glass standard/i })).toHaveAttribute("aria-pressed", "true");
-    expect(within(dialog).getByRole("button", { name: /button glass standard/i })).toHaveAttribute("aria-pressed", "true");
+    expect(within(dialog).getByRole("button", { name: /control glass standard/i })).toHaveAttribute("aria-pressed", "true");
+    expect(within(dialog).getByRole("button", { name: /panel glass standard/i })).toHaveAttribute("aria-pressed", "true");
     await userEvent.click(within(dialog).getByRole("button", { name: /^dark$/i }));
     await userEvent.click(within(dialog).getByRole("button", { name: /^english$/i }));
     await userEvent.click(within(dialog).getByRole("checkbox", { name: /task completion celebration/i }));
-    await userEvent.click(within(dialog).getByRole("button", { name: /soft glass subtle/i }));
-    await userEvent.click(within(dialog).getByRole("button", { name: /button glass strong/i }));
+    await userEvent.click(within(dialog).getByRole("button", { name: /control glass subtle/i }));
+    await userEvent.click(within(dialog).getByRole("button", { name: /panel glass strong/i }));
 
     expect(document.documentElement.dataset.theme).toBe("dark");
     expect(document.documentElement.dataset.softGlass).toBe("subtle");
-    expect(document.documentElement.dataset.highlightGlass).toBe("strong");
+    expect(document.documentElement.dataset.panelGlass).toBe("strong");
     expect(JSON.parse(localStorage.getItem("tofinal.preferences.v1") ?? "{}")).toMatchObject({
-      version: 5,
+      version: 6,
       theme: "dark",
       language: "en-US",
       completionCelebrationsEnabled: false,
-      softGlassLevel: "subtle",
-      highlightGlassLevel: "strong",
+      controlGlassLevel: "subtle",
+      panelGlassLevel: "strong",
     });
     expect(screen.getByPlaceholderText(/search tasks/i)).toBeInTheDocument();
 

@@ -77,15 +77,17 @@ export function PreferencesPanel({ onClose, open }: PreferencesPanelProps) {
   const completionCelebrationsEnabled = usePreferencesStore((state) => state.completionCelebrationsEnabled);
   const reminderSoundEnabled = usePreferencesStore((state) => state.reminderSoundEnabled);
   const setReminderSoundEnabled = usePreferencesStore((state) => state.setReminderSoundEnabled);
-  const softGlassLevel = usePreferencesStore((state) => state.softGlassLevel);
-  const highlightGlassLevel = usePreferencesStore((state) => state.highlightGlassLevel);
-  const shadowStrength = usePreferencesStore((state) => state.shadowStrength);
+  const controlGlassLevel = usePreferencesStore((state) => state.controlGlassLevel);
+  const panelGlassLevel = usePreferencesStore((state) => state.panelGlassLevel);
+  const panelShadowStrength = usePreferencesStore((state) => state.panelShadowStrength);
+  const controlShadowStrength = usePreferencesStore((state) => state.controlShadowStrength);
   const setTheme = usePreferencesStore((state) => state.setTheme);
   const setLanguage = usePreferencesStore((state) => state.setLanguage);
   const setCompletionCelebrationsEnabled = usePreferencesStore((state) => state.setCompletionCelebrationsEnabled);
-  const setSoftGlassLevel = usePreferencesStore((state) => state.setSoftGlassLevel);
-  const setHighlightGlassLevel = usePreferencesStore((state) => state.setHighlightGlassLevel);
-  const setShadowStrength = usePreferencesStore((state) => state.setShadowStrength);
+  const setControlGlassLevel = usePreferencesStore((state) => state.setControlGlassLevel);
+  const setPanelGlassLevel = usePreferencesStore((state) => state.setPanelGlassLevel);
+  const setPanelShadowStrength = usePreferencesStore((state) => state.setPanelShadowStrength);
+  const setControlShadowStrength = usePreferencesStore((state) => state.setControlShadowStrength);
   const resetPreferences = usePreferencesStore((state) => state.resetPreferences);
 
   if (!open) {
@@ -192,18 +194,18 @@ export function PreferencesPanel({ onClose, open }: PreferencesPanelProps) {
             </div>
             <div className="space-y-3 rounded-[20px] border border-[var(--border-soft)] bg-[var(--surface-field)] p-3">
               <div className="space-y-2">
-                <div className="text-xs font-medium text-[var(--text-muted)]">{t("settings.softGlass")}</div>
+                <div className="text-xs font-medium text-[var(--text-muted)]">{t("settings.controlGlass")}</div>
                 <div className="grid grid-cols-3 gap-2">
                   {glassLevelOptions.map((option) => {
-                    const selected = softGlassLevel === option.value;
+                    const selected = controlGlassLevel === option.value;
 
                     return (
                       <button
-                        aria-label={`${t("settings.softGlass")} ${t(option.labelKey)}`}
+                        aria-label={`${t("settings.controlGlass")} ${t(option.labelKey)}`}
                         aria-pressed={selected}
                         className={cn("preferences-choice", selected && "glass-soft preferences-choice-selected")}
                         key={option.value}
-                        onClick={() => setSoftGlassLevel(option.value)}
+                        onClick={() => setControlGlassLevel(option.value)}
                         type="button"
                       >
                         {t(option.labelKey)}
@@ -213,18 +215,18 @@ export function PreferencesPanel({ onClose, open }: PreferencesPanelProps) {
                 </div>
               </div>
               <div className="space-y-2">
-                <div className="text-xs font-medium text-[var(--text-muted)]">{t("settings.buttonGlass")}</div>
+                <div className="text-xs font-medium text-[var(--text-muted)]">{t("settings.panelGlass")}</div>
                 <div className="grid grid-cols-3 gap-2">
                   {glassLevelOptions.map((option) => {
-                    const selected = highlightGlassLevel === option.value;
+                    const selected = panelGlassLevel === option.value;
 
                     return (
                       <button
-                        aria-label={`${t("settings.buttonGlass")} ${t(option.labelKey)}`}
+                        aria-label={`${t("settings.panelGlass")} ${t(option.labelKey)}`}
                         aria-pressed={selected}
                         className={cn("preferences-choice", selected && "glass-soft preferences-choice-selected")}
                         key={option.value}
-                        onClick={() => setHighlightGlassLevel(option.value)}
+                        onClick={() => setPanelGlassLevel(option.value)}
                         type="button"
                       >
                         {t(option.labelKey)}
@@ -235,20 +237,38 @@ export function PreferencesPanel({ onClose, open }: PreferencesPanelProps) {
               </div>
               <div className="space-y-2">
                 <div className="flex items-baseline justify-between gap-2">
-                  <label className="text-xs font-medium text-[var(--text-muted)]" htmlFor="preferences-shadow-strength">
-                    {t("settings.shadowStrength")}
+                  <label className="text-xs font-medium text-[var(--text-muted)]" htmlFor="preferences-panel-shadow">
+                    {t("settings.panelShadow")}
                   </label>
-                  <span className="text-xs tabular-nums text-[var(--text-faint)]">{shadowStrength}%</span>
+                  <span className="text-xs tabular-nums text-[var(--text-faint)]">{panelShadowStrength}%</span>
                 </div>
                 <input
                   className="preferences-range"
-                  id="preferences-shadow-strength"
+                  id="preferences-panel-shadow"
                   max={SHADOW_STRENGTH_MAX}
                   min={SHADOW_STRENGTH_MIN}
-                  onChange={(event) => setShadowStrength(Number(event.currentTarget.value))}
+                  onChange={(event) => setPanelShadowStrength(Number(event.currentTarget.value))}
                   step={5}
                   type="range"
-                  value={shadowStrength}
+                  value={panelShadowStrength}
+                />
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-baseline justify-between gap-2">
+                  <label className="text-xs font-medium text-[var(--text-muted)]" htmlFor="preferences-control-shadow">
+                    {t("settings.controlShadow")}
+                  </label>
+                  <span className="text-xs tabular-nums text-[var(--text-faint)]">{controlShadowStrength}%</span>
+                </div>
+                <input
+                  className="preferences-range"
+                  id="preferences-control-shadow"
+                  max={SHADOW_STRENGTH_MAX}
+                  min={SHADOW_STRENGTH_MIN}
+                  onChange={(event) => setControlShadowStrength(Number(event.currentTarget.value))}
+                  step={5}
+                  type="range"
+                  value={controlShadowStrength}
                 />
               </div>
             </div>

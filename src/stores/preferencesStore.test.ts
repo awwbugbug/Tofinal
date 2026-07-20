@@ -47,13 +47,13 @@ describe("preferences store", () => {
       resolvedTheme: "light",
       language: "zh-CN",
       completionCelebrationsEnabled: true,
-      softGlassLevel: "standard",
-      highlightGlassLevel: "standard",
+      controlGlassLevel: "standard",
+      panelGlassLevel: "standard",
       initialized: true,
     });
     expect(document.documentElement.dataset.theme).toBe("light");
     expect(document.documentElement.dataset.softGlass).toBe("standard");
-    expect(document.documentElement.dataset.highlightGlass).toBe("standard");
+    expect(document.documentElement.dataset.panelGlass).toBe("standard");
   });
 
   it("loads valid preferences from localStorage", () => {
@@ -78,11 +78,11 @@ describe("preferences store", () => {
     expect(store.getState().completionCelebrationsEnabled).toBe(false);
     // v3 payloads predate the reminder toggle; it defaults on.
     expect(store.getState().reminderSoundEnabled).toBe(true);
-    expect(store.getState().softGlassLevel).toBe("subtle");
-    expect(store.getState().highlightGlassLevel).toBe("strong");
+    expect(store.getState().controlGlassLevel).toBe("subtle");
+    expect(store.getState().panelGlassLevel).toBe("standard");
     expect(document.documentElement.dataset.theme).toBe("dark");
     expect(document.documentElement.dataset.softGlass).toBe("subtle");
-    expect(document.documentElement.dataset.highlightGlass).toBe("strong");
+    expect(document.documentElement.dataset.panelGlass).toBe("standard");
   });
 
   it("migrates version 1 preferences by enabling completion celebrations and glass defaults", () => {
@@ -98,8 +98,8 @@ describe("preferences store", () => {
       theme: "dark",
       language: "en-US",
       completionCelebrationsEnabled: true,
-      softGlassLevel: "standard",
-      highlightGlassLevel: "standard",
+      controlGlassLevel: "standard",
+      panelGlassLevel: "standard",
     });
   });
 
@@ -116,8 +116,8 @@ describe("preferences store", () => {
       theme: "dark",
       language: "en-US",
       completionCelebrationsEnabled: false,
-      softGlassLevel: "standard",
-      highlightGlassLevel: "standard",
+      controlGlassLevel: "standard",
+      panelGlassLevel: "standard",
     });
   });
 
@@ -144,9 +144,10 @@ describe("preferences store", () => {
       language: "en-US",
       completionCelebrationsEnabled: false,
       reminderSoundEnabled: false,
-      softGlassLevel: "subtle",
-      highlightGlassLevel: "strong",
-      shadowStrength: 100,
+      controlGlassLevel: "subtle",
+      panelGlassLevel: "standard",
+      panelShadowStrength: 100,
+      controlShadowStrength: 100,
     });
   });
 
@@ -166,13 +167,13 @@ describe("preferences store", () => {
     );
     const store = createPreferencesStore();
     store.getState().loadPreferences();
-    expect(store.getState().shadowStrength).toBe(100);
+    expect(store.getState().panelShadowStrength).toBe(100);
 
-    store.getState().setShadowStrength(9999);
-    expect(store.getState().shadowStrength).toBe(200);
+    store.getState().setPanelShadowStrength(9999);
+    expect(store.getState().panelShadowStrength).toBe(200);
 
-    store.getState().setShadowStrength(-40);
-    expect(store.getState().shadowStrength).toBe(0);
+    store.getState().setControlShadowStrength(-40);
+    expect(store.getState().controlShadowStrength).toBe(0);
   });
 
   it("falls back to defaults for invalid localStorage JSON and invalid values", () => {
@@ -184,8 +185,8 @@ describe("preferences store", () => {
     expect(brokenJsonStore.getState().theme).toBe("system");
     expect(brokenJsonStore.getState().language).toBe("zh-CN");
     expect(brokenJsonStore.getState().completionCelebrationsEnabled).toBe(true);
-    expect(brokenJsonStore.getState().softGlassLevel).toBe("standard");
-    expect(brokenJsonStore.getState().highlightGlassLevel).toBe("standard");
+    expect(brokenJsonStore.getState().controlGlassLevel).toBe("standard");
+    expect(brokenJsonStore.getState().panelGlassLevel).toBe("standard");
 
     localStorage.setItem(
       PREFERENCES_STORAGE_KEY,
@@ -198,8 +199,8 @@ describe("preferences store", () => {
     expect(invalidValuesStore.getState().theme).toBe("system");
     expect(invalidValuesStore.getState().language).toBe("zh-CN");
     expect(invalidValuesStore.getState().completionCelebrationsEnabled).toBe(true);
-    expect(invalidValuesStore.getState().softGlassLevel).toBe("standard");
-    expect(invalidValuesStore.getState().highlightGlassLevel).toBe("standard");
+    expect(invalidValuesStore.getState().controlGlassLevel).toBe("standard");
+    expect(invalidValuesStore.getState().panelGlassLevel).toBe("standard");
   });
 
   it("persists theme, language, celebration, and glass updates without routing through task persistence", () => {
@@ -210,25 +211,25 @@ describe("preferences store", () => {
     store.getState().setLanguage("en-US");
     store.getState().setCompletionCelebrationsEnabled(false);
     store.getState().setReminderSoundEnabled(false);
-    store.getState().setSoftGlassLevel("subtle");
-    store.getState().setHighlightGlassLevel("strong");
-    store.getState().setShadowStrength(140);
+    store.getState().setControlGlassLevel("subtle");
+    store.getState().setPanelGlassLevel("strong");
+    store.getState().setPanelShadowStrength(140);
 
     expect(JSON.parse(localStorage.getItem(PREFERENCES_STORAGE_KEY) ?? "{}")).toMatchObject({
-      version: 5,
+      version: 6,
       theme: "dark",
       language: "en-US",
       completionCelebrationsEnabled: false,
       reminderSoundEnabled: false,
-      softGlassLevel: "subtle",
-      highlightGlassLevel: "strong",
-      shadowStrength: 140,
+      controlGlassLevel: "subtle",
+      panelGlassLevel: "strong",
+      panelShadowStrength: 140,
     });
-    expect(document.documentElement.style.getPropertyValue("--shadow-strength")).toBe("1.4");
+    expect(document.documentElement.style.getPropertyValue("--panel-shadow-strength")).toBe("1.4");
     expect(store.getState().resolvedTheme).toBe("dark");
     expect(document.documentElement.dataset.theme).toBe("dark");
     expect(document.documentElement.dataset.softGlass).toBe("subtle");
-    expect(document.documentElement.dataset.highlightGlass).toBe("strong");
+    expect(document.documentElement.dataset.panelGlass).toBe("strong");
   });
 
   it("resets preferences to defaults and persists the reset", () => {
@@ -237,8 +238,8 @@ describe("preferences store", () => {
     store.getState().loadPreferences();
     store.getState().setTheme("light");
     store.getState().setLanguage("en-US");
-    store.getState().setSoftGlassLevel("strong");
-    store.getState().setHighlightGlassLevel("subtle");
+    store.getState().setControlGlassLevel("strong");
+    store.getState().setPanelGlassLevel("subtle");
 
     store.getState().resetPreferences();
 
@@ -247,19 +248,21 @@ describe("preferences store", () => {
       resolvedTheme: "dark",
       language: "zh-CN",
       completionCelebrationsEnabled: true,
-      softGlassLevel: "standard",
-      highlightGlassLevel: "standard",
-      shadowStrength: 100,
+      controlGlassLevel: "standard",
+      panelGlassLevel: "standard",
+      panelShadowStrength: 100,
+      controlShadowStrength: 100,
     });
     expect(JSON.parse(localStorage.getItem(PREFERENCES_STORAGE_KEY) ?? "{}")).toMatchObject({
-      version: 5,
+      version: 6,
       theme: "system",
       language: "zh-CN",
       completionCelebrationsEnabled: true,
       reminderSoundEnabled: true,
-      softGlassLevel: "standard",
-      highlightGlassLevel: "standard",
-      shadowStrength: 100,
+      controlGlassLevel: "standard",
+      panelGlassLevel: "standard",
+      panelShadowStrength: 100,
+      controlShadowStrength: 100,
     });
 
     systemTheme.setMatches(false);
@@ -300,8 +303,8 @@ describe("preferences store", () => {
     expect(store.getState().initialized).toBe(true);
     expect(store.getState().theme).toBe("dark");
     expect(store.getState().resolvedTheme).toBe("dark");
-    expect(store.getState().softGlassLevel).toBe("standard");
-    expect(store.getState().highlightGlassLevel).toBe("standard");
+    expect(store.getState().controlGlassLevel).toBe("standard");
+    expect(store.getState().panelGlassLevel).toBe("standard");
     expect(document.documentElement.dataset.theme).toBe("dark");
 
     getItem.mockRestore();

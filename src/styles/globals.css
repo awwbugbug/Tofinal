@@ -36,7 +36,7 @@
   --selected-glass-highlight: rgb(255 255 255 / 0.70);
   --selected-glass-shadow:
     0 1px 0 rgb(255 255 255 / 0.62) inset,
-    0 8px 18px rgb(39 58 78 / 0.08),
+    0 8px 18px rgb(39 58 78 / calc(0.08 * var(--control-shadow-strength))),
     0 0 0 1px rgb(86 108 132 / 0.06);
   --glass-soft-bg:
     linear-gradient(180deg, var(--selected-glass-highlight), rgb(255 255 255 / 0.14)),
@@ -51,10 +51,10 @@
   --glass-highlight-border: rgb(255 255 255 / 0.22);
   --glass-highlight-shadow:
     0 1px 0 rgb(255 255 255 / 0.28) inset,
-    0 5px 12px rgb(39 58 78 / 0.06);
+    0 5px 12px rgb(39 58 78 / calc(0.06 * var(--control-shadow-strength)));
   --glass-highlight-hover-shadow:
     0 1px 0 rgb(255 255 255 / 0.34) inset,
-    0 7px 16px rgb(39 58 78 / 0.09);
+    0 7px 16px rgb(39 58 78 / calc(0.09 * var(--control-shadow-strength)));
   --glass-highlight-blur: 10px;
   --glass-highlight-saturate: 128%;
   --detail-panel-shadow: 0 22px 48px rgb(39 58 78 / 0.10);
@@ -106,28 +106,34 @@
   /* Every shadow alpha is scaled by --shadow-strength so the preferences slider
      can dial the whole app's depth at once. Rings (the 1px rim on a selected
      card) are rim light, not shadow, so they stay put. */
-  --shadow-soft: 0 22px 48px rgb(39 58 78 / calc(0.12 * var(--shadow-strength)));
-  --shadow-card: 0 14px 30px rgb(39 58 78 / calc(0.11 * var(--shadow-strength)));
+  --shadow-soft: 0 22px 48px rgb(39 58 78 / calc(0.12 * var(--panel-shadow-strength)));
+  --shadow-card: 0 14px 30px rgb(39 58 78 / calc(0.11 * var(--panel-shadow-strength)));
   --shadow-card-around:
     0 0 0 1px rgb(52 95 123 / 0.08),
-    0 0 22px rgb(52 95 123 / calc(0.1 * var(--shadow-strength))),
-    0 10px 24px rgb(39 58 78 / calc(0.08 * var(--shadow-strength)));
+    0 0 22px rgb(52 95 123 / calc(0.1 * var(--panel-shadow-strength))),
+    0 10px 24px rgb(39 58 78 / calc(0.08 * var(--panel-shadow-strength)));
   --shadow-card-hover:
     0 0 0 1px rgb(86 108 132 / 0.08),
-    0 0 18px rgb(39 58 78 / calc(0.07 * var(--shadow-strength))),
-    0 8px 18px rgb(39 58 78 / calc(0.06 * var(--shadow-strength)));
-  --shadow-subtle: 0 6px 18px rgb(39 58 78 / calc(0.07 * var(--shadow-strength)));
+    0 0 18px rgb(39 58 78 / calc(0.07 * var(--panel-shadow-strength))),
+    0 8px 18px rgb(39 58 78 / calc(0.06 * var(--panel-shadow-strength)));
+  --shadow-subtle: 0 6px 18px rgb(39 58 78 / calc(0.07 * var(--panel-shadow-strength)));
   /* Liquid Glass: frosted white over the drifting aurora. */
   --glass-tint: rgb(255 255 255 / 0.5);
   --glass-edge: rgb(255 255 255 / 0.72);
   --glass-fresnel: rgb(255 255 255 / 0.85);
   --glass-accent-light: rgb(178 205 255 / 0.16);
   --glass-underglow: rgb(190 160 230 / 0.10);
-  --glass-drop-shadow: 0 22px 48px rgb(80 70 110 / calc(0.14 * var(--shadow-strength)));
+  --glass-drop-shadow: 0 22px 48px rgb(80 70 110 / calc(0.14 * var(--panel-shadow-strength)));
   /* White on the light theme's blue accent glass. */
   --glass-button-primary-text: #ffffff;
-  /** Global shadow depth, driven by the preferences slider. 1 = designed value. */
-  --shadow-strength: 1;
+  /* Panel frosting, driven by data-panel-glass (the "面板毛玻璃" control).
+     Defined once on :root so both themes inherit; the level blocks override. */
+  --panel-glass-blur: 24px;
+  --panel-glass-saturate: 134%;
+  /* Two independent depth sliders. 1 = the designed value; the preference sets
+     each 0..2. Panel = the big glass surfaces + cards; control = buttons/pills. */
+  --panel-shadow-strength: 1;
+  --control-shadow-strength: 1;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -168,7 +174,7 @@
   --selected-glass-highlight: rgb(255 255 255 / 0.16);
   --selected-glass-shadow:
     0 1px 0 rgb(255 255 255 / 0.14) inset,
-    0 12px 24px rgb(0 0 0 / 0.44),
+    0 12px 24px rgb(0 0 0 / calc(0.44 * var(--control-shadow-strength))),
     0 0 0 1px rgb(212 216 228 / 0.06);
   --glass-soft-bg:
     linear-gradient(180deg, var(--selected-glass-highlight), rgb(255 255 255 / 0.06)),
@@ -183,10 +189,10 @@
   --glass-highlight-border: rgb(255 255 255 / 0.14);
   --glass-highlight-shadow:
     0 1px 0 rgb(255 255 255 / 0.12) inset,
-    0 5px 12px rgb(0 0 0 / 0.18);
+    0 5px 12px rgb(0 0 0 / calc(0.18 * var(--control-shadow-strength)));
   --glass-highlight-hover-shadow:
     0 1px 0 rgb(255 255 255 / 0.16) inset,
-    0 7px 16px rgb(0 0 0 / 0.24);
+    0 7px 16px rgb(0 0 0 / calc(0.24 * var(--control-shadow-strength)));
   --glass-highlight-blur: 10px;
   --glass-highlight-saturate: 122%;
   --detail-panel-shadow: 0 24px 52px rgb(0 0 0 / 0.24);
@@ -244,29 +250,29 @@
      Deliberately no light-grey glow: a card does not emit light, and faking one
      was what made these look pasted on. */
   --shadow-soft:
-    0 2px 4px rgb(0 0 0 / calc(0.3 * var(--shadow-strength))),
-    0 6px 12px rgb(0 0 0 / calc(0.24 * var(--shadow-strength))),
-    0 14px 28px rgb(0 0 0 / calc(0.18 * var(--shadow-strength))),
-    0 28px 56px rgb(0 0 0 / calc(0.13 * var(--shadow-strength)));
+    0 2px 4px rgb(0 0 0 / calc(0.3 * var(--panel-shadow-strength))),
+    0 6px 12px rgb(0 0 0 / calc(0.24 * var(--panel-shadow-strength))),
+    0 14px 28px rgb(0 0 0 / calc(0.18 * var(--panel-shadow-strength))),
+    0 28px 56px rgb(0 0 0 / calc(0.13 * var(--panel-shadow-strength)));
   --shadow-card:
-    0 1px 3px rgb(0 0 0 / calc(0.28 * var(--shadow-strength))),
-    0 4px 8px rgb(0 0 0 / calc(0.2 * var(--shadow-strength))),
-    0 10px 20px rgb(0 0 0 / calc(0.15 * var(--shadow-strength))),
-    0 20px 38px rgb(0 0 0 / calc(0.11 * var(--shadow-strength)));
+    0 1px 3px rgb(0 0 0 / calc(0.28 * var(--panel-shadow-strength))),
+    0 4px 8px rgb(0 0 0 / calc(0.2 * var(--panel-shadow-strength))),
+    0 10px 20px rgb(0 0 0 / calc(0.15 * var(--panel-shadow-strength))),
+    0 20px 38px rgb(0 0 0 / calc(0.11 * var(--panel-shadow-strength)));
   --shadow-card-around:
     0 0 0 1px rgb(212 216 228 / 0.1),
-    0 1px 3px rgb(0 0 0 / calc(0.28 * var(--shadow-strength))),
-    0 6px 14px rgb(0 0 0 / calc(0.2 * var(--shadow-strength))),
-    0 16px 32px rgb(0 0 0 / calc(0.14 * var(--shadow-strength)));
+    0 1px 3px rgb(0 0 0 / calc(0.28 * var(--panel-shadow-strength))),
+    0 6px 14px rgb(0 0 0 / calc(0.2 * var(--panel-shadow-strength))),
+    0 16px 32px rgb(0 0 0 / calc(0.14 * var(--panel-shadow-strength)));
   --shadow-card-hover:
     0 0 0 1px rgb(212 216 228 / 0.13),
-    0 2px 5px rgb(0 0 0 / calc(0.3 * var(--shadow-strength))),
-    0 8px 18px rgb(0 0 0 / calc(0.22 * var(--shadow-strength))),
-    0 20px 40px rgb(0 0 0 / calc(0.15 * var(--shadow-strength)));
+    0 2px 5px rgb(0 0 0 / calc(0.3 * var(--panel-shadow-strength))),
+    0 8px 18px rgb(0 0 0 / calc(0.22 * var(--panel-shadow-strength))),
+    0 20px 40px rgb(0 0 0 / calc(0.15 * var(--panel-shadow-strength)));
   --shadow-subtle:
-    0 1px 2px rgb(0 0 0 / calc(0.26 * var(--shadow-strength))),
-    0 3px 6px rgb(0 0 0 / calc(0.17 * var(--shadow-strength))),
-    0 8px 16px rgb(0 0 0 / calc(0.12 * var(--shadow-strength)));
+    0 1px 2px rgb(0 0 0 / calc(0.26 * var(--panel-shadow-strength))),
+    0 3px 6px rgb(0 0 0 / calc(0.17 * var(--panel-shadow-strength))),
+    0 8px 16px rgb(0 0 0 / calc(0.12 * var(--panel-shadow-strength)));
   /* Liquid Glass: smoked glass over the silver starfield. Tint stays fairly
      transparent so the field actually reads through it. */
   --glass-tint: rgb(26 26 30 / 0.44);
@@ -275,10 +281,10 @@
   --glass-accent-light: rgb(220 224 235 / 0.10);
   --glass-underglow: rgb(150 156 172 / 0.09);
   --glass-drop-shadow:
-    0 2px 6px rgb(0 0 0 / calc(0.28 * var(--shadow-strength))),
-    0 8px 18px rgb(0 0 0 / calc(0.22 * var(--shadow-strength))),
-    0 20px 40px rgb(0 0 0 / calc(0.16 * var(--shadow-strength))),
-    0 40px 72px rgb(0 0 0 / calc(0.11 * var(--shadow-strength)));
+    0 2px 6px rgb(0 0 0 / calc(0.28 * var(--panel-shadow-strength))),
+    0 8px 18px rgb(0 0 0 / calc(0.22 * var(--panel-shadow-strength))),
+    0 20px 40px rgb(0 0 0 / calc(0.16 * var(--panel-shadow-strength))),
+    0 40px 72px rgb(0 0 0 / calc(0.11 * var(--panel-shadow-strength)));
   /* Dark ink on the light SILVER accent glass — white would vanish on it. */
   --glass-button-primary-text: #16161b;
 }
@@ -314,9 +320,9 @@
   inset: -56px;
   /* Saturate is deliberately restrained: pushing it hard (180%+) amplifies the
      blur's own dithering into visible speckle and skews the backdrop's hues.
-     No brightness boost for the same reason — it crushes highlights. */
-  backdrop-filter: blur(24px) saturate(134%);
-  -webkit-backdrop-filter: blur(24px) saturate(134%);
+     Blur/saturate come from the panel-glass preference (data-panel-glass). */
+  backdrop-filter: blur(var(--panel-glass-blur)) saturate(var(--panel-glass-saturate));
+  -webkit-backdrop-filter: blur(var(--panel-glass-blur)) saturate(var(--panel-glass-saturate));
   /* Several overlapping soft light sources — never a single flat gradient. The
      falloffs run all the way out to ~100% so no stop lands inside the visible
      panel as a hard arc. Percentages resolve against the OVERSIZED box, so the
@@ -401,6 +407,18 @@
   --glass-highlight-border: color-mix(in srgb, var(--selected-glass-border) 72%, var(--border-soft));
   --glass-highlight-blur: 22px;
   --glass-highlight-saturate: 172%;
+}
+
+/* Panel frosting level (the three big glass surfaces). Its own control so it is
+   independent of the buttons/pills glass above. */
+:root[data-panel-glass="subtle"] {
+  --panel-glass-blur: 11px;
+  --panel-glass-saturate: 116%;
+}
+
+:root[data-panel-glass="strong"] {
+  --panel-glass-blur: 42px;
+  --panel-glass-saturate: 168%;
 }
 
 * {
