@@ -313,12 +313,12 @@
 .liquid-glass__pane {
   position: absolute;
   pointer-events: none;
-  /* Extend the blurred layer well past the shell so backdrop-filter's edge
-     bleed (a washed band where the blur samples beyond the panel) falls OUTSIDE
-     the shell's overflow:hidden clip. The visible area then only ever shows the
-     clean interior of the blur. Must exceed the largest --panel-glass-blur
-     (72px at the "strong" level) or the band reappears at high blur. */
-  inset: -88px;
+  /* Extend the blurred layer past the shell so backdrop-filter's edge bleed (a
+     washed band where the blur samples beyond the panel) falls OUTSIDE the
+     shell's overflow:hidden clip. Scaled from the ACTIVE blur rather than fixed
+     at the worst case: a fixed -88px meant an oversized compositor layer even at
+     the standard 28px blur, and bigger layers re-rasterise more visibly. */
+  inset: calc(-16px - var(--panel-glass-blur));
   /* Saturate is deliberately restrained: pushing it hard (180%+) amplifies the
      blur's own dithering into visible speckle and skews the backdrop's hues.
      Blur/saturate come from the panel-glass preference (data-panel-glass). */
@@ -638,6 +638,10 @@ textarea,
     background: var(--glass-button-bg);
     border: 1px solid var(--glass-button-border);
     box-shadow: var(--glass-button-shadow);
+    /* Persistent layer: the hover transform otherwise promotes/demotes one per
+       hover, and that churn makes the panel's backdrop pane re-rasterise
+       (edge flicker). */
+    will-change: transform;
     transition:
       background-color 180ms ease,
       border-color 180ms ease,
@@ -1283,6 +1287,13 @@ textarea,
   .task-card-shell {
     overflow: visible;
     transform-origin: center;
+    /* Keep every card on a PERSISTENT compositor layer (v0.3.0 had this; it was
+       lost in a later rework). Without it each hover promotes then demotes a
+       layer, and that churn forces the panel's big backdrop-filter pane to
+       re-rasterise — which flashed at the panel edges whenever the cursor
+       touched a card. `scale` listed too: Tailwind v4 scales via the standalone
+       property. */
+    will-change: transform, scale;
     /* Explicitly NOT transition-all. z-index is animatable, so pairing it with
        hover:z-10 made the card interpolate 0 -> 10 in integer steps and re-stack
        repeatedly mid-hover — each re-stack changed which shadows overlapped its
