@@ -8,7 +8,7 @@ const prefersReducedMotion = () =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 type Star = { x: number; y: number; layer: number; r: number; phase: number; twinkleSpeed: number };
-type Nebula = { x: number; y: number; radius: number; driftX: number; driftY: number; phase: number; sprite: HTMLCanvasElement; alpha: number };
+type Nebula = { x: number; y: number; radius: number; driftX: number; driftY: number; sprite: HTMLCanvasElement; alpha: number };
 
 // Three parallax depths: distant stars are dim, slow, and small; near stars are
 // brighter, faster, and larger. Counts kept modest (~214 total) so the always-
@@ -120,7 +120,6 @@ export function Starfield() {
     let height = 0;
     let stars: Star[] = [];
     let nebulae: Nebula[] = [];
-    let sunPhase = Math.random() * Math.PI * 2;
     let rafId = 0;
     let resizeRaf = 0;
     let running = false;
@@ -146,9 +145,13 @@ export function Starfield() {
         x: Math.random() * width,
         y: Math.random() * height,
         radius: span * (0.32 + Math.random() * 0.22),
-        driftX: (Math.random() - 0.5) * 6,
-        driftY: (Math.random() - 0.5) * 6,
-        phase: Math.random() * Math.PI * 2,
+        // Slow positional drift only. Halved: WebView2's glass panes re-blur
+        // the backdrop lazily (on the next unrelated invalidation, e.g. a
+        // hover), so between refreshes the snapshot goes stale — the smaller
+        // the movement per second, the less the glass "jumps" when it catches
+        // up.
+        driftX: (Math.random() - 0.5) * 3,
+        driftY: (Math.random() - 0.5) * 3,
         sprite,
         alpha: index === 0 ? 0.22 : 0.15,
       }));
@@ -161,12 +164,14 @@ export function Starfield() {
       // than paint — and so it blooms through the panels' blur.
       ctx.globalCompositeOperation = "lighter";
 
-      // The sun, breathing slowly in the corner.
-      if (animate) {
-        sunPhase += 0.16 * deltaMs * 0.001;
-      }
-      const sunBreath = 0.88 + Math.sin(sunPhase) * 0.12;
-      const sunRadius = Math.max(width, height) * SUN_RADIUS_RATIO * sunBreath;
+      // The sun: a CONSTANT glow. It used to breathe (radius 0.88..1.00), but
+      // the glass panes re-blur the backdrop lazily — only when some unrelated
+      // invalidation (a hover transition) forces a compositor update. A
+      // luminance-animated backdrop therefore made the panels visibly jump
+      // brighter/darker exactly when the cursor touched an interactive control,
+      // as the stale blurred snapshot caught up with the live sun. Constant
+      // luminance means a stale snapshot and a fresh one look the same.
+      const sunRadius = Math.max(width, height) * SUN_RADIUS_RATIO;
       ctx.globalAlpha = 0.94;
       ctx.drawImage(
         sunSprite,
@@ -185,10 +190,11 @@ export function Starfield() {
           if (nebula.x > width + margin) nebula.x = -margin;
           if (nebula.y < -margin) nebula.y = height + margin;
           if (nebula.y > height + margin) nebula.y = -margin;
-          nebula.phase += deltaMs * 0.0004;
         }
-        const pulse = 0.82 + Math.sin(nebula.phase) * 0.18;
-        ctx.globalAlpha = nebula.alpha * pulse;
+        // Constant alpha for the same reason as the sun: the old ±18% pulse
+        // was a global luminance oscillation the lazy glass turned into
+        // hover-correlated brightness jumps.
+        ctx.globalAlpha = nebula.alpha;
         const size = nebula.radius * 2;
         ctx.drawImage(nebula.sprite, nebula.x - nebula.radius, nebula.y - nebula.radius, size, size);
       }
