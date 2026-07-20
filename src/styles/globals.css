@@ -992,13 +992,25 @@ textarea,
     width: 0.1875rem;
   }
 
-  .column-resize-handle:hover::after,
+  /* Hover reveal is DELAYED and quiet: the handles sit in the column gaps, so a
+     cursor merely sweeping across the layout used to strobe the accent pill +
+     ring on every pass ("忽闪忽闪" at the panels' right edges). The delay means
+     only a lingering cursor reveals it; quick pass-throughs show nothing. */
+  .column-resize-handle:hover::after {
+    background: var(--accent);
+    opacity: 0.55;
+    transform: scaleY(1.04);
+    transition-delay: 160ms;
+  }
+
+  /* Keyboard focus and an actual drag are deliberate — full emphasis, no delay. */
   .column-resize-handle:focus-visible::after,
   .column-resize-handle[data-active="true"]::after {
     background: var(--accent);
     box-shadow: 0 0 0 4px var(--ring-soft);
     opacity: 0.72;
     transform: scaleY(1.08);
+    transition-delay: 0ms;
   }
 
   .priority-segment-shell {
