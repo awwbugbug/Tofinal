@@ -319,6 +319,16 @@
      at the worst case: a fixed -88px meant an oversized compositor layer even at
      the standard 28px blur, and bigger layers re-rasterise more visibly. */
   inset: calc(-16px - var(--panel-glass-blur));
+  /* Pin the pane to its OWN compositor layer. Without this, WebView2 re-blurs
+     backdrop-filter lazily: any repaint of a SIBLING in the content layer (a card
+     scaling on hover, a button's shadow appearing) invalidates the panel and makes
+     the pane re-sample a fresh frame of the animated starfield behind it — a
+     one-off luminance jump visible as an edge "flash" when the pointer touches an
+     interactive element. An isolated layer is recomputed on the compositor's own
+     cadence (tied to the backdrop's motion), not to unrelated content repaints, so
+     hovering no longer forces an out-of-phase re-sample. */
+  transform: translateZ(0);
+  will-change: transform;
   /* Saturate is deliberately restrained: pushing it hard (180%+) amplifies the
      blur's own dithering into visible speckle and skews the backdrop's hues.
      Blur/saturate come from the panel-glass preference (data-panel-glass). */
