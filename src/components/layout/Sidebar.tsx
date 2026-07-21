@@ -1,11 +1,9 @@
 import { type CSSProperties, useState } from "react";
 import { CalendarDays, Inbox, ListTodo, Pin, Settings, Star } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PreferencesPanel } from "@/components/layout/PreferencesPanel";
 import { GlassSurface } from "@/components/ui/glass-surface";
-import { Separator } from "@/components/ui/separator";
 import { TrashBinIcon } from "@/components/ui/trash-bin-icon";
 import { useI18n } from "@/i18n/useI18n";
 import { cn } from "@/lib/utils";
@@ -120,13 +118,6 @@ export function Sidebar({ activeFilter, onFilterChange, onOpenTrash, tasks, tras
           );
         })}
       </nav>
-
-      <Separator className="my-6" />
-
-      <div className="space-y-2 px-2">
-        <p className="text-xs font-medium uppercase text-[var(--text-label)]">{t("sidebar.stage")}</p>
-        <Badge>{t("sidebar.foundationPrototype")}</Badge>
-      </div>
 
       <div className="mt-auto space-y-3">
         <button
