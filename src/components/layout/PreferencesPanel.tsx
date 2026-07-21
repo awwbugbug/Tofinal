@@ -39,6 +39,15 @@ const glassLevelOptions: Array<{ value: GlassLevelPreference; labelKey: string }
   { value: "strong", labelKey: "settings.glassStrong" },
 ];
 
+// The panel control adjusts translucency (not blur), so its levels read as
+// opaque→see-through left to right. Values map to the same data-panel-glass
+// enum: "strong" = 朦胧 (most opaque tint), "subtle" = 通透 (most see-through).
+const panelOpacityOptions: Array<{ value: GlassLevelPreference; labelKey: string }> = [
+  { value: "strong", labelKey: "settings.opacityFrosted" },
+  { value: "standard", labelKey: "settings.glassStandard" },
+  { value: "subtle", labelKey: "settings.opacityClear" },
+];
+
 type PreferencesSection = "appearance" | "shortcuts" | "data";
 
 const preferenceSections: Array<{ value: PreferencesSection; labelKey: string }> = [
@@ -217,7 +226,7 @@ export function PreferencesPanel({ onClose, open }: PreferencesPanelProps) {
               <div className="space-y-2">
                 <div className="text-xs font-medium text-[var(--text-muted)]">{t("settings.panelGlass")}</div>
                 <div className="grid grid-cols-3 gap-2">
-                  {glassLevelOptions.map((option) => {
+                  {panelOpacityOptions.map((option) => {
                     const selected = panelGlassLevel === option.value;
 
                     return (

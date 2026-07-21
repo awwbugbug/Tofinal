@@ -28,9 +28,9 @@ const STAR_COLOR = "#eef1ff";
 // black/white/grey/silver palette instead of tinting it violet.
 const NEBULA_COLORS = ["226, 230, 240", "170, 176, 190", "244, 246, 252", "138, 144, 158"];
 
-// The backdrop drifts slowly, so it does not need 60fps — and every frame it
-// paints also forces each glass panel to recompute its backdrop blur, so
-// halving the rate roughly halves the whole backdrop cost.
+// The backdrop drifts slowly, so it does not need 60fps; halving the rate keeps
+// the always-running canvas cheap. (The panels no longer backdrop-blur this
+// canvas — they are a translucent tint — so a frame only costs the canvas paint.)
 const FRAME_MS = 1000 / 30;
 
 // Nebulae are huge, soft gradients: rasterise each ONCE into a small sprite and

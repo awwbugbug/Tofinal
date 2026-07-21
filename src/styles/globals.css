@@ -117,8 +117,9 @@
     0 0 18px rgb(39 58 78 / calc(0.07 * var(--panel-shadow-strength))),
     0 8px 18px rgb(39 58 78 / calc(0.06 * var(--panel-shadow-strength)));
   --shadow-subtle: 0 6px 18px rgb(39 58 78 / calc(0.07 * var(--panel-shadow-strength)));
-  /* Liquid Glass: frosted white over the drifting aurora. */
-  --glass-tint: rgb(255 255 255 / 0.5);
+  /* Liquid Glass: translucent white over the drifting aurora. --panel-tint-scale
+     (the 面板透光度 preference) scales the base alpha: <1 = more see-through. */
+  --glass-tint: rgb(255 255 255 / calc(0.5 * var(--panel-tint-scale)));
   --glass-edge: rgb(255 255 255 / 0.72);
   --glass-fresnel: rgb(255 255 255 / 0.85);
   --glass-accent-light: rgb(178 205 255 / 0.16);
@@ -126,10 +127,10 @@
   --glass-drop-shadow: 0 22px 48px rgb(80 70 110 / calc(0.14 * var(--panel-shadow-strength)));
   /* White on the light theme's blue accent glass. */
   --glass-button-primary-text: #ffffff;
-  /* Panel frosting, driven by data-panel-glass (the "面板毛玻璃" control).
-     Defined once on :root so both themes inherit; the level blocks override. */
-  --panel-glass-blur: 28px;
-  --panel-glass-saturate: 138%;
+  /* Panel translucency, driven by data-panel-glass (the "面板透光度" control).
+     Multiplies each theme's base --glass-tint alpha. 1 = the designed level; the
+     level blocks set <1 (更通透) or >1 (更朦胧). */
+  --panel-tint-scale: 1;
   /* Two independent depth sliders. 1 = the designed value; the preference sets
      each 0..2. Panel = the big glass surfaces + cards; control = buttons/pills. */
   --panel-shadow-strength: 1;
@@ -274,8 +275,9 @@
     0 3px 6px rgb(0 0 0 / calc(0.17 * var(--panel-shadow-strength))),
     0 8px 16px rgb(0 0 0 / calc(0.12 * var(--panel-shadow-strength)));
   /* Liquid Glass: smoked glass over the silver starfield. Tint stays fairly
-     transparent so the field actually reads through it. */
-  --glass-tint: rgb(26 26 30 / 0.44);
+     transparent so the field actually reads through it. --panel-tint-scale (the
+     面板透光度 preference) scales the base alpha: <1 = more see-through. */
+  --glass-tint: rgb(26 26 30 / calc(0.44 * var(--panel-tint-scale)));
   --glass-edge: rgb(255 255 255 / 0.11);
   --glass-fresnel: rgb(255 255 255 / 0.14);
   --glass-accent-light: rgb(220 224 235 / 0.10);
@@ -313,21 +315,19 @@
 .liquid-glass__pane {
   position: absolute;
   pointer-events: none;
-  /* Extend the blurred layer past the shell so backdrop-filter's edge bleed (a
-     washed band where the blur samples beyond the panel) falls OUTSIDE the
-     shell's overflow:hidden clip. Scaled from the ACTIVE blur rather than fixed
-     at the worst case: a fixed -88px meant an oversized compositor layer even at
-     the standard 28px blur, and bigger layers re-rasterise more visibly. */
-  inset: calc(-16px - var(--panel-glass-blur));
-  /* Saturate is deliberately restrained: pushing it hard (180%+) amplifies the
-     blur's own dithering into visible speckle and skews the backdrop's hues.
-     Blur/saturate come from the panel-glass preference (data-panel-glass). */
-  backdrop-filter: blur(var(--panel-glass-blur)) saturate(var(--panel-glass-saturate));
-  -webkit-backdrop-filter: blur(var(--panel-glass-blur)) saturate(var(--panel-glass-saturate));
+  /* Fills the shell exactly. This used to be an OVERSIZED, backdrop-filter'd
+     layer, but WebView2 recomputed that blur on every repaint (its own or a
+     sibling panel's in the same frame) and the fresh re-blur disagreed with the
+     last frame — a visible brightness "flash" at the panel's edge whenever the
+     pointer touched an interactive element. The glass is now a translucent tint
+     (adjustable via the "面板透光度" control) with soft light-source gradients on
+     top: the starfield/aurora reads through sharp instead of frosted, and there
+     is no backdrop sampling left to re-sample, so the flash is gone by design. */
+  inset: 0;
   /* Several overlapping soft light sources — never a single flat gradient. The
      falloffs run all the way out to ~100% so no stop lands inside the visible
-     panel as a hard arc. Percentages resolve against the OVERSIZED box, so the
-     anchors are pulled toward the middle to compensate. */
+     panel as a hard arc. --glass-tint carries the base translucency; its alpha is
+     scaled by --panel-tint-scale (the 面板透光度 preference, via data-panel-glass). */
   background:
     radial-gradient(140% 120% at 24% 14%, rgb(255 255 255 / 0.11), transparent 96%),
     radial-gradient(130% 100% at 88% 20%, var(--glass-accent-light), transparent 94%),
@@ -410,16 +410,15 @@
   --glass-highlight-saturate: 172%;
 }
 
-/* Panel frosting level (the three big glass surfaces). Its own control so it is
-   independent of the buttons/pills glass above. */
+/* Panel translucency level (the three big glass surfaces). Its own control so it
+   is independent of the buttons/pills glass above. "subtle" reads as 通透 (more
+   see-through), "strong" as 朦胧 (more opaque); the :root default (1) is 标准. */
 :root[data-panel-glass="subtle"] {
-  --panel-glass-blur: 8px;
-  --panel-glass-saturate: 112%;
+  --panel-tint-scale: 0.45;
 }
 
 :root[data-panel-glass="strong"] {
-  --panel-glass-blur: 72px;
-  --panel-glass-saturate: 190%;
+  --panel-tint-scale: 1.7;
 }
 
 * {
