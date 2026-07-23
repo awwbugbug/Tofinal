@@ -43,6 +43,12 @@
     var(--selected-glass-bg);
   --glass-soft-border: var(--selected-glass-border);
   --glass-soft-shadow: var(--selected-glass-shadow);
+  /* A real soft shadow for edge-placed controls (the detail-panel pin), capped at
+     ~10px blur so it renders fully inside that panel's 12px scroll-clip instead
+     of being cut on the right like the full --glass-soft-shadow was. */
+  --pin-safe-shadow:
+    0 1px 0 rgb(255 255 255 / 0.5) inset,
+    0 4px 10px rgb(39 58 78 / calc(0.1 * var(--control-shadow-strength)));
   --glass-soft-blur: 14px;
   --glass-soft-saturate: 150%;
   --glass-highlight-bg:
@@ -182,6 +188,12 @@
     var(--selected-glass-bg);
   --glass-soft-border: var(--selected-glass-border);
   --glass-soft-shadow: var(--selected-glass-shadow);
+  /* Dark counterpart of --pin-safe-shadow: a genuine soft drop (not the flat
+     near-nothing the first pass used), still ≤10px blur so it clears the 12px
+     scroll-clip on the pin's right. */
+  --pin-safe-shadow:
+    0 1px 0 rgb(255 255 255 / 0.14) inset,
+    0 4px 10px rgb(0 0 0 / calc(0.4 * var(--control-shadow-strength)));
   --glass-soft-blur: 12px;
   --glass-soft-saturate: 132%;
   --glass-highlight-bg:
@@ -777,10 +789,8 @@ textarea,
        --glass-soft-shadow is a 24px-blur drop in dark). This button sits ~12px
        from the detail panel's scroll-container clip, which cut the halo's right
        side. Same specificity as .glass-soft but declared later, so it wins. The
-       pressed state ([aria-pressed]) sets its own edge-safe shadow below. */
-    box-shadow:
-      0 1px 0 rgb(255 255 255 / 0.14) inset,
-      0 1px 3px rgb(0 0 0 / calc(0.16 * var(--control-shadow-strength)));
+       pressed state ([aria-pressed]) adds the pinned ring below. */
+    box-shadow: var(--pin-safe-shadow);
     /* --text-muted, not --text-faint: the faint token is nearly invisible in the
        dark theme (#6e6e76), leaving the pin hard to spot when idle. */
     color: var(--text-muted);
@@ -819,13 +829,10 @@ textarea,
       linear-gradient(180deg, rgb(255 255 255 / 0.18), rgb(255 255 255 / 0.06)),
       color-mix(in srgb, var(--pinned-bg) 52%, var(--selected-glass-bg));
     border-color: color-mix(in srgb, var(--pinned-text) 34%, var(--glass-soft-border));
-    /* Edge-safe: this button sits ~12px from the detail panel's scroll-container
-       clip, so the full --glass-soft-shadow (a 24px-blur drop in dark) had its
-       right half cut off. A tight inset-highlight + small drop + pinned ring
-       keeps the raised, pinned look entirely within that clearance. */
+    /* The edge-safe soft shadow (fits the panel's 12px clip) plus the pinned
+       ring on top. */
     box-shadow:
-      0 1px 0 rgb(255 255 255 / 0.16) inset,
-      0 1px 3px rgb(0 0 0 / calc(0.20 * var(--control-shadow-strength))),
+      var(--pin-safe-shadow),
       0 0 0 1px color-mix(in srgb, var(--pinned-text) 16%, transparent);
     color: var(--pinned-text);
   }
