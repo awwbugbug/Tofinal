@@ -773,7 +773,9 @@ textarea,
     align-items: center;
     border: 1px solid var(--glass-soft-border);
     border-radius: 999px;
-    color: var(--text-faint);
+    /* --text-muted, not --text-faint: the faint token is nearly invisible in the
+       dark theme (#6e6e76), leaving the pin hard to spot when idle. */
+    color: var(--text-muted);
     display: inline-flex;
     height: 2rem;
     justify-content: center;
@@ -809,9 +811,14 @@ textarea,
       linear-gradient(180deg, rgb(255 255 255 / 0.18), rgb(255 255 255 / 0.06)),
       color-mix(in srgb, var(--pinned-bg) 52%, var(--selected-glass-bg));
     border-color: color-mix(in srgb, var(--pinned-text) 34%, var(--glass-soft-border));
+    /* Edge-safe: this button sits ~12px from the detail panel's scroll-container
+       clip, so the full --glass-soft-shadow (a 24px-blur drop in dark) had its
+       right half cut off. A tight inset-highlight + small drop + pinned ring
+       keeps the raised, pinned look entirely within that clearance. */
     box-shadow:
-      var(--glass-soft-shadow),
-      0 0 0 1px color-mix(in srgb, var(--pinned-text) 14%, transparent);
+      0 1px 0 rgb(255 255 255 / 0.16) inset,
+      0 1px 3px rgb(0 0 0 / calc(0.20 * var(--control-shadow-strength))),
+      0 0 0 1px color-mix(in srgb, var(--pinned-text) 16%, transparent);
     color: var(--pinned-text);
   }
 
