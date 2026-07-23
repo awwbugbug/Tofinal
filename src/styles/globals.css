@@ -773,6 +773,14 @@ textarea,
     align-items: center;
     border: 1px solid var(--glass-soft-border);
     border-radius: 999px;
+    /* Edge-safe shadow that OVERRIDES .glass-soft's box-shadow (the shared
+       --glass-soft-shadow is a 24px-blur drop in dark). This button sits ~12px
+       from the detail panel's scroll-container clip, which cut the halo's right
+       side. Same specificity as .glass-soft but declared later, so it wins. The
+       pressed state ([aria-pressed]) sets its own edge-safe shadow below. */
+    box-shadow:
+      0 1px 0 rgb(255 255 255 / 0.14) inset,
+      0 1px 3px rgb(0 0 0 / calc(0.16 * var(--control-shadow-strength)));
     /* --text-muted, not --text-faint: the faint token is nearly invisible in the
        dark theme (#6e6e76), leaving the pin hard to spot when idle. */
     color: var(--text-muted);
