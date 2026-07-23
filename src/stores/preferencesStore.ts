@@ -379,4 +379,5 @@ export const resetPreferencesStore = () => {
   document.documentElement.removeAttribute("data-theme");
   document.documentElement.removeAttribute("data-soft-glass");
   document.documentElement.removeAttribute("data-highlight-glass");
+  document.documentElement.removeAttribute("data-panel-glass");
 };
