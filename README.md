@@ -1,3 +1,7 @@
+<p align="right">
+  <strong>English</strong> · <a href="README.zh-CN.md">简体中文</a>
+</p>
+
 # ToFinal
 
 A local-first, minimal desktop task manager built with [Tauri](https://tauri.app/) and React. Your tasks live entirely on your machine — no accounts, no sync, no network.
